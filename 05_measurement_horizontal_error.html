@@ -3085,6 +3085,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   function boot(){
     installInputGuards();
     installEntryPoints();
+    // グローバルに公開（他スクリプトから呼べるように）
+    window.setupHistoryMode=setupHistoryMode;
+    window.setupNewMode=setupNewMode;
+    window.refreshResultButton=refreshResultButton;
     setupNewMode();
   }
 
