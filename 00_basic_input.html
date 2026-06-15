@@ -871,9 +871,6 @@ function openPage(file){
   #alignmentStageCard > h2{font-size:19px!important}
   #alignmentStageCard > .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   #alignmentStageCard .az-row{grid-column:1 / -1!important}
-  #alignmentStageCard .az-row .az-box{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;align-items:end}
-  #alignmentStageCard .az-box label{font-size:12px;color:#374151;font-weight:700}
-  #alignmentStageCard .az-box input{width:100%!important}
   .curve{padding:12px 10px!important;margin:12px 0!important}
   .curve h2{font-size:18px!important;margin-bottom:10px!important}
   .curve .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px 10px!important}
@@ -909,28 +906,11 @@ function openPage(file){
       const row = baseAz?.closest('.row');
       if(row && !row.classList.contains('az-row')){
         row.classList.add('az-row');
-        row.innerHTML = '<label>基準方向角</label><div class="az-box"><label>10進法<input class="num" id="baseAz" value="'+(baseAz.value||'0.000')+'"></label><label>度<input class="num" id="baseAzDeg" value="0"></label><label>分<input class="num" id="baseAzMin" value="0"></label><label>秒<input class="num" id="baseAzSec" value="0"></label></div>';
-        const syncDms = () => {
-          const deg = Math.abs(parseFloat(document.getElementById('baseAz').value)||0);
-          const d = Math.floor(deg);
-          const mFloat = (deg - d) * 60;
-          const m = Math.floor(mFloat);
-          const s = (mFloat - m) * 60;
-          document.getElementById('baseAzDeg').value = d;
-          document.getElementById('baseAzMin').value = m;
-          document.getElementById('baseAzSec').value = s.toFixed(1);
-        };
-        const syncDecimal = () => {
-          const d = parseFloat(document.getElementById('baseAzDeg').value)||0;
-          const m = parseFloat(document.getElementById('baseAzMin').value)||0;
-          const s = parseFloat(document.getElementById('baseAzSec').value)||0;
-          document.getElementById('baseAz').value = (d + m/60 + s/3600).toFixed(6);
-          updateWorkMenuLocks?.();
-          scheduleDraftSave?.();
-        };
-        document.getElementById('baseAz').addEventListener('input', syncDms);
-        ['baseAzDeg','baseAzMin','baseAzSec'].forEach(id => document.getElementById(id).addEventListener('input', syncDecimal));
-        syncDms();
+        const storedVal = baseAz.value || '0.000';
+        row.innerHTML = '<label>基準方向角（自動計算）</label>'
+          + '<span id="baseAzDisplay" style="font-family:Consolas,monospace;padding:7px 9px;border:1px solid #b8c0cc;border-radius:6px;background:#f8fafc;display:inline-block;user-select:all">---</span>'
+          + '<input type="hidden" id="baseAz" value="' + storedVal + '">';
+        if(typeof calcBaseAz === 'function') calcBaseAz();
       }
     }
   }
