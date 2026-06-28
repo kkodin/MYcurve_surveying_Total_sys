@@ -407,6 +407,7 @@ body.vr015-screen-flash::before{
 <header>
   <button class="menu-toggle no-print" type="button" onclick="toggleNav()" aria-label="メニュー">☰</button>
   <h1>05 測定結果・水平左右誤差判定</h1>
+  <span style="font-size:11px;font-weight:normal;opacity:0.75;white-space:nowrap">M_APP_004</span>
 </header>
 
 <div class="appShell">
@@ -631,9 +632,7 @@ function correctedKnownCurveL(id,L,R,IA){
 function geometryFromAlignmentProject(p){
   if(!p?.alignment || !Array.isArray(p.alignment.curves)) return null;
   const pts=[],curves=[],sections=[];
-  // 測量座標系はパイプラインローカル系（第一直線=X軸方向）
-  // baseAzは実世界の絶対方位角だが、ここでは常に0°（X軸方向）で構築する
-  let x=0,y=0,az=0,accum=0;
+  let x=0,y=0,az=degToRad(p.alignment.baseAz||0),accum=0;
   const bp={name:'BP',x,y}; pts.push(bp);
   let lineStart=bp;
   (p.alignment.curves||[]).forEach((cd,i)=>{
@@ -1369,82 +1368,39 @@ function curveDelta(c,ang){
   return d;
 }
 function judgeStraight(p,sec){
-  // 基線方向の単位ベクトル (X=北=前進, Y=東=右)
-  const dx=sec.b.x-sec.a.x, dy=sec.b.y-sec.a.y;
-  const len=Math.hypot(dx,dy)||1;
-  const ux=dx/len, uy=dy/len;           // 基線方向単位ベクトル
-
-  // 測点を基線に射影して垂線の足を求める
-  const wx=p.x-sec.a.x, wy=p.y-sec.a.y;
-  const proj=wx*ux+wy*uy;               // 基線上の投影距離
-  const inside=proj>=0&&proj<=len;
-  const clamp=Math.max(0,Math.min(len,proj));
-  const foot={x:sec.a.x+ux*clamp, y:sec.a.y+uy*clamp};
-
-  // 垂線誤差ベクトル（垂線の足→測点）
-  const ex=p.x-foot.x, ey=p.y-foot.y;
-  const errorM=Math.hypot(ex,ey);
-
-  // 右左判定: 外積 (基線方向) × (誤差方向)
-  // X=北, Y=東 の左手系では外積が正 → 右, 負 → 左
-  const cross=ux*ey-uy*ex;
-  const side=cross>=0?'右':'左';
-  const mm=errorM*1000;
-
-  return {
-    type:'直線', sectionName:`${sec.from}〜${sec.to}`,
-    foot, errorMm:mm,
-    side, short:`${side} ${fmt(mm,0)}`,
-    priority:inside?1:9,
-    remaining:Math.max(0,sec.accEnd-(sec.accStart+clamp))
-  };
+  const ax=sec.a.x, ay=sec.a.y, bx=sec.b.x, by=sec.b.y;
+  const vx=bx-ax,vy=by-ay,len=Math.hypot(vx,vy)||1,ux=vx/len,uy=vy/len;
+  const wx=p.x-ax,wy=p.y-ay,proj=wx*ux+wy*uy,inside=proj>=0&&proj<=len;
+  const clamped=Math.max(0,Math.min(len,proj)), foot={x:ax+ux*clamped,y:ay+uy*clamped};
+  const ex=p.x-foot.x,ey=p.y-foot.y,signed=ux*ey-uy*ex,mm=Math.abs(signed)*1000;
+  return {type:'直線',sectionName:`${sec.from}〜${sec.to}`,foot,errorMm:mm,side:signed>0?'右':'左',priority:inside?1:9,remaining:Math.max(0,sec.accEnd-(sec.accStart+clamped))};
 }
 function judgeCurve(p,c){
-  // RO（曲線中心）から測点までの距離
   const dx=p.x-c.ro.x, dy=p.y-c.ro.y;
   const dist=Math.hypot(dx,dy);
-  const curveName=`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`;
   if(dist<=1e-9){
-    return {type:'曲線',sectionName:curveName,curve:c,foot:{x:p.x,y:p.y},
-      roDist:0,radialMm:NaN,errorMm:Infinity,side:'判定不可',short:'判定不可',priority:99,remaining:0};
+    return {type:'曲線',sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`,curve:c,foot:{x:p.x,y:p.y},roDist:dist,radialMm:NaN,errorMm:Infinity,side:'判定不可',short:'判定不可',priority:99,dx,dy,azDeg:0,remaining:0};
   }
-
-  // 誤差 = 実距離 - 設計半径 R
-  // radial > 0: 外側（ROから遠い方向）  radial < 0: 内側（ROに近い方向）
-  const radial=dist-c.R;
-  const mm=Math.abs(radial)*1000;
-
-  // RO方向の単位ベクトル（RO→測点）
-  const ux=dx/dist, uy=dy/dist;
-
-  // 計画座標: ROから設計半径R方向の点（測点をROから見た方向上にある）
-  const foot={x:c.ro.x+c.R*ux, y:c.ro.y+c.R*uy};
-
-  // 弧角の確認（測点がBC〜EC弧内かどうか）
+  const radial=dist-c.R;                 // 外側なら正、内側なら負
+  const mm=Math.abs(radial*1000);
   const ang=Math.atan2(dy,dx);
+  const azDeg=radToDeg(ang);
   const delta=curveDelta(c,ang);
   const inArc=Math.abs(delta)<=Math.abs(c.IA)+1e-7;
-
-  // 右左判定
-  // 右曲線(dir=R): ROは右側。内側(radial<0) → 右に寄っている。外側(radial>0) → 左に寄っている
-  // 左曲線(dir=L): ROは左側。内側(radial<0) → 左に寄っている。外側(radial>0) → 右に寄っている
-  let side;
-  if(radial===0)      side='中心';
-  else if(radial<0)   side=c.dir==='R'?'右':'左';   // 内側 → ROの方向
-  else                side=c.dir==='R'?'左':'右';   // 外側 → ROの反対方向
-
+  const ux=dx/dist, uy=dy/dist;
+  const foot={x:p.x-radial*ux,y:p.y-radial*uy};
+  const checkDist=Math.hypot(foot.x-c.ro.x,foot.y-c.ro.y);
+  const checkErrorMm=(checkDist-c.R)*1000;
+  let dirText='中心';
+  if(radial<0) dirText=c.dir==='L'?'左':'右';
+  if(radial>0) dirText=c.dir==='L'?'右':'左';
   const insideOutside=radial<0?'内側':radial>0?'外側':'中心';
-  const azDeg=radToDeg(ang);
-
   return {
-    type:'曲線', sectionName:curveName, curve:c,
-    foot, roDist:dist, radialMm:radial*1000, errorMm:mm,
-    side, short:`${side} ${fmt(mm,0)}`,
-    insideOutside, azDeg,
-    dx, dy, ux, uy,
-    correctionX:foot.x-p.x, correctionY:foot.y-p.y,
-    checkErrorMm:(Math.hypot(foot.x-c.ro.x, foot.y-c.ro.y)-c.R)*1000,
-    priority:inArc?0:8,
+    type:'曲線',sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`,curve:c,foot,
+    roDist:dist,radialMm:radial*1000,errorMm:mm,side:`${dirText}${radial<0?'（内側）':radial>0?'（外側）':''}`,
+    short:`${dirText} ${fmt(mm,0)}`,priority:inArc?0:8,
+    dx,dy,azDeg,ux,uy,insideOutside,checkDist,checkErrorMm,
+    correctionX:foot.x-p.x,correctionY:foot.y-p.y,
     remaining:Math.max(0,c.endDist-(c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA))))
   };
 }
