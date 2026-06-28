@@ -1367,41 +1367,82 @@ function curveDelta(c,ang){
   return d;
 }
 function judgeStraight(p,sec){
-  const ax=sec.a.x, ay=sec.a.y, bx=sec.b.x, by=sec.b.y;
-  const vx=bx-ax,vy=by-ay,len=Math.hypot(vx,vy)||1,ux=vx/len,uy=vy/len;
-  const wx=p.x-ax,wy=p.y-ay,proj=wx*ux+wy*uy,inside=proj>=0&&proj<=len;
-  const clamped=Math.max(0,Math.min(len,proj)), foot={x:ax+ux*clamped,y:ay+uy*clamped};
-  const ex=p.x-foot.x,ey=p.y-foot.y,signed=ux*ey-uy*ex,mm=Math.abs(signed)*1000;
-  return {type:'直線',sectionName:`${sec.from}〜${sec.to}`,foot,errorMm:mm,side:signed>0?'右':'左',priority:inside?1:9,remaining:Math.max(0,sec.accEnd-(sec.accStart+clamped))};
+  // 基線方向の単位ベクトル (X=北=前進, Y=東=右)
+  const dx=sec.b.x-sec.a.x, dy=sec.b.y-sec.a.y;
+  const len=Math.hypot(dx,dy)||1;
+  const ux=dx/len, uy=dy/len;           // 基線方向単位ベクトル
+
+  // 測点を基線に射影して垂線の足を求める
+  const wx=p.x-sec.a.x, wy=p.y-sec.a.y;
+  const proj=wx*ux+wy*uy;               // 基線上の投影距離
+  const inside=proj>=0&&proj<=len;
+  const clamp=Math.max(0,Math.min(len,proj));
+  const foot={x:sec.a.x+ux*clamp, y:sec.a.y+uy*clamp};
+
+  // 垂線誤差ベクトル（垂線の足→測点）
+  const ex=p.x-foot.x, ey=p.y-foot.y;
+  const errorM=Math.hypot(ex,ey);
+
+  // 右左判定: 外積 (基線方向) × (誤差方向)
+  // X=北, Y=東 の左手系では外積が正 → 右, 負 → 左
+  const cross=ux*ey-uy*ex;
+  const side=cross>=0?'右':'左';
+  const mm=errorM*1000;
+
+  return {
+    type:'直線', sectionName:`${sec.from}〜${sec.to}`,
+    foot, errorMm:mm,
+    side, short:`${side} ${fmt(mm,0)}`,
+    priority:inside?1:9,
+    remaining:Math.max(0,sec.accEnd-(sec.accStart+clamp))
+  };
 }
 function judgeCurve(p,c){
+  // RO（曲線中心）から測点までの距離
   const dx=p.x-c.ro.x, dy=p.y-c.ro.y;
   const dist=Math.hypot(dx,dy);
+  const curveName=`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`;
   if(dist<=1e-9){
-    return {type:'曲線',sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`,curve:c,foot:{x:p.x,y:p.y},roDist:dist,radialMm:NaN,errorMm:Infinity,side:'判定不可',short:'判定不可',priority:99,dx,dy,azDeg:0,remaining:0};
+    return {type:'曲線',sectionName:curveName,curve:c,foot:{x:p.x,y:p.y},
+      roDist:0,radialMm:NaN,errorMm:Infinity,side:'判定不可',short:'判定不可',priority:99,remaining:0};
   }
-  const radial=dist-c.R;                 // 外側なら正、内側なら負
-  const mm=Math.abs(radial*1000);
+
+  // 誤差 = 実距離 - 設計半径 R
+  // radial > 0: 外側（ROから遠い方向）  radial < 0: 内側（ROに近い方向）
+  const radial=dist-c.R;
+  const mm=Math.abs(radial)*1000;
+
+  // RO方向の単位ベクトル（RO→測点）
+  const ux=dx/dist, uy=dy/dist;
+
+  // 計画座標: ROから設計半径R方向の点（測点をROから見た方向上にある）
+  const foot={x:c.ro.x+c.R*ux, y:c.ro.y+c.R*uy};
+
+  // 弧角の確認（測点がBC〜EC弧内かどうか）
   const ang=Math.atan2(dy,dx);
-  const azDeg=radToDeg(ang);
   const delta=curveDelta(c,ang);
   const inArc=Math.abs(delta)<=Math.abs(c.IA)+1e-7;
-  const ux=dx/dist, uy=dy/dist;
-  // 計画座標は、RO→測点方向上で半径Rとなる点。
-  // 同じ意味で、測点から誤差分だけ基線方向（外側ならRO方向、内側なら外方向）へ戻す。
-  const foot={x:p.x-radial*ux,y:p.y-radial*uy};
-  const checkDist=Math.hypot(foot.x-c.ro.x,foot.y-c.ro.y);
-  const checkErrorMm=(checkDist-c.R)*1000;
-  let dirText='中心';
-  if(radial<0) dirText=c.dir==='L'?'左':'右';
-  if(radial>0) dirText=c.dir==='L'?'右':'左';
+
+  // 右左判定
+  // 右曲線(dir=R): ROは右側。内側(radial<0) → 右に寄っている。外側(radial>0) → 左に寄っている
+  // 左曲線(dir=L): ROは左側。内側(radial<0) → 左に寄っている。外側(radial>0) → 右に寄っている
+  let side;
+  if(radial===0)      side='中心';
+  else if(radial<0)   side=c.dir==='R'?'右':'左';   // 内側 → ROの方向
+  else                side=c.dir==='R'?'左':'右';   // 外側 → ROの反対方向
+
   const insideOutside=radial<0?'内側':radial>0?'外側':'中心';
+  const azDeg=radToDeg(ang);
+
   return {
-    type:'曲線',sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`,curve:c,foot,
-    roDist:dist,radialMm:radial*1000,errorMm:mm,side:`${dirText}${radial<0?'（内側）':radial>0?'（外側）':''}`,
-    short:`${dirText} ${fmt(mm,0)}`,priority:inArc?0:8,
-    dx,dy,azDeg,ux,uy,insideOutside,checkDist,checkErrorMm,
-    correctionX:foot.x-p.x,correctionY:foot.y-p.y,
+    type:'曲線', sectionName:curveName, curve:c,
+    foot, roDist:dist, radialMm:radial*1000, errorMm:mm,
+    side, short:`${side} ${fmt(mm,0)}`,
+    insideOutside, azDeg,
+    dx, dy, ux, uy,
+    correctionX:foot.x-p.x, correctionY:foot.y-p.y,
+    checkErrorMm:(Math.hypot(foot.x-c.ro.x, foot.y-c.ro.y)-c.R)*1000,
+    priority:inArc?0:8,
     remaining:Math.max(0,c.endDist-(c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA))))
   };
 }
@@ -1738,26 +1779,58 @@ function updatePredictions(){
   window.latestPrediction=null;
   window.latestPredictionJudge=null;
 
-  // 予測式：
-  // 先頭管方向 = KP2→KP1
-  // 後方管方向 = KP4→KP3
-  // 折れ角 = 先頭管方向 - 後方管方向
-  // 次回方向 = 先頭管方向 + 折れ角
-  // 次回位置 = KP1 + 次回方向 × 指定距離
+  // ──────────────────────────────────────────
+  // 予測測点の計算
+  //
+  // KP1-KP2 = 一本目の管（先頭管）  KP1が先端、KP2が後端
+  // KP3-KP4 = 二本目の管            KP3が先端、KP4が後端
+  //
+  // 先頭管方向角  frontAz = KP2→KP1 の方向
+  // 二本目管方向角 rearAz  = KP4→KP3 の方向
+  //
+  // 折れ角 bend = frontAz - rearAz
+  //   （先頭管が二本目管に対してどれだけ向きが変わったか）
+  //
+  // 次回（新管）方向 = frontAz + bend
+  //   （同じ折れ角が新管にも継続すると仮定）
+  //
+  // 予測座標 = KP1 から次回方向へ 管長分進んだ点
+  // ──────────────────────────────────────────
   let pred=null;
   if(kpPoints.length>=4){
     const kp1=kpPoints[0], kp2=kpPoints[1], kp3=kpPoints[2], kp4=kpPoints[3];
-    const frontAz=Math.atan2(kp1.y-kp2.y,kp1.x-kp2.x);
-    const rearAz=Math.atan2(kp3.y-kp4.y,kp3.x-kp4.x);
+
+    // 先頭管(一本目) KP2→KP1 の方向角
+    const frontAz=Math.atan2(kp1.y-kp2.y, kp1.x-kp2.x);
+
+    // 二本目管 KP4→KP3 の方向角
+    const rearAz=Math.atan2(kp3.y-kp4.y, kp3.x-kp4.x);
+
+    // 折れ角（-π〜π に正規化）
     let bend=frontAz-rearAz;
-    while(bend>Math.PI)bend-=Math.PI*2;
-    while(bend<-Math.PI)bend+=Math.PI*2;
+    while(bend>Math.PI)  bend-=Math.PI*2;
+    while(bend<-Math.PI) bend+=Math.PI*2;
+
+    // 新管方向 = 先頭管方向 + 折れ角
     const nextAz=frontAz+bend;
-    pred={name:'次回予測',role:'予測',kind:'PRED',x:kp1.x+len*Math.cos(nextAz),y:kp1.y+len*Math.sin(nextAz),az:nextAz,bend:bend,method:'折れ角予測'};
+
+    // 予測点 = KP1 から新管方向へ 管長 len だけ進む
+    pred={
+      name:'次回予測', role:'予測', kind:'PRED',
+      x:kp1.x+len*Math.cos(nextAz),
+      y:kp1.y+len*Math.sin(nextAz),
+      az:nextAz, bend:bend, method:'折れ角予測'
+    };
   }else if(kpPoints.length>=2){
+    // KP2点しかない場合: 折れ角不明のため先頭管方向をそのまま延長
     const kp1=kpPoints[0], kp2=kpPoints[1];
-    const az=Math.atan2(kp1.y-kp2.y,kp1.x-kp2.x);
-    pred={name:'次回予測',role:'予測',kind:'PRED',x:kp1.x+len*Math.cos(az),y:kp1.y+len*Math.sin(az),az:az,bend:0,method:'先頭管方向'};
+    const az=Math.atan2(kp1.y-kp2.y, kp1.x-kp2.x);
+    pred={
+      name:'次回予測', role:'予測', kind:'PRED',
+      x:kp1.x+len*Math.cos(az),
+      y:kp1.y+len*Math.sin(az),
+      az:az, bend:0, method:'先頭管方向（折れ角なし）'
+    };
   }
 
   results.forEach(r=>{delete r.pred});
