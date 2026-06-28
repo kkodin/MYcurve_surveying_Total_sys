@@ -631,7 +631,9 @@ function correctedKnownCurveL(id,L,R,IA){
 function geometryFromAlignmentProject(p){
   if(!p?.alignment || !Array.isArray(p.alignment.curves)) return null;
   const pts=[],curves=[],sections=[];
-  let x=0,y=0,az=degToRad(p.alignment.baseAz||0),accum=0;
+  // 測量座標系はパイプラインローカル系（第一直線=X軸方向）
+  // baseAzは実世界の絶対方位角だが、ここでは常に0°（X軸方向）で構築する
+  let x=0,y=0,az=0,accum=0;
   const bp={name:'BP',x,y}; pts.push(bp);
   let lineStart=bp;
   (p.alignment.curves||[]).forEach((cd,i)=>{
