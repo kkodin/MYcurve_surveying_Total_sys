@@ -59,7 +59,7 @@ body.show-frame #rightPane{display:block}
   #curves .curve:first-child > button.danger{display:none!important}
   .add-curve-btn{margin-top:10px;width:100%;min-height:44px}
 }
-</style></head><body><header><h1>00 基本情報入力・保存読込</h1><div class="toolbar"><button onclick="document.getElementById('file').click()">JSON読込</button><button class="ok" onclick="saveProject()">JSON保存</button></div></header><button id="edgeMenuHandle" class="edge-menu-handle" type="button" onclick="toggleWorkMenuCollapse(false)" aria-label="作業メニューを開く"></button><main>
+</style></head><body><header><h1>00 基本情報入力・保存読込</h1><div class="toolbar"><button onclick="document.getElementById('file').click()">JSON読込</button><button class="ok" onclick="saveProject()">JSON保存</button></div><span style="font-size:11px;font-weight:normal;opacity:0.75;white-space:nowrap">M_APP_004</span></header><button id="edgeMenuHandle" class="edge-menu-handle" type="button" onclick="toggleWorkMenuCollapse(false)" aria-label="作業メニューを開く"></button><main>
 <input id="file" type="file" accept=".json,application/json" class="hide" onchange="loadProjectFile(this,(p)=>{applyBase(p);renderCurves(p.alignment?.curves||[]);})">
 <div class="card hide" id="startMenu">
   <h2>&#22522;&#32218;&#12487;&#12540;&#12479;&#12398;&#36984;&#25246;</h2>
