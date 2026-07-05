@@ -252,13 +252,46 @@ tr.row-ng td{color:var(--ng)}
 
   <div class="card">
     <div class="card-title">📐 線形・推進区間</div>
-    <div class="field-row">
-      <label>総推進延長 [m]</label>
-      <input id="totalLength" class="mono" type="number" step="0.1" value="100" oninput="autoSave()">
-      <span class="unit">m</span>
+    <div class="ok-box" style="font-size:11px;margin-bottom:8px">
+      BP→IP1間距離・曲線諸元（R/方向/交角）・最終直線を入力すると、CL・TL・総推進延長を自動計算します。
     </div>
+
+    <!-- 第1直線 BP-IP1 -->
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0">
+      <div style="font-size:13px;font-weight:bold;color:var(--navy);margin-bottom:8px">第1直線（BP → IP1）</div>
+      <div class="field-row">
+        <label>BP〜IP1 間距離 L₁ [m]</label>
+        <input id="seg_L0" class="mono" type="number" step="0.1" value="50.0" oninput="calcAlignment()">
+        <span class="unit">m</span>
+      </div>
+    </div>
+
+    <!-- 曲線リスト -->
     <div id="curveList"></div>
     <button class="big-btn secondary" onclick="addCurve()" style="min-height:44px;font-size:14px">＋ 曲線区間を追加</button>
+
+    <!-- 最終直線 -->
+    <div style="background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0">
+      <div style="font-size:13px;font-weight:bold;color:var(--navy);margin-bottom:8px">最終直線（最終IP → EP）</div>
+      <div class="field-row">
+        <label>最終IP〜EP 間距離 Ln [m]</label>
+        <input id="seg_Lf" class="mono" type="number" step="0.1" value="30.0" oninput="calcAlignment()">
+        <span class="unit">m</span>
+      </div>
+    </div>
+
+    <!-- 自動計算された総推進延長 -->
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin:8px 0">
+      <div style="font-size:13px;font-weight:bold;color:var(--blue2);margin-bottom:8px">線形計算結果（自動）</div>
+      <div id="alignmentCalcResult">
+        <div class="note-box">曲線情報を入力すると自動計算されます。</div>
+      </div>
+      <div class="field-row" style="margin-top:8px">
+        <label style="color:var(--blue2);font-size:13px">総推進延長（自動計算）[m]</label>
+        <input id="totalLength" class="mono" type="number" step="0.1" value="100" readonly style="background:#dbeafe;color:var(--blue2);font-weight:bold">
+        <span class="unit">m</span>
+      </div>
+    </div>
   </div>
 
   <div class="card" id="pipeLenOptCard">
@@ -597,55 +630,164 @@ function onPipeDiaChange() {
 }
 
 // ══════════════════════════════════════
-//  曲線区間管理
+//  曲線区間管理（線形計算方式）
 // ══════════════════════════════════════
 let curves = [];
 let curveCounter = 0;
 
 function addCurve() {
   const id = ++curveCounter;
-  curves.push({id, R:30, dir:'R', CL:0});
+  const Li = curves.length === 0 ? 0 : 50; // IP間距離（2本目以降のデフォルト）
+  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0});
   renderCurves();
-  autoSave();
+  calcAlignment();
 }
 
 function removeCurve(id) {
   curves = curves.filter(c => c.id !== id);
   renderCurves();
-  autoSave();
+  calcAlignment();
 }
 
 function renderCurves() {
   const el = document.getElementById('curveList');
-  if (!curves.length) { el.innerHTML = '<div class="note-box">曲線区間はありません（直線推進）</div>'; return; }
+  if (!curves.length) {
+    el.innerHTML = '<div class="note-box" style="margin:6px 0">曲線区間はありません（直線推進）</div>';
+    return;
+  }
   el.innerHTML = curves.map((c, i) => `
     <div class="curve-block">
       <div class="curve-block-title">
-        <span>曲線区間 ${i+1}</span>
+        <span>曲線${i+1}（IP${i+1}）</span>
         <button class="del-btn" onclick="removeCurve(${c.id})">削除</button>
       </div>
+      ${i > 0 ? `
+      <div class="field-row">
+        <label>IP${i}〜IP${i+1} 間距離 [m]</label>
+        <input id="cL_${c.id}" class="mono" type="number" step="0.1" value="${c.L}" oninput="onCurveChange(${c.id})">
+        <span class="unit">m</span>
+      </div>` : ''}
       <div class="two-col">
         <div class="field-row"><label>曲線半径 R [m]</label><input id="cR_${c.id}" class="mono" type="number" step="1" value="${c.R}" oninput="onCurveChange(${c.id})"><span class="unit">m</span></div>
         <div class="field-row full"><label>曲線方向</label>
           <select id="cDir_${c.id}" onchange="onCurveChange(${c.id})">
-            <option value="R" ${c.dir==='R'?'selected':''}>右カーブ</option>
-            <option value="L" ${c.dir==='L'?'selected':''}>左カーブ</option>
+            <option value="R" ${c.dir==='R'?'selected':''}>右カーブ (R)</option>
+            <option value="L" ${c.dir==='L'?'selected':''}>左カーブ (L)</option>
           </select>
         </div>
-        <div class="field-row"><label>曲線長 CL [m]</label><input id="cCL_${c.id}" class="mono" type="number" step="0.1" value="${c.CL}" oninput="onCurveChange(${c.id})"><span class="unit">m</span></div>
       </div>
+      <div style="font-size:12px;font-weight:bold;color:var(--sub);margin:4px 0 2px">交角 IA（度 分 秒）</div>
+      <div class="three-col">
+        <div class="field-row"><label>度</label><input id="cDeg_${c.id}" class="mono" type="number" step="1" min="0" max="179" value="${c.deg}" oninput="onCurveChange(${c.id})"><span class="unit">°</span></div>
+        <div class="field-row"><label>分</label><input id="cMin_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.min}" oninput="onCurveChange(${c.id})"><span class="unit">′</span></div>
+        <div class="field-row"><label>秒</label><input id="cSec_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.sec}" oninput="onCurveChange(${c.id})"><span class="unit">″</span></div>
+      </div>
+      <div id="cCalc_${c.id}" style="background:#f0fdf4;border-radius:8px;padding:8px;font-size:12px;margin-top:4px;color:var(--ok)"></div>
     </div>
   `).join('');
-  updatePipeLenOpt();
 }
 
 function onCurveChange(id) {
   const c = curves.find(x => x.id === id);
   if (!c) return;
-  c.R = parseFloat(document.getElementById('cR_'+id).value) || 30;
+  if (document.getElementById('cL_'+id)) c.L = parseFloat(document.getElementById('cL_'+id).value) || 0;
+  c.R   = parseFloat(document.getElementById('cR_'+id).value)   || 30;
   c.dir = document.getElementById('cDir_'+id).value;
-  c.CL = parseFloat(document.getElementById('cCL_'+id).value) || 0;
+  c.deg = parseFloat(document.getElementById('cDeg_'+id).value)  || 0;
+  c.min = parseFloat(document.getElementById('cMin_'+id).value)  || 0;
+  c.sec = parseFloat(document.getElementById('cSec_'+id).value)  || 0;
+  calcAlignment();
+}
+
+function calcCurveElements(c) {
+  const IA_deg = c.deg + c.min/60 + c.sec/3600;
+  const IA_rad = IA_deg * Math.PI / 180;
+  const TL = c.R * Math.tan(IA_rad / 2);
+  const CL = c.R * IA_rad;
+  const SL = c.R * (1/Math.cos(IA_rad/2) - 1);
+  return { IA_deg, IA_rad, TL, CL, SL };
+}
+
+function calcAlignment() {
+  const L0 = parseFloat(document.getElementById('seg_L0').value) || 0;
+  const Lf = parseFloat(document.getElementById('seg_Lf').value) || 0;
+
+  // 曲線要素を計算
+  const elems = curves.map(c => calcCurveElements(c));
+
+  // TL配列
+  const TLs = elems.map(e => e.TL);
+
+  // 各区間の長さを計算
+  let segments = [];
+  let totalLen = 0;
+  let valid = true;
+  let warnMsg = '';
+
+  if (curves.length === 0) {
+    // 直線のみ
+    totalLen = L0 + Lf;
+    segments.push({ label:'直線（BP→EP）', L: totalLen });
+  } else {
+    // 第1直線: L0 - TL[0]
+    const s0 = L0 - TLs[0];
+    if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
+    segments.push({ label:`BP→BC1 直線`, L: Math.max(0, s0) });
+
+    curves.forEach((c, i) => {
+      const e = elems[i];
+      // 曲線
+      segments.push({ label:`曲線${i+1} (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg });
+      // 次の直線
+      if (i < curves.length - 1) {
+        const Lmid = curves[i+1].L;
+        const sMid = Lmid - TLs[i] - TLs[i+1];
+        if (sMid < 0) { valid = false; warnMsg += `\n⚠ 中間直線${i+1}(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
+        segments.push({ label:`EC${i+1}→BC${i+2} 直線`, L: Math.max(0, sMid) });
+      }
+    });
+
+    // 最終直線: Lf - TL[last]
+    const sf = Lf - TLs[TLs.length-1];
+    if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
+    segments.push({ label:`EC${curves.length}→EP 直線`, L: Math.max(0, sf) });
+
+    totalLen = segments.reduce((s, seg) => s + seg.L, 0);
+  }
+
+  // 総推進延長をセット（readonlyフィールド）
+  setV('totalLength', totalLen.toFixed(2));
+
+  // 結果表示
+  const resEl = document.getElementById('alignmentCalcResult');
+  if (!valid) {
+    resEl.innerHTML = `<div class="ng-box" style="font-size:12px;white-space:pre-wrap">${warnMsg}</div>`;
+  } else {
+    let html = '<div style="font-size:12px">';
+    segments.forEach(seg => {
+      html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)">
+        <span ${seg.isCurve?'style="color:var(--warn);font-weight:bold"':''}>${seg.label}</span>
+        <span class="mono">${seg.L.toFixed(3)} m</span>
+      </div>`;
+    });
+    html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:bold;color:var(--blue2)">
+      <span>合計 総推進延長</span><span class="mono">${totalLen.toFixed(3)} m</span>
+    </div>`;
+    // 曲線ごとのTL/CL/SL詳細
+    curves.forEach((c, i) => {
+      const e = elems[i];
+      const calcEl = document.getElementById('cCalc_'+c.id);
+      if (calcEl) calcEl.innerHTML =
+        `TL=${e.TL.toFixed(3)}m　CL=${e.CL.toFixed(3)}m　SL=${e.SL.toFixed(3)}m　IA=${e.IA_deg.toFixed(4)}°`;
+    });
+    html += '</div>';
+    resEl.innerHTML = html;
+  }
+
+  // 内部curves配列にCLを保存
+  curves.forEach((c, i) => { c.CL = elems[i].CL; });
   updatePipeLenOpt();
+  updateGroundLen();
   autoSave();
 }
 
