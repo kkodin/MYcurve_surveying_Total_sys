@@ -153,6 +153,13 @@ tr.row-curve{background:#fef3c7}
 tr.row-ep{background:#f0fdf4}
 tr.row-tip{background:#eff6ff}
 
+/* ── モードボタン ── */
+.mode-btn{flex:1;padding:9px 8px;border:2px solid var(--line);border-radius:9px;background:var(--card);color:var(--sub);font-size:13px;font-weight:bold;cursor:pointer;transition:all .15s}
+.mode-btn.active{border-color:var(--blue2);background:#eff6ff;color:var(--blue2)}
+
+/* ── 距離図解キャンバス ── */
+#distDiagram{display:block;background:var(--card);border:1px solid var(--line)}
+
 @media(min-width:640px){
   #pageArea{padding:14px 20px calc(var(--tab-h) + var(--safe-b) + 12px)}
   .page{max-width:720px;margin:0 auto}
@@ -316,78 +323,139 @@ tr.row-tip{background:#eff6ff}
 <!-- ─── TAB 2: 発進/到達立坑 ─── -->
 <section class="page" id="p1">
 
+  <!-- ══ 発進立坑 ══ -->
   <div class="card">
     <div class="card-title">🚀 発進立坑</div>
-    <div class="field-row full">
-      <label>立坑形状</label>
-      <div class="shaft-chips" id="launchShaftType">
-        <div class="shaft-chip active" data-val="rect" onclick="setShaftType('launch','rect',this)">矩形立坑</div>
-        <div class="shaft-chip" data-val="circle" onclick="setShaftType('launch','circle',this)">円形立坑</div>
-        <div class="shaft-chip" data-val="open" onclick="setShaftType('launch','open',this)">オープンカット</div>
+
+    <!-- 入力モード切替 -->
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="launchModeBtn0" class="mode-btn active" onclick="setShaftInputMode('launch','direct')">📏 距離直接入力</button>
+      <button id="launchModeBtn1" class="mode-btn" onclick="setShaftInputMode('launch','shape')">📐 形状から算出</button>
+    </div>
+
+    <!-- 直接入力モード -->
+    <div id="launchDirectMode">
+      <div class="ok-box" style="margin-bottom:8px">
+        座標原点（BP）から坑口（地山との境界）までの距離を直接入力します。<br>
+        立坑図面の「推進方向距離」を読み取って入力してください。
+      </div>
+      <div class="field-row">
+        <label>BP原点〜発進坑口（地山境界）までの距離 [m]</label>
+        <input id="launchDirectDist" class="mono" type="number" step="0.1" value="1.5" oninput="calcGroundLength()">
+        <span class="unit">m</span>
       </div>
     </div>
-    <div class="two-col">
-      <div class="field-row"><label>内法幅 B [m]</label><input id="launchW" class="mono" type="number" step="0.1" value="3.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
-      <div class="field-row"><label>内法長（推進方向）L [m]</label><input id="launchL" class="mono" type="number" step="0.1" value="4.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+
+    <!-- 形状入力モード -->
+    <div id="launchShapeMode" style="display:none">
+      <div class="field-row full">
+        <label>立坑形状</label>
+        <div class="shaft-chips" id="launchShaftTypeChips">
+          <div class="shaft-chip active" data-val="rect" onclick="setShaftType('launch','rect',this)">矩形立坑</div>
+          <div class="shaft-chip" data-val="circle" onclick="setShaftType('launch','circle',this)">円形立坑</div>
+          <div class="shaft-chip" data-val="open" onclick="setShaftType('launch','open',this)">オープンカット</div>
+        </div>
+      </div>
+      <!-- 矩形 -->
+      <div id="launchRectInputs">
+        <div class="two-col">
+          <div class="field-row"><label>内法幅 B [m]</label><input id="launchW" class="mono" type="number" step="0.1" value="3.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+          <div class="field-row"><label>内法長 L（推進方向）[m]</label><input id="launchL" class="mono" type="number" step="0.1" value="4.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+        </div>
+        <div class="field-row">
+          <label>発進フレーム設置位置（坑口〜フレーム前端）[m]</label>
+          <input id="launchFrameOffset" class="mono" type="number" step="0.1" value="0.3" oninput="calcGroundLength()">
+          <span class="unit">m</span>
+        </div>
+      </div>
+      <!-- 円形 -->
+      <div id="launchCircleInputs" style="display:none">
+        <div class="field-row">
+          <label>立坑内径 φ [m]</label>
+          <input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcGroundLength()">
+          <span class="unit">m</span>
+        </div>
+        <div class="field-row">
+          <label>管中心〜立坑中心のオフセット [m]</label>
+          <input id="launchCircleOffset" class="mono" type="number" step="0.05" value="0.0" oninput="calcGroundLength()">
+          <span class="unit">m</span>
+        </div>
+      </div>
+      <!-- 算出された距離表示 -->
+      <div class="note-box" id="launchShapeCalcNote" style="margin-top:8px"></div>
     </div>
-    <div class="field-row">
-      <label>坑口から地山までの距離 [m]</label>
-      <input id="launchEntry" class="mono" type="number" step="0.1" value="0.5" oninput="calcGroundLength()">
-      <span class="unit">m</span>
-    </div>
-    <div class="note-box" id="launchNote"></div>
   </div>
 
+  <!-- ══ 到達立坑 ══ -->
   <div class="card">
     <div class="card-title">🏁 到達立坑（マンホール等）</div>
-    <div class="field-row full">
-      <label>到達形状・種別</label>
-      <div class="shaft-chips" id="arrivalShaftType">
-        <div class="shaft-chip active" data-val="manhole" onclick="setShaftType('arrival','manhole',this)">マンホール</div>
-        <div class="shaft-chip" data-val="rect" onclick="setShaftType('arrival','rect',this)">矩形立坑</div>
-        <div class="shaft-chip" data-val="circle" onclick="setShaftType('arrival','circle',this)">円形立坑</div>
-        <div class="shaft-chip" data-val="shield" onclick="setShaftType('arrival','shield',this)">シールド坑</div>
-        <div class="shaft-chip" data-val="open" onclick="setShaftType('arrival','open',this)">オープンカット</div>
-        <div class="shaft-chip" data-val="direct" onclick="setShaftType('arrival','direct',this)">直接掘削</div>
+
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button id="arrivalModeBtn0" class="mode-btn active" onclick="setShaftInputMode('arrival','direct')">📏 距離直接入力</button>
+      <button id="arrivalModeBtn1" class="mode-btn" onclick="setShaftInputMode('arrival','shape')">📐 形状から算出</button>
+    </div>
+
+    <!-- 直接入力 -->
+    <div id="arrivalDirectMode">
+      <div class="ok-box" style="margin-bottom:8px">
+        到達坑口（地山との境界）〜推進終点（EP）までの距離を直接入力します。
+      </div>
+      <div class="field-row">
+        <label>到達坑口（地山境界）〜EP終点までの距離 [m]</label>
+        <input id="arrivalDirectDist" class="mono" type="number" step="0.1" value="0.8" oninput="calcGroundLength()">
+        <span class="unit">m</span>
       </div>
     </div>
-    <!-- マンホール専用 -->
-    <div id="manholeFields">
+
+    <!-- 形状入力 -->
+    <div id="arrivalShapeMode" style="display:none">
       <div class="field-row full">
-        <label>マンホール内径</label>
-        <select id="manholeSize" onchange="calcGroundLength()">
-          <option value="0.6">φ600mm（1号人孔）</option>
-          <option value="0.9">φ900mm（2号人孔）</option>
-          <option value="1.2" selected>φ1200mm（3号人孔）</option>
-          <option value="1.5">φ1500mm（4号人孔）</option>
-          <option value="1.8">φ1800mm（大型人孔）</option>
-          <option value="custom">カスタム</option>
-        </select>
+        <label>到達形状・種別</label>
+        <div class="shaft-chips" id="arrivalShaftTypeChips" style="grid-template-columns:repeat(3,1fr)">
+          <div class="shaft-chip active" data-val="manhole" onclick="setShaftType('arrival','manhole',this)">マンホール</div>
+          <div class="shaft-chip" data-val="rect" onclick="setShaftType('arrival','rect',this)">矩形立坑</div>
+          <div class="shaft-chip" data-val="circle" onclick="setShaftType('arrival','circle',this)">円形立坑</div>
+          <div class="shaft-chip" data-val="shield" onclick="setShaftType('arrival','shield',this)">シールド坑</div>
+          <div class="shaft-chip" data-val="open" onclick="setShaftType('arrival','open',this)">オープンカット</div>
+          <div class="shaft-chip" data-val="direct" onclick="setShaftType('arrival','direct_cut',this)">直接掘削</div>
+        </div>
       </div>
-      <div class="field-row" id="manholeCustomRow" style="display:none">
-        <label>内径 [m]</label><input id="manholeCustomD" class="mono" type="number" step="0.1" value="1.2" oninput="calcGroundLength()"><span class="unit">m</span>
+      <div id="manholeFields">
+        <div class="field-row full">
+          <label>マンホール内径</label>
+          <select id="manholeSize" onchange="onManholeChange()">
+            <option value="0.6">φ600mm（1号人孔）</option>
+            <option value="0.9">φ900mm（2号人孔）</option>
+            <option value="1.2" selected>φ1200mm（3号人孔）</option>
+            <option value="1.5">φ1500mm（4号人孔）</option>
+            <option value="1.8">φ1800mm（大型人孔）</option>
+            <option value="custom">カスタム指定</option>
+          </select>
+        </div>
+        <div class="field-row" id="manholeCustomRow" style="display:none">
+          <label>内径 [m]</label><input id="manholeCustomD" class="mono" type="number" step="0.1" value="1.2" oninput="calcGroundLength()"><span class="unit">m</span>
+        </div>
       </div>
-    </div>
-    <div id="arrivalRectFields" style="display:none">
-      <div class="two-col">
-        <div class="field-row"><label>内法幅 B [m]</label><input id="arrivalW" class="mono" type="number" step="0.1" value="3.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
-        <div class="field-row"><label>内法長 L [m]</label><input id="arrivalL" class="mono" type="number" step="0.1" value="4.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+      <div id="arrivalRectFields" style="display:none">
+        <div class="two-col">
+          <div class="field-row"><label>内法幅 B [m]</label><input id="arrivalW" class="mono" type="number" step="0.1" value="3.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+          <div class="field-row"><label>内法長 L [m]</label><input id="arrivalL" class="mono" type="number" step="0.1" value="3.0" oninput="calcGroundLength()"><span class="unit">m</span></div>
+        </div>
       </div>
-    </div>
-    <div class="field-row">
-      <label>坑口から地山までの距離 [m]</label>
-      <input id="arrivalEntry" class="mono" type="number" step="0.1" value="0.3" oninput="calcGroundLength()">
-      <span class="unit">m</span>
+      <div id="arrivalCircleFields" style="display:none">
+        <div class="field-row"><label>立坑内径 φ [m]</label><input id="arrivalCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcGroundLength()"><span class="unit">m</span></div>
+      </div>
+      <div class="note-box" id="arrivalShapeCalcNote" style="margin-top:8px"></div>
     </div>
   </div>
 
-  <!-- 推進距離サマリー -->
+  <!-- ══ 推進距離サマリー ══ -->
   <div class="card">
     <div class="card-title ok">📏 実地山推進距離の算定</div>
     <div class="ok-box">
       <b>推進力計算には「実地山推進距離」を使用します</b><br>
-      実地山区間 = 総推進延長 − 発進側立坑内距離 − 到達側立坑内距離<br>
-      立坑内は地山摩擦が発生しないため、fo×L の積算から除外します。
+      実地山区間 = 総推進延長 − 発進側坑内距離 − 到達側坑内距離<br>
+      立坑・マンホール内では地山との摩擦が発生しないため fo×L 積算から除外します。
     </div>
     <div class="metrics-grid">
       <div class="metric-card">
@@ -396,22 +464,24 @@ tr.row-tip{background:#eff6ff}
         <div class="metric-sub">m</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">発進側 坑内区間</div>
+        <div class="metric-label">発進側 除外距離</div>
         <div class="metric-value" id="res_launchInside">—</div>
-        <div class="metric-sub">m (地山外・除外)</div>
+        <div class="metric-sub">m (坑内・除外)</div>
       </div>
       <div class="metric-card">
-        <div class="metric-label">到達側 坑内区間</div>
+        <div class="metric-label">到達側 除外距離</div>
         <div class="metric-value" id="res_arrivalInside">—</div>
-        <div class="metric-sub">m (地山外・除外)</div>
+        <div class="metric-sub">m (坑内・除外)</div>
       </div>
       <div class="metric-card">
         <div class="metric-label" style="color:var(--blue2)">実地山推進距離</div>
         <div class="metric-value ok" id="res_groundLen">—</div>
-        <div class="metric-sub">m ← 推進力計算に使用</div>
+        <div class="metric-sub">m ← 推進力計算使用</div>
       </div>
     </div>
-    <div class="note-box" id="groundLenNote"></div>
+    <!-- 図解 -->
+    <canvas id="distDiagram" style="width:100%;height:100px;margin-top:8px;border-radius:8px"></canvas>
+    <div class="note-box" id="groundLenNote" style="margin-top:8px"></div>
   </div>
 
 </section>
@@ -460,12 +530,55 @@ tr.row-tip{background:#eff6ff}
 
   <div class="card">
     <div class="card-title">🧱 支圧壁（反力壁）仕様</div>
-    <div class="two-col">
+
+    <!-- 立坑形状連動 -->
+    <div class="note-box" id="wallShaftNote" style="margin-bottom:8px">
+      立坑タブで形状を設定すると、利用可能な最大幅・高さが自動反映されます。
+    </div>
+
+    <div class="field-row full">
+      <label>発進立坑の形状（支圧壁制約に使用）</label>
+      <div class="shaft-chips" id="wallShaftShape" style="grid-template-columns:repeat(3,1fr)">
+        <div class="shaft-chip active" data-val="rect" onclick="setWallShaft('rect',this)">矩形立坑</div>
+        <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)">円形立坑</div>
+        <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)">オープンカット</div>
+      </div>
+    </div>
+
+    <!-- 矩形立坑の場合 -->
+    <div id="wallRectInputs">
+      <div class="two-col">
+        <div class="field-row"><label>立坑内法幅 B_pit [m]</label><input id="wallPitW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
+        <div class="field-row"><label>立坑内法高 H_pit [m]</label><input id="wallPitH" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+      </div>
+    </div>
+
+    <!-- 円形立坑の場合 -->
+    <div id="wallCircleInputs" style="display:none">
+      <div class="field-row">
+        <label>立坑内径 φ_pit [m]</label>
+        <input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()">
+        <span class="unit">m</span>
+      </div>
+      <div class="field-row">
+        <label>管中心高（底版上面から）[m]</label>
+        <input id="wallCirclePipeH" class="mono" type="number" step="0.05" value="1.0" oninput="calcBacklock()">
+        <span class="unit">m</span>
+      </div>
+      <!-- 円形立坑の有効幅図 -->
+      <div id="circleWallDiagram" class="backlock-vis" style="margin-top:8px">
+        <canvas id="circleWallCanvas" style="width:200px;height:200px;display:block;margin:0 auto"></canvas>
+        <div id="circleWallInfo" style="font-size:12px;color:var(--sub);margin-top:6px;text-align:center"></div>
+      </div>
+    </div>
+
+    <div class="two-col" style="margin-top:10px">
       <div class="field-row"><label>壁幅 Bw [m]</label><input id="wallW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>壁高 Hw [m]</label><input id="wallH" class="mono" type="number" step="0.1" value="2.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>許容支圧応力 fa [kN/m²]</label><input id="wallFa" class="mono" type="number" step="10" value="350" oninput="calcBacklock()"><span class="unit">kN/m²</span></div>
-      <div class="field-row"><label>推進機軸高（GL-） [m]</label><input id="wallAxisH" class="mono" type="number" step="0.1" value="1.0" oninput="calcBacklock()"><span class="unit">m</span></div>
+      <div class="field-row"><label>推進機軸高（底版上面から）[m]</label><input id="wallAxisH" class="mono" type="number" step="0.1" value="1.0" oninput="calcBacklock()"><span class="unit">m</span></div>
     </div>
+    <div id="wallConstraintNote"></div>
   </div>
 
   <div class="card">
@@ -751,59 +864,209 @@ function getCurves(){
 }
 
 // ══════════════════════════════════════════════
-//  立坑形状選択
+//  入力モード切替（直接/形状）
 // ══════════════════════════════════════════════
-function setShaftType(side, val, el){
-  const key = side==='launch'?'launchShaft':'arrivalShaft';
-  if(side==='launch') launchShaft=val;
-  else arrivalShaft=val;
-  el.closest('.shaft-chips').querySelectorAll('.shaft-chip').forEach(c=>c.classList.remove('active'));
-  el.classList.add('active');
-  if(side==='arrival'){
-    document.getElementById('manholeFields').style.display = val==='manhole'?'':'none';
-    document.getElementById('arrivalRectFields').style.display = (val==='rect'||val==='circle'||val==='shield')?'':'none';
+let launchInputMode = 'direct'; // 'direct' | 'shape'
+let arrivalInputMode = 'direct';
+
+function setShaftInputMode(side, mode){
+  if(side==='launch'){
+    launchInputMode = mode;
+    document.getElementById('launchDirectMode').style.display = mode==='direct'?'':'none';
+    document.getElementById('launchShapeMode').style.display  = mode==='shape'?'':'none';
+    document.getElementById('launchModeBtn0').classList.toggle('active', mode==='direct');
+    document.getElementById('launchModeBtn1').classList.toggle('active', mode==='shape');
+  } else {
+    arrivalInputMode = mode;
+    document.getElementById('arrivalDirectMode').style.display = mode==='direct'?'':'none';
+    document.getElementById('arrivalShapeMode').style.display  = mode==='shape'?'':'none';
+    document.getElementById('arrivalModeBtn0').classList.toggle('active', mode==='direct');
+    document.getElementById('arrivalModeBtn1').classList.toggle('active', mode==='shape');
   }
   calcGroundLength();
 }
 
 // ══════════════════════════════════════════════
+//  立坑形状選択
+// ══════════════════════════════════════════════
+function setShaftType(side, val, el){
+  if(side==='launch') launchShaft=val;
+  else arrivalShaft=val;
+  el.closest('.shaft-chips').querySelectorAll('.shaft-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  if(side==='launch'){
+    document.getElementById('launchRectInputs').style.display   = (val==='rect'||val==='open')?'':'none';
+    document.getElementById('launchCircleInputs').style.display = val==='circle'?'':'none';
+  }
+  if(side==='arrival'){
+    document.getElementById('manholeFields').style.display      = val==='manhole'?'':'none';
+    document.getElementById('arrivalRectFields').style.display  = (val==='rect'||val==='shield'||val==='open')?'':'none';
+    document.getElementById('arrivalCircleFields').style.display= val==='circle'?'':'none';
+  }
+  calcGroundLength();
+  calcBacklock();
+}
+
+function onManholeChange(){
+  document.getElementById('manholeCustomRow').style.display =
+    document.getElementById('manholeSize').value==='custom' ? '' : 'none';
+  calcGroundLength();
+}
+
+// ══════════════════════════════════════════════
+//  支圧壁 立坑形状選択
+// ══════════════════════════════════════════════
+let wallShaftShape = 'rect';
+function setWallShaft(val, el){
+  wallShaftShape = val;
+  el.closest('.shaft-chips').querySelectorAll('.shaft-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('wallRectInputs').style.display   = (val==='rect'||val==='open')?'':'none';
+  document.getElementById('wallCircleInputs').style.display = val==='circle'?'':'none';
+  calcBacklock();
+}
+
+// ══════════════════════════════════════════════
 //  推進距離計算（最重要ロジック）
 // ══════════════════════════════════════════════
+function getShaftExclusion(side){
+  // side: 'launch' | 'arrival'
+  // returns: {dist: 除外距離m, desc: 説明文}
+  const mode = side==='launch' ? launchInputMode : arrivalInputMode;
+
+  if(mode==='direct'){
+    // ── 直接入力モード ──
+    const id = side==='launch' ? 'launchDirectDist' : 'arrivalDirectDist';
+    const d = Math.max(0, +document.getElementById(id).value||0);
+    return {dist:d, desc:`直接入力値 ${d.toFixed(2)} m`};
+  }
+
+  // ── 形状から算出モード ──
+  const shape = side==='launch' ? launchShaft : arrivalShaft;
+  let dist=0, desc='';
+
+  if(side==='launch'){
+    if(shape==='rect'||shape==='open'){
+      const L  = +document.getElementById('launchL').value||4.0;
+      const fo = +document.getElementById('launchFrameOffset').value||0.3;
+      // 発進側除外 = 立坑長（推進方向）- 発進フレーム前端が立坑内に残る部分
+      // ※ 通常: 発進坑口(地山側壁)から立坑の前壁(反力壁側)まで全て立坑内
+      //   発進フレームの場合、管が地山に入る前の区間（フレーム内）も除外
+      dist = fo; // 坑口から地山境界まで
+      desc = `矩形立坑 坑口〜地山 ${dist.toFixed(2)} m（フレームオフセット ${fo}m）`;
+    } else if(shape==='circle'){
+      const D   = +document.getElementById('launchCircleD').value||3.5;
+      const off = +document.getElementById('launchCircleOffset').value||0;
+      // 円形立坑: 管中心から坑口(立坑壁)まで = R - offset（推進方向の端）
+      dist = Math.max(0, D/2 - Math.abs(off));
+      desc = `円形立坑 φ${D}m: 坑口〜地山 ${dist.toFixed(2)} m`;
+    }
+    const noteEl = document.getElementById('launchShapeCalcNote');
+    if(noteEl) noteEl.textContent = `算出された除外距離: ${dist.toFixed(2)} m — ${desc}`;
+  } else {
+    // arrival
+    if(shape==='manhole'){
+      const sel = document.getElementById('manholeSize').value;
+      const mhD = sel==='custom'? (+document.getElementById('manholeCustomD').value||1.2) : +sel;
+      // マンホール内到達: 管が管路中心でマンホール中心に到達
+      //   除外 = マンホール内径/2（EP位置がマンホール中心）
+      dist = mhD/2;
+      desc = `マンホール φ${mhD*1000|0}mm: 半径分 ${dist.toFixed(2)} m`;
+    } else if(shape==='rect'||shape==='shield'||shape==='open'){
+      const L = +document.getElementById('arrivalL').value||3.0;
+      dist = L/2; // 到達坑の中心までの距離として半分
+      desc = `矩形立坑 到達坑内 ${dist.toFixed(2)} m`;
+    } else if(shape==='circle'){
+      const D = +document.getElementById('arrivalCircleD').value||3.5;
+      dist = D/2;
+      desc = `円形立坑 φ${D}m: 半径分 ${dist.toFixed(2)} m`;
+    } else {
+      dist = 0.3;
+      desc = '直接掘削 0.3m';
+    }
+    const noteEl = document.getElementById('arrivalShapeCalcNote');
+    if(noteEl) noteEl.textContent = `算出された除外距離: ${dist.toFixed(2)} m — ${desc}`;
+  }
+  return {dist, desc};
+}
+
 function calcGroundLength(){
   const totalL = +document.getElementById('totalLength').value||100;
-
-  // 発進側の坑内区間 = 坑口～地山
-  // 地山推進は「坑口から地山まで」の距離 + 管が立坑内にある間 = 立坑長（推進方向）- 管が坑口を出るまで
-  // 最もシンプルかつ正確な方法:
-  //   発進側除外 = 坑口内距離(launchEntry) + 推進フレームアーム長(通常0)
-  //   ※ 立坑内は土圧がかからない → fo×L を積算しない
-  const launchInside = Math.max(0, +document.getElementById('launchEntry').value||0.5);
-
-  // 到達側の坑内区間
-  let arrivalInside = 0;
-  if(arrivalShaft==='manhole'){
-    const sel=document.getElementById('manholeSize').value;
-    const mhD = sel==='custom'? (+document.getElementById('manholeCustomD').value||1.2) : +sel;
-    document.getElementById('manholeCustomRow').style.display = sel==='custom'?'':'none';
-    // マンホール内 + 坑口距離
-    arrivalInside = mhD/2 + (+document.getElementById('arrivalEntry').value||0.3);
-  } else {
-    arrivalInside = Math.max(0, +document.getElementById('arrivalEntry').value||0.3);
-  }
+  const launchEx  = getShaftExclusion('launch');
+  const arrivalEx = getShaftExclusion('arrival');
+  const launchInside  = launchEx.dist;
+  const arrivalInside = arrivalEx.dist;
 
   groundLength = Math.max(0, totalL - launchInside - arrivalInside);
 
-  document.getElementById('res_totalLen').textContent = totalL.toFixed(2);
+  document.getElementById('res_totalLen').textContent    = totalL.toFixed(2);
   document.getElementById('res_launchInside').textContent = launchInside.toFixed(2);
-  document.getElementById('res_arrivalInside').textContent = arrivalInside.toFixed(2);
-  document.getElementById('res_groundLen').textContent = groundLength.toFixed(2);
+  document.getElementById('res_arrivalInside').textContent= arrivalInside.toFixed(2);
+  document.getElementById('res_groundLen').textContent   = groundLength.toFixed(2);
 
-  const pct = ((launchInside+arrivalInside)/totalL*100).toFixed(1);
+  const pct = totalL>0 ? ((launchInside+arrivalInside)/totalL*100).toFixed(1) : 0;
   document.getElementById('groundLenNote').innerHTML =
-    `坑内区間合計 ${(launchInside+arrivalInside).toFixed(2)} m (${pct}%) を fo×L の積算から除外します。<br>` +
-    `実地山推進距離 <b>${groundLength.toFixed(2)} m</b> で推進力を計算します。`;
+    `発進側: ${launchEx.desc}<br>到達側: ${arrivalEx.desc}<br>` +
+    `坑内除外合計 ${(launchInside+arrivalInside).toFixed(2)} m (${pct}%) → ` +
+    `<b>実地山推進距離 ${groundLength.toFixed(2)} m</b>`;
 
+  drawDistDiagram(totalL, launchInside, arrivalInside, groundLength);
   autoSave();
+}
+
+function drawDistDiagram(total, launch, arrival, ground){
+  const canvas = document.getElementById('distDiagram');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  canvas.width  = canvas.clientWidth*dpr;
+  canvas.height = canvas.clientHeight*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W=canvas.clientWidth, H=canvas.clientHeight;
+  ctx.clearRect(0,0,W,H);
+  const m={l:8,r:8,t:18,b:20};
+  const gw=W-m.l-m.r, gh=H-m.t-m.b;
+  const sc=d=>m.l+d/total*gw;
+
+  // 背景
+  ctx.fillStyle='#f8fafc'; ctx.fillRect(m.l,m.t,gw,gh);
+
+  // 発進立坑部
+  ctx.fillStyle='rgba(99,102,241,.18)';
+  ctx.fillRect(m.l, m.t, sc(launch)-m.l, gh);
+  ctx.fillStyle='#4f46e5'; ctx.font=`bold 11px Meiryo`; ctx.textAlign='center';
+  if(launch/total>0.04) ctx.fillText(`${launch.toFixed(1)}m`, (m.l+sc(launch))/2, m.t+gh/2+4);
+
+  // 地山区間（緑）
+  ctx.fillStyle='rgba(34,197,94,.18)';
+  ctx.fillRect(sc(launch), m.t, sc(launch+ground)-sc(launch), gh);
+  ctx.fillStyle='#16a34a'; ctx.textAlign='center';
+  ctx.fillText(`地山 ${ground.toFixed(1)} m`, (sc(launch)+sc(launch+ground))/2, m.t+gh/2+4);
+
+  // 到達立坑部
+  ctx.fillStyle='rgba(249,115,22,.18)';
+  ctx.fillRect(sc(launch+ground), m.t, gw-(sc(launch+ground)-m.l), gh);
+  ctx.fillStyle='#ea580c'; ctx.textAlign='center';
+  if(arrival/total>0.04) ctx.fillText(`${arrival.toFixed(1)}m`, (sc(launch+ground)+W-m.r)/2, m.t+gh/2+4);
+
+  // 境界線
+  ctx.strokeStyle='#94a3b8'; ctx.lineWidth=1.5;
+  [launch, launch+ground].forEach(d=>{
+    const x=sc(d);
+    ctx.setLineDash([3,2]); ctx.beginPath(); ctx.moveTo(x,m.t); ctx.lineTo(x,m.t+gh); ctx.stroke();
+    ctx.setLineDash([]);
+  });
+  ctx.strokeStyle='#475569'; ctx.lineWidth=2;
+  ctx.strokeRect(m.l,m.t,gw,gh);
+
+  // ラベル上部
+  ctx.font='10px Meiryo'; ctx.fillStyle='#475569'; ctx.textAlign='left';
+  ctx.fillText('SP(発進)', m.l+3, m.t-4);
+  ctx.textAlign='right';
+  ctx.fillText('EP(到達)', W-m.r-3, m.t-4);
+  ctx.textAlign='center';
+  ctx.fillStyle='#334155'; ctx.font='bold 10px Meiryo';
+  ctx.fillText(`総推進延長 ${total.toFixed(1)} m`, W/2, H-4);
 }
 
 // ══════════════════════════════════════════════
@@ -1180,85 +1443,215 @@ function drawForceGraph(){
 }
 
 // ══════════════════════════════════════════════
+//  円形立坑 支圧壁の有効幅計算
+//  圧縮力の作用高さにおける弦長 = 2√((R_pit)²-(|y|)²)
+//  y = 管中心高 - 立坑中心高
+// ══════════════════════════════════════════════
+function getCircleWallConstraint(pitD, pipeAxisH){
+  // pitD: 立坑内径 [m]  pipeAxisH: 底版上面から管中心まで [m]
+  const R = pitD/2;
+  const pitCenterH = pitD/2; // 立坑中心高(底版から)
+  const y = pipeAxisH - pitCenterH; // 管中心の偏心量（上が正）
+
+  // 管中心高での弦長（支圧壁最大幅）
+  const chordY = 2*Math.sqrt(Math.max(0, R**2 - y**2));
+
+  // 支圧壁の高さ = 管中心から上下に同等広がる幅で、円弧に収まる最大矩形を求める
+  // 最大矩形: 幅 w, 高さ h で w = 2√(R²-(y±h/2)²) を満たすもの
+  // 単純化: 壁中心を管中心と一致させ、壁高 Hw の場合の有効幅を計算
+  function effectiveWidth(Hw){
+    const topY = y + Hw/2;
+    const botY = y - Hw/2;
+    const wTop = 2*Math.sqrt(Math.max(0, R**2 - topY**2));
+    const wBot = 2*Math.sqrt(Math.max(0, R**2 - botY**2));
+    return Math.min(wTop, wBot); // 最小弦長（矩形が内接するため）
+  }
+
+  return {R, y, chordY, effectiveWidth};
+}
+
+function drawCircleWallCanvas(pitD, pipeAxisH, wallW, wallH){
+  const canvas = document.getElementById('circleWallCanvas');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const size = Math.min(canvas.clientWidth, canvas.clientHeight) || 200;
+  canvas.width = size*dpr; canvas.height = size*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,size,size);
+
+  const R = pitD/2;
+  const scale = (size*0.42)/R;
+  const cx = size/2, cy = size/2;
+  const pitCenterH = R; // 底版から立坑中心まで
+  const y = (pipeAxisH - pitCenterH) * scale; // 画面Y（下が正）→ 上が正なのでマイナス
+
+  // 立坑円
+  ctx.strokeStyle='#64748b'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx,cy,R*scale,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle='rgba(148,163,184,.1)'; ctx.fill();
+
+  // 支圧壁（矩形）
+  const hw2 = (wallH/2)*scale;
+  const bw2 = (wallW/2)*scale;
+  const wallCy = cy - y; // 管中心Y（画面上）
+  ctx.fillStyle='rgba(37,99,235,.25)';
+  ctx.strokeStyle='#1d6fd8'; ctx.lineWidth=1.5;
+  ctx.fillRect(cx-bw2, wallCy-hw2, bw2*2, hw2*2);
+  ctx.strokeRect(cx-bw2, wallCy-hw2, bw2*2, hw2*2);
+
+  // 管断面
+  const pipeD = +document.getElementById('pipeOuter').value||0.96;
+  const pr = (pipeD/2)*scale;
+  ctx.strokeStyle='#dc2626'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(cx, wallCy, pr, 0, Math.PI*2); ctx.stroke();
+
+  // 有効幅線（管中心での弦）
+  const chordHalf = Math.sqrt(Math.max(0, (R*scale)**2 - y**2));
+  ctx.strokeStyle='#16a34a'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(cx-chordHalf, wallCy); ctx.lineTo(cx+chordHalf, wallCy); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 寸法ラベル
+  ctx.fillStyle='#1d6fd8'; ctx.font=`bold ${Math.max(9,size*0.055)}px Meiryo`; ctx.textAlign='center';
+  ctx.fillText(`φ${pitD*1000|0}mm`, cx, cy-R*scale-6);
+
+  const {effectiveWidth} = getCircleWallConstraint(pitD,pipeAxisH);
+  const effW = effectiveWidth(wallH);
+  document.getElementById('circleWallInfo').innerHTML =
+    `管中心高(底版上面から): <b>${pipeAxisH}m</b> &nbsp;|&nbsp; ` +
+    `管中心での弦長: <b>${(chordHalf*2/scale).toFixed(3)}m</b><br>` +
+    `壁高 ${wallH}m 時の有効幅: <b style="color:${effW<wallW?'#dc2626':'#16a34a'}">${effW.toFixed(3)}m</b>` +
+    (effW<wallW?` ← ⚠️ 指定幅 ${wallW}m 超過`:'');
+}
+
+// ══════════════════════════════════════════════
 //  バックロック計算
 // ══════════════════════════════════════════════
 function calcBacklock(){
   const mode = document.getElementById('blocklockMode').value;
   document.getElementById('blocklockManual').style.display = mode==='manual'?'':'none';
 
-  const Bw = +document.getElementById('wallW').value||3.0;
-  const Hw = +document.getElementById('wallH').value||2.0;
-  const fa = +document.getElementById('wallFa').value||350;
-  const axisH = +document.getElementById('wallAxisH').value||1.0;
-  const fc = +document.getElementById('blConcrete').value||21;
-  const F = calcResult ? calcResult.maxF : 1000;
-  const phi = calcResult ? calcResult.inp.phi : 30;
-  const gamma = calcResult ? calcResult.inp.gamma : 18;
+  const Bw     = +document.getElementById('wallW').value||3.0;
+  const Hw     = +document.getElementById('wallH').value||2.0;
+  const fa     = +document.getElementById('wallFa').value||350;
+  const axisH  = +document.getElementById('wallAxisH').value||1.0;
+  const fc     = +document.getElementById('blConcrete').value||21;
+  const F      = calcResult ? calcResult.maxF : 1000;
+  const phi    = calcResult ? calcResult.inp.phi : 30;
+  const gamma  = calcResult ? calcResult.inp.gamma : 18;
 
-  // コンクリート圧縮許容応力（f′cの60%程度）
+  // ── 立坑形状による支圧壁の最大幅・高さ制約 ──
+  let maxBw = Infinity, maxHw = Infinity;
+  let constraintDesc = '';
+
+  if(wallShaftShape==='rect'||wallShaftShape==='open'){
+    const pitW = +document.getElementById('wallPitW').value||3.0;
+    const pitH = +document.getElementById('wallPitH').value||3.5;
+    maxBw = pitW; maxHw = pitH;
+    constraintDesc = `矩形立坑 内法幅 ${pitW}m × 内法高 ${pitH}m`;
+    // wallW/wallH を超えていたら警告
+  } else if(wallShaftShape==='circle'){
+    const pitD   = +document.getElementById('wallCircleD').value||3.5;
+    const pipeH  = axisH;
+    const {effectiveWidth} = getCircleWallConstraint(pitD, pipeH);
+    maxBw = effectiveWidth(Hw);
+    maxHw = pitD; // 高さ方向は直径が上限（実際には弦長）
+    constraintDesc = `円形立坑 φ${pitD}m: 壁高${Hw}m時の有効幅 ${maxBw.toFixed(3)}m`;
+    drawCircleWallCanvas(pitD, pipeH, Math.min(Bw,maxBw), Hw);
+  } else {
+    constraintDesc = 'オープンカット: 制約なし';
+  }
+
+  const effectiveBw = Math.min(Bw, maxBw);
+  const exceedsBw   = Bw > maxBw;
+
+  document.getElementById('wallConstraintNote').innerHTML =
+    exceedsBw
+      ? `<div class="ng-box">⚠️ 指定壁幅 ${Bw}m > 立坑制約 ${maxBw.toFixed(3)}m — 有効幅 <b>${effectiveBw.toFixed(3)}m</b> で計算します<br>${constraintDesc}</div>`
+      : `<div class="ok-box">立坑制約: ${constraintDesc} — 指定幅 ${Bw}m は範囲内 ✅</div>`;
+
+  // コンクリート圧縮許容応力（f′c×0.6）
   const fa_conc = fc*0.6*1000; // kN/m²
 
+  // ── バックロック選定 ──
   let selectedBL, blCount=1;
   if(mode==='auto'){
-    // 最適バックロック選定
-    // 必要面積 = F / fa_conc (コンクリート圧縮チェック)
     const requiredA = F / fa_conc;
-    selectedBL = BACKLOCK_STD.find(bl=>bl.w*bl.h>=requiredA) || BACKLOCK_STD[BACKLOCK_STD.length-1];
-    // 壁面接触確認: BL幅≤壁幅, BL高≤壁高
-    if(selectedBL.w > Bw || selectedBL.h > Hw){
-      blCount = Math.ceil(F/(fa_conc*Bw*Hw));
-      selectedBL = {w:Math.min(selectedBL.w,Bw), h:Math.min(selectedBL.h,Hw), d:selectedBL.d, label:'調整サイズ'};
+    // 立坑制約内で選定（幅・高さがそれぞれ effectiveBw, Hw を超えない）
+    selectedBL = BACKLOCK_STD.find(bl=>{
+      return bl.w*bl.h>=requiredA && bl.w<=effectiveBw && bl.h<=Hw;
+    });
+    if(!selectedBL){
+      // 1個で収まらない → 複数個で対応（並列配置）
+      blCount = Math.ceil(requiredA / (effectiveBw * Hw));
+      selectedBL = {
+        w: Math.min(effectiveBw, Math.sqrt(requiredA/blCount)),
+        h: Math.min(Hw, Math.sqrt(requiredA/blCount)),
+        d: 0.8,
+        label: `自動調整(${blCount}個配置)`,
+      };
     }
   } else {
     selectedBL = {
-      w:+document.getElementById('blW').value||0.8,
-      h:+document.getElementById('blH').value||0.8,
-      d:+document.getElementById('blD').value||0.6,
-      label:'手動指定',
+      w: Math.min(+document.getElementById('blW').value||0.8, effectiveBw),
+      h: +document.getElementById('blH').value||0.8,
+      d: +document.getElementById('blD').value||0.6,
+      label: '手動指定',
     };
     blCount = +document.getElementById('blCount').value||1;
   }
 
-  const A_bl = selectedBL.w * selectedBL.h * blCount;
-  const sigma_bl = F / A_bl; // バックロック面圧
-  const ok_bl = sigma_bl <= fa_conc;
+  const A_bl     = selectedBL.w * selectedBL.h * blCount;
+  const sigma_bl = F / Math.max(A_bl, 1e-9);
+  const ok_bl    = sigma_bl <= fa_conc;
 
-  // 支圧壁3段階照査
-  const A_wall = Bw * Hw;
-  const f_wall = F / A_wall;
-  const ok_f = f_wall <= fa;
+  // ── 支圧壁3段階照査（有効幅使用）──
+  const A_wall   = effectiveBw * Hw;
+  const f_wall   = F / Math.max(A_wall, 1e-9);
+  const ok_f     = f_wall <= fa;
 
-  // 偏心モーメント照査
-  const e = axisH - Hw/2;
-  const M = F * Math.abs(e);
-  const Z = Bw * Hw**2 / 6;
-  const sigma_max = F/A_wall + M/Z;
-  const ok_bending = sigma_max <= fa;
+  const e         = axisH - Hw/2;
+  const M_eccen   = F * Math.abs(e);
+  const Z_wall    = effectiveBw * Hw**2 / 6;
+  const sigma_max = F/A_wall + M_eccen/Z_wall;
+  const ok_bending= sigma_max <= fa;
 
-  // 受働土圧照査（ランキン式）
   const phiR = phi*Math.PI/180;
-  const Kp = Math.tan(Math.PI/4 + phiR/2)**2;
-  const Ep = 0.5 * gamma * Hw**2 * Kp * Bw;
-  const ok_ep = Ep >= F;
+  const Kp   = Math.tan(Math.PI/4 + phiR/2)**2;
+  const Ep   = 0.5 * gamma * Hw**2 * Kp * effectiveBw;
+  const ok_ep= Ep >= F;
+  const allOk= ok_f && ok_bending && ok_ep;
 
-  const allOk = ok_f && ok_bending && ok_ep;
+  const blVisW = Math.round(Math.max(30, Math.min(80, selectedBL.w*60)));
+  const blVisH = Math.round(Math.max(30, Math.min(70, selectedBL.h*60)));
 
   const html = `
     <div class="card">
       <div class="card-title accent">🔩 バックロック選定結果</div>
       <div class="backlock-vis">
-        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin:8px 0">
-          <span style="font-size:28px;color:var(--ng)">→ F</span>
-          <div style="display:flex;gap:4px">
-            ${Array(blCount).fill(0).map(()=>`
-              <div class="backlock-diagram" style="width:${Math.max(40,selectedBL.w*50)}px;height:${Math.max(40,selectedBL.h*50)}px;display:flex;align-items:center;justify-content:center">
-                ${selectedBL.w*100|0}×${selectedBL.h*100|0}
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:8px 0">
+          <div style="text-align:center;font-size:12px;color:var(--sub)">推進力<br>F=${F.toFixed(0)}kN</div>
+          <span style="font-size:24px;color:var(--ng);font-weight:bold">→</span>
+          <div style="display:flex;gap:3px;align-items:center">
+            ${Array(blCount).fill(0).map((_,bi)=>`
+              <div style="display:flex;flex-direction:column;align-items:center">
+                <div class="backlock-diagram" style="width:${blVisW}px;height:${blVisH}px;display:flex;align-items:center;justify-content:center;font-size:9px">
+                  W${(selectedBL.w*100|0)}<br>H${(selectedBL.h*100|0)}
+                </div>
+                ${blCount>1?`<div style="font-size:9px;color:var(--sub)">${bi+1}</div>`:''}
               </div>`).join('')}
           </div>
-          <div style="background:#8b9eb5;width:12px;height:${Math.max(50,Hw*30)}px;border-radius:2px"></div>
-          <span style="font-size:11px;color:var(--sub)">支圧壁</span>
+          <span style="font-size:24px;color:var(--ng);font-weight:bold">→</span>
+          <div style="background:#8b9eb5;width:14px;height:${Math.max(40,Hw*28)}px;border-radius:2px;position:relative">
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:9px;color:#fff;writing-mode:vertical-rl">支圧壁</div>
+          </div>
         </div>
-        <div style="font-size:12px;color:var(--sub)">${selectedBL.label} × ${blCount}個 &nbsp; (W=${selectedBL.w}m × H=${selectedBL.h}m × D=${selectedBL.d}m)</div>
+        <div style="font-size:12px;color:var(--sub)">
+          ${selectedBL.label} × ${blCount}個 &nbsp;
+          (W=${selectedBL.w.toFixed(2)}m × H=${selectedBL.h.toFixed(2)}m × D=${selectedBL.d.toFixed(2)}m)<br>
+          有効壁幅: ${effectiveBw.toFixed(3)}m ${exceedsBw?'<span style="color:#dc2626">(立坑制約で縮小)</span>':''}
+        </div>
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
@@ -1268,47 +1661,58 @@ function calcBacklock(){
         <div class="metric-card">
           <div class="metric-label">BL面圧 σ</div>
           <div class="metric-value ${ok_bl?'ok':'ng'}">${(sigma_bl/1000).toFixed(2)}</div>
-          <div class="metric-sub">N/mm²  ≤ ${(fa_conc/1000).toFixed(1)} N/mm² (${ok_bl?'OK':'NG'})</div>
+          <div class="metric-sub">N/mm² ≤ ${(fa_conc/1000).toFixed(1)}(${ok_bl?'OK':'NG'})</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">必要面積</div>
+          <div class="metric-value">${(F/fa_conc).toFixed(3)}</div>
+          <div class="metric-sub">m²</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">安全率</div>
+          <div class="metric-value ${ok_bl?'ok':'ng'}">${(fa_conc/sigma_bl).toFixed(2)}</div>
+          <div class="metric-sub">— (≥1.0)</div>
         </div>
       </div>
-      ${!ok_bl?'<div class="ng-box">バックロック面圧超過 — 配置数を増やすかサイズアップが必要です</div>':'<div class="ok-box">バックロック圧縮照査 OK</div>'}
+      ${!ok_bl?'<div class="ng-box">BL圧縮照査NG — 配置数を増やすかサイズアップが必要</div>':'<div class="ok-box">バックロック圧縮照査 OK</div>'}
     </div>
 
     <div class="card">
-      <div class="card-title">🧱 支圧壁 3段階照査</div>
+      <div class="card-title">🧱 支圧壁 3段階照査（有効壁幅 ${effectiveBw.toFixed(3)}m 使用）</div>
       <div class="tbl-wrap"><table>
-        <tr><th>照査項目</th><th>計算値</th><th>許容値</th><th>判定</th></tr>
+        <tr><th>照査項目</th><th>計算式</th><th>計算値</th><th>許容値</th><th>判定</th></tr>
         <tr>
-          <td class="left">① 基礎反力 f [kN/m²]</td>
-          <td class="mono">${f_wall.toFixed(1)}</td>
-          <td class="mono">≤ ${fa} kN/m² (fa)</td>
+          <td class="left">① 基礎反力 f</td>
+          <td class="left mono small">F/(Bw×Hw)</td>
+          <td class="mono">${f_wall.toFixed(1)} kN/m²</td>
+          <td class="mono">≤ ${fa} kN/m²</td>
           <td><span class="pill ${ok_f?'ok':'ng'}">${ok_f?'OK':'NG'}</span></td>
         </tr>
         <tr>
-          <td class="left">② 曲げ最大応力 σmax [kN/m²]</td>
-          <td class="mono">${sigma_max.toFixed(1)}</td>
-          <td class="mono">≤ ${fa} kN/m² (fa)</td>
+          <td class="left">② 偏心曲げ σmax</td>
+          <td class="left mono small">F/A + M/Z<br>e=${e.toFixed(3)}m</td>
+          <td class="mono">${sigma_max.toFixed(1)} kN/m²</td>
+          <td class="mono">≤ ${fa} kN/m²</td>
           <td><span class="pill ${ok_bending?'ok':'ng'}">${ok_bending?'OK':'NG'}</span></td>
         </tr>
         <tr>
-          <td class="left">③ 受働土圧 Ep [kN]</td>
-          <td class="mono">${Ep.toFixed(1)}</td>
-          <td class="mono">≥ ${F.toFixed(0)} kN (F)</td>
+          <td class="left">③ 受働土圧 Ep</td>
+          <td class="left mono small">½γHw²×Kp×Bw<br>Kp=${Kp.toFixed(3)}</td>
+          <td class="mono">${Ep.toFixed(1)} kN</td>
+          <td class="mono">≥ ${F.toFixed(0)} kN</td>
           <td><span class="pill ${ok_ep?'ok':'ng'}">${ok_ep?'OK':'NG'}</span></td>
         </tr>
         <tr style="background:${allOk?'#f0fdf4':'#fef2f2'}">
           <td class="left"><b>総合判定</b></td>
-          <td colspan="2">偏心距離 e=${e.toFixed(3)}m, Kp=${Kp.toFixed(3)}</td>
-          <td><span class="pill ${allOk?'ok':'ng'}">${allOk?'OK':'NG'}</span></td>
+          <td class="left small">φ=${phi}° γ=${gamma}kN/m³</td>
+          <td colspan="2">F=${F.toFixed(0)}kN Bw=${effectiveBw.toFixed(2)}m Hw=${Hw}m</td>
+          <td><span class="pill ${allOk?'ok':'ng'}">${allOk?'✅ OK':'❌ NG'}</span></td>
         </tr>
       </table></div>
-      <div style="font-size:12px;color:var(--sub);margin-top:8px">
-        推進力 F = ${F.toFixed(0)} kN | Bw=${Bw}m × Hw=${Hw}m | φ=${phi}° | γ=${gamma} kN/m³
-      </div>
     </div>`;
 
   document.getElementById('backlockResult').innerHTML = html;
-  document.getElementById('wallCheckResult').innerHTML = ''; // 統合済み
+  document.getElementById('wallCheckResult').innerHTML = '';
 }
 
 // ══════════════════════════════════════════════
@@ -1495,10 +1899,13 @@ function toast(msg){
 //  初期化
 // ══════════════════════════════════════════════
 function init(){
-  // デフォルト管径設定
   onPipeDiaChange();
   setMethod('blade');
+  // モードボタン初期状態
+  setShaftInputMode('launch','direct');
+  setShaftInputMode('arrival','direct');
   calcGroundLength();
+  calcBacklock();
 
   // ドラフト復元
   try{
@@ -1506,29 +1913,24 @@ function init(){
     if(draft) applyProjectData(JSON.parse(draft));
   }catch(e){}
 
-  // 既存プロジェクト引き継ぎ
+  // 既存プロジェクト引き継ぎ（旧JSONから）
   try{
     const old=localStorage.getItem('curvedJackingProject');
     if(old && !localStorage.getItem('M_APP_005_draft')){
       const p=JSON.parse(old);
-      // 基本情報だけ引き継ぎ
-      if(p.site) document.getElementById('siteName').value=p.site.name||'';
-      if(p.pipe?.size) document.getElementById('pipeDia').value=p.pipe.size;
+      if(p.site?.name) document.getElementById('siteName').value=p.site.name;
+      if(p.pipe?.size) { document.getElementById('pipeDia').value=p.pipe.size; onPipeDiaChange(); }
       if(p.soil?.H) document.getElementById('soilH').value=p.soil.H;
+      calcGroundLength();
     }
   }catch(e){}
 
-  // マンホール選択変更
-  document.getElementById('manholeSize').addEventListener('change',function(){
-    document.getElementById('manholeCustomRow').style.display=this.value==='custom'?'':'none';
+  // canvas リサイズ対応
+  window.addEventListener('resize',()=>{
     calcGroundLength();
+    if(calcResult && currentTab===2) drawForceGraph();
+    if(currentTab===3 && wallShaftShape==='circle') calcBacklock();
   });
-
-  // 曲線なし状態でデモ直線を示す
-  if(document.querySelectorAll('#curveList .card').length===0){
-    // デフォルトで1曲線追加
-    // (空でも動くが、ユーザーが追加できる)
-  }
 }
 
 document.addEventListener('DOMContentLoaded', init);
