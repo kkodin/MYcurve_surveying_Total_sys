@@ -318,6 +318,16 @@ tr.row-tip{background:#eff6ff}
     </div>
   </div>
 
+  <!-- ══ 管長さ最適化アドバイス ══ -->
+  <div class="card" id="pipeLenOptCard">
+    <div class="card-title">📐 管長さ最適化アドバイス</div>
+    <div style="font-size:12px;color:var(--sub);background:var(--bg);border-radius:8px;padding:9px 11px;margin-bottom:8px;line-height:1.7">
+      曲線区間では継手の目地開き量が管長を制約します。直線区間には継手制約がないため長い管ほど経済的です。<br>
+      <b>目地開き量</b>: S₁ = D×l′ / (2(R−D/2)) + S₄ ≤ 許容値
+    </div>
+    <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると最適管長を表示します。</div></div>
+  </div>
+
 </section>
 
 <!-- ─── TAB 2: 発進/到達立坑 ─── -->
@@ -1900,6 +1910,132 @@ function calcBacklock(){
 
 
 // ══════════════════════════════════════════════
+//  管長さ最適化アドバイス
+//
+//  曲線区間: S₁ = D×l′/(2(R-D/2)) + S₄ ≤ 許容開き
+//  最大管長: L_max = (許容開き−S₄)/1000 × 2(R−D/2)/D  [m]
+//  直線区間: 目地制約なし → 経済的な長い管を推奨
+//  立坑制約: 矩形発進立坑の内法長（推進方向）≥ 管長
+// ══════════════════════════════════════════════
+const STD_PIPE_LENGTHS = [1.00, 1.20, 1.50, 1.80, 2.00, 2.43, 2.50, 3.00, 3.50, 4.00];
+
+function calcPipeLenOpt(){
+  const el = document.getElementById('pipeLenOptResult');
+  if(!el) return;
+
+  const D        = +document.getElementById('pipeOuter').value || 0.96;
+  const lp       = +document.getElementById('pipeLen').value || 2.43;
+  const allowMm  = +document.getElementById('pipeJoint').value || 40; // 許容目地開き mm
+  const S4mm     = +document.getElementById('pipeCushion').value || 20; // クッション材厚 mm
+  const curves   = getCurves();
+
+  // 利用可能な幾何学的開き量 [mm]
+  const availMm = Math.max(0, allowMm - S4mm);
+
+  // 発進立坑からの管長制約（形状入力モード・矩形のみ）
+  let shaftLimit = Infinity;
+  let shaftNote  = '';
+  if(launchInputMode === 'shape' && (launchShaft === 'rect' || launchShaft === 'open')){
+    const launchL = +document.getElementById('launchL').value || 4.0;
+    // 立坑内に管を挿入する際、機器・クリアランスとして約0.3m必要
+    shaftLimit = Math.max(0.5, launchL - 0.3);
+    shaftNote  = `発進立坑内法長 ${launchL}m → 最大挿入可能管長 約 <b>${shaftLimit.toFixed(1)}m</b>`;
+  }
+
+  // 標準管長から最大値以下で最長のものを選ぶ
+  function bestStdLen(maxLen){
+    const opts = STD_PIPE_LENGTHS.filter(l => l <= maxLen - 0.001);
+    return opts.length ? opts[opts.length - 1] : null;
+  }
+
+  // 現在の管長での目地開き量 [mm]
+  function calcS1(R, l){
+    const Rc = R - D/2;
+    if(Rc <= 0) return Infinity;
+    return (D * l / (2 * Rc)) * 1000 + S4mm;
+  }
+
+  if(curves.length === 0){
+    const recLen = bestStdLen(shaftLimit < Infinity ? shaftLimit + 0.001 : 4.01);
+    el.innerHTML = `<div class="ok-box">
+      直線推進のみ: 目地開き制約なし。${shaftLimit < Infinity
+        ? `発進立坑の制約より最大 <b>${shaftLimit.toFixed(1)}m</b>。推奨: <b>${recLen ? recLen.toFixed(2) : '—'}m</b>`
+        : '長い管ほど経済的です（4.0m 管まで検討可）。'}
+    </div>`;
+    return;
+  }
+
+  // 曲線ごとの最大管長を計算
+  const curveOpts = curves.map((c,i) => {
+    const Rc    = c.R - D/2;
+    const L_max = Rc > 0 ? (availMm / 1000) * 2 * Rc / D : 0;
+    const L_eff = Math.min(L_max, shaftLimit);
+    const S1    = calcS1(c.R, lp);
+    const ok    = S1 <= allowMm;
+    const rec   = bestStdLen(L_eff);
+    return { label:`曲線${i+1} (R=${c.R}m)`, R:c.R, L_max, L_eff, S1, ok, rec };
+  });
+
+  const minL_max   = Math.min(...curveOpts.map(c => c.L_eff));
+  const recCurve   = bestStdLen(minL_max);
+  const recStraight= bestStdLen(shaftLimit < Infinity ? shaftLimit + 0.001 : 4.01);
+  const hasNG      = curveOpts.some(c => !c.ok);
+  const allSame    = recCurve !== null && recCurve === recStraight;
+
+  let html = '';
+
+  // 推奨サマリー
+  if(recCurve !== null){
+    if(allSame){
+      html += `<div class="ok-box"><b>全区間推奨管長: ${recCurve.toFixed(2)}m</b>（曲線制約・直線区間とも同一）</div>`;
+    } else {
+      html += `<div class="note-box">
+        <b>区間別推奨管長:</b><br>
+        🔵 曲線区間: <b>${recCurve.toFixed(2)}m</b>（目地開き制約より。最も厳しい曲線で L_max=${minL_max.toFixed(2)}m）<br>
+        🟢 直線区間: <b>${recStraight ? recStraight.toFixed(2) : '—'}m</b>（制約なし・経済優先）<br>
+        ※曲線と直線で異なる管長を使い分けると経済的です。
+      </div>`;
+    }
+  } else {
+    html += `<div class="ng-box">⚠️ R=${Math.min(...curves.map(c=>c.R))}m は小さすぎて規格管長が入りません。曲線半径を大きくするか、特注短管を検討してください。</div>`;
+  }
+
+  // 詳細テーブル
+  html += `<div class="tbl-wrap"><table>
+    <tr><th>曲線区間</th><th>曲線半径<br>R[m]</th><th>最大管長<br>L_max[m]</th><th>推奨管長<br>[m]</th><th>現在管長<br>の S₁[mm]</th><th>許容[mm]</th><th>判定</th></tr>`;
+
+  curveOpts.forEach(c => {
+    html += `<tr ${c.ok?'':'style="background:#fef2f2"'}>
+      <td class="left">${c.label}</td>
+      <td class="mono">${c.R}</td>
+      <td class="mono">${c.L_max.toFixed(2)}</td>
+      <td class="mono"><b>${c.rec ? c.rec.toFixed(2) : '規格外'}</b></td>
+      <td class="mono ${c.ok?'':'ng'}">${c.S1.toFixed(1)}</td>
+      <td class="mono">${allowMm}</td>
+      <td><span class="pill ${c.ok?'ok':'ng'}">${c.ok?'OK':'NG'}</span></td>
+    </tr>`;
+  });
+  html += '</table></div>';
+
+  // 直線区間の注記
+  if(!allSame && recStraight){
+    html += `<div style="font-size:12px;color:var(--sub);margin:6px 4px">
+      直線区間（EP前後・BC前後の直線部）: 目地開き制約なし → <b>${recStraight.toFixed(2)}m</b> 管が経済的
+    </div>`;
+  }
+  if(shaftNote) html += `<div class="note-box" style="margin-top:6px">${shaftNote}</div>`;
+
+  // NG時の警告
+  if(hasNG){
+    html += `<div class="ng-box" style="margin-top:6px">
+      ⚠️ 現在の管長 <b>l′=${lp}m</b> は一部曲線で目地開き超過。曲線区間に短い管（推奨: <b>${recCurve ? recCurve.toFixed(2)+'m' : '規格外'}</b>）を採用してください。
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════
 //  チェックリスト
 // ══════════════════════════════════════════════
 function renderChecklist(){
@@ -2010,7 +2146,10 @@ function applyProjectData(d){
   }
   calcGroundLength();
 }
-function autoSave(){try{localStorage.setItem('M_APP_005_draft',JSON.stringify(getProjectData()))}catch(e){}}
+function autoSave(){
+  try{localStorage.setItem('M_APP_005_draft',JSON.stringify(getProjectData()))}catch(e){}
+  calcPipeLenOpt();
+}
 function saveJSON(){
   const data=getProjectData();
   const name=(data.site?.name||'現場').replace(/[\\/:*?"<>|]/g,'_');
@@ -2090,6 +2229,7 @@ function init(){
   setShaftInputMode('arrival','direct');
   calcGroundLength();
   calcBacklock();
+  calcPipeLenOpt();
 
   // ドラフト復元
   try{
