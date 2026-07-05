@@ -1358,16 +1358,13 @@ function setProjectData(d) {
   if (d.pipe) {
     setV('pipeDia', d.pipe.dia||800);
     setV('pipeGrade', d.pipe.grade||'1shu');
-    setV('pipeOuter', d.pipe.outer||0.96);
-    setV('pipeInner', d.pipe.inner||0.8);
-    setV('pipeThick', d.pipe.thick||0.08);
-    setV('pipeLen', d.pipe.len||2.43);
-    setV('pipeWeight', d.pipe.weight||7.36);
-    setV('pipeAllow', d.pipe.allow||3921);
-    setV('pipeJointType', d.pipe.jointType||40);
-    setV('pipeCushion', d.pipe.cushion||20);
-    setV('pipePext', d.pipe.Pext||1273.7);
-    setV('pipeBs', d.pipe.Bs||1.0);
+    // 標準値テーブルから再計算（古いlocalStorageデータの誤値を上書き）
+    onPipeDiaChange();
+    // 有効長・クッション・Bs は保存値を優先
+    if (d.pipe.len) setV('pipeLen', d.pipe.len);
+    if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
+    if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
+    if (d.pipe.jointType) setV('pipeJointType', d.pipe.jointType);
   }
   if (d.soil) {
     setV('soilType', d.soil.type||'sand');
