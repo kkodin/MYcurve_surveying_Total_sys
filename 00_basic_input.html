@@ -59,6 +59,20 @@ body.show-frame #rightPane{display:block}
   #curves .curve:first-child > button.danger{display:none!important}
   .add-curve-btn{margin-top:10px;width:100%;min-height:44px}
 }
+/* 曲線計算結果パネル */
+.curve-result-panel{background:#f0f9ff;border:1px solid #7dd3fc;border-radius:8px;padding:12px 14px;margin:10px 0 6px;display:none}
+.curve-result-panel.active{display:block}
+.crp-title{font-weight:bold;color:#0369a1;font-size:13px;margin-bottom:8px}
+.crp-row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+.crp-label{color:#374151;font-weight:bold;min-width:120px}
+.crp-val{font-family:Consolas,monospace;color:#0f172a;font-size:13px;user-select:all;cursor:text}
+.crp-table{width:auto;margin:8px 0 0;font-size:13px;border-collapse:collapse}
+.crp-table th,.crp-table td{border:1px solid #bae6fd;padding:5px 10px;text-align:right}
+.crp-table th{background:#0369a1;color:#fff;text-align:center}
+.crp-table td.pt-name{text-align:center;font-weight:bold;background:#e0f2fe;color:#0c4a6e}
+.crp-table td.coord{font-family:Consolas,monospace;user-select:all;cursor:text;min-width:90px}
+.bp-ip1-error{color:#b91c1c;font-weight:bold;font-size:13px;display:none;margin:4px 0}
+
 </style></head><body><header><h1>00 基本情報入力・保存読込</h1><div class="toolbar"><button onclick="document.getElementById('file').click()">JSON読込</button><button class="ok" onclick="saveProject()">JSON保存</button></div></header><button id="edgeMenuHandle" class="edge-menu-handle" type="button" onclick="toggleWorkMenuCollapse(false)" aria-label="作業メニューを開く"></button><main>
 <input id="file" type="file" accept=".json,application/json" class="hide" onchange="loadProjectFile(this,(p)=>{applyBase(p);renderCurves(p.alignment?.curves||[]);})">
 <div class="card hide" id="startMenu">
@@ -101,13 +115,29 @@ body.show-frame #rightPane{display:block}
   </div>
 </div>
 <div id="baseForm" class="base-locked"><div class="card"><h2>現場情報</h2><div class="grid"><div class="row"><label>現場名</label><input id="siteName" value="八王子市 1350刃口推進工"></div><div class="row"><label>スパン名</label><input id="spanName" value="1～2"></div><div class="row"><label>入力日</label><input type="date" id="inputDate"><button class="secondary" onclick="set('inputDate',today())">今日</button></div></div></div>
-<div class="card"><h2>土質条件</h2><div class="grid"><div class="row"><label>土質区分</label><select id="soilType"><option>粘性土</option><option>砂質土</option><option>礫質土</option></select></div><div class="row"><label>単位体積重量 γ</label><input class="num" id="soilWeight" value="13.000"> kN/m³</div><div class="row"><label>内部摩擦角 φ</label><input class="num" id="soilPhi" value="5.000"> °</div><div class="row"><label>粘着力 C</label><input class="num" id="soilC" value="3.000"> kN/m²</div><div class="row"><label>N値</label><input class="num" id="soilN" value="4.0"></div><div class="row"><label>平均土かぶり H</label><input class="num" id="soilH" value="5.310"> m</div></div></div>
-<div class="card"><h2>推進管仕様</h2><div class="grid"><div class="row"><label>管種</label><select id="pipeCategory" onchange="calcPipe()"><option>ヒューム管</option><option>レジン管</option><option>鋼管</option></select></div><div class="row"><label>強度/分類</label><select id="pipeStrength" onchange="calcPipe()"><option>1種</option><option>2種</option><option>RS</option><option>RM</option><option>標準鋼管</option></select></div><div class="row"><label>継手</label><select id="jointType" onchange="jointChanged()"><option value="JC">JC 許容60mm</option><option value="JB">JB 許容40mm</option><option value="JA">JA 許容30mm</option></select></div><div class="row"><label>呼び径</label><select id="pipeSize" onchange="calcPipe()"></select> mm</div><div class="row"><label>内径</label><input class="num" id="pipeInner"> m</div><div class="row"><label>外径</label><input class="num" id="pipeOuter"> m</div><div class="row"><label>管厚 t</label><input class="num" id="pipeT"> m</div><div class="row"><label>有効断面積 Ae</label><input class="num" id="pipeArea"> m²</div><div class="row"><label>管重量 W</label><input class="num" id="pipeWeight"> kN/m</div><div class="row"><label>管有効長 L</label><input class="num" id="pipeLength" value="2.4300"> m</div><div class="row"><label>クッション材厚 S4</label><input class="num" id="cushionT" value="10.0"> mm</div><div class="row"><label>想定潰れ代</label><input class="num" id="cushionCrush" value="2.0"> mm</div><div class="row"><label>許容開口長</label><input class="num" id="allowOpen" value="60.0"> mm</div><div class="row"><label>許容耐荷力 Fa</label><input class="num" id="allowForce" value="0"> kN</div></div><p class="note">管種・強度・継手・呼び径から自動入力します。管有効長Lとクッション材厚S4のみ手入力できます。</p></div>
-<div class="card"><h2>測量基準・平面</h2><div class="grid"><div class="row"><label>測量基準点 OX</label><input class="num" id="instX" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>OY</label><input class="num" id="instY" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>後視点 BX</label><input class="num" id="bsX" value="10.000" oninput="calcBaseAz()"></div><div class="row"><label>BY</label><input class="num" id="bsY" value="0.000" oninput="calcBaseAz()"></div><div class="row" style="grid-column:1/-1"><label>基準方向角（自動計算）</label><span id="baseAzDisplay" style="font-family:Consolas,monospace;padding:7px 9px;border:1px solid #b8c0cc;border-radius:6px;background:#f8fafc;display:inline-block">0.000° / 0°0′0.00″</span><input type="hidden" id="baseAz" value="0.000"></div></div><hr><div id="curves"></div><div class="row final-distance-row"><label>最終IP〜EP距離</label><input class="num" id="finalL" value="2.150"> m</div><button class="add-curve-btn" onclick="addCurve();updateWorkMenuLocks();">曲線追加</button></div>
+<div class="card"><h2>土質条件</h2><div class="grid"><div class="row"><label>土質区分</label><select id="soilType" onchange="soilChanged()"><option>粘性土</option><option>砂質土</option><option>礫質土</option></select></div><div class="row"><label>単位体積重量 γ</label><input class="num" id="soilWeight" value="16.000"> kN/m³</div><div class="row"><label>内部摩擦角 φ</label><input class="num" id="soilPhi" value="5.000"> °</div><div class="row"><label>粘着力 C</label><input class="num" id="soilC" value="20.000"> kN/m²</div><div class="row"><label>N値</label><input class="num" id="soilN" value="4.0"></div><div class="row"><label>平均土かぶり H</label><input class="num" id="soilH" value="5.310"> m</div></div><p class="note">土質区分を変更すると γ・φ・C・N値に標準値を自動入力します（要確認・修正可）。<br>標準値出典：「下水道推進工法の指針と解説」公益社団法人 日本下水道協会<br>粘性土：γ=16.0, φ=5°, C=20 kN/m², N=4 ／ 砂質土：γ=18.0, φ=30°, C=0, N=15 ／ 礫質土：γ=19.0, φ=35°, C=0, N=30</p></div>
+<div class="card"><h2>推進管仕様</h2><div class="grid"><div class="row"><label>管種</label><select id="pipeCategory" onchange="calcPipe()"><option>ヒューム管</option><option>レジン管</option><option>鋼管</option></select></div><div class="row"><label>強度/分類</label><select id="pipeStrength" onchange="calcPipe()"><option>1種</option><option>2種</option><option>RS</option><option>RM</option><option>標準鋼管</option></select></div><div class="row"><label>継手</label><select id="jointType" onchange="jointChanged()"><option value="JC">JC 許容60mm</option><option value="JB">JB 許容40mm</option><option value="JA">JA 許容30mm</option></select></div><div class="row"><label>呼び径</label><select id="pipeSize" onchange="calcPipe()"></select> mm</div><div class="row"><label>内径</label><input class="num" id="pipeInner"> m</div><div class="row"><label>外径</label><input class="num" id="pipeOuter"> m</div><div class="row"><label>管厚 t</label><input class="num" id="pipeT"> m</div><div class="row"><label>有効断面積 Ae</label><input class="num" id="pipeArea"> m²</div><div class="row"><label>管重量 W</label><input class="num" id="pipeWeight"> kN/m</div><div class="row"><label>管有効長 L</label><input class="num" id="pipeLength" value="2.4300"> m</div><div class="row"><label>クッション材厚 S4</label><input class="num" id="cushionT" value="10.0"> mm</div><div class="row"><label>想定潰れ代</label><input class="num" id="cushionCrush" value="2.0"> mm</div><div class="row"><label>許容開口長</label><input class="num" id="allowOpen" value="60.0"> mm</div><div class="row"><label>許容耐荷力 Fa</label><input class="num" id="allowForce" value="0"> kN</div></div><p class="note">管種・強度・継手・呼び径から自動入力します。管有効長Lとクッション材厚S4のみ手入力できます。<br>管厚出典：ヒューム管 JSWAS A-1「推進工法用ヒューム管」／ レジン管 JSWAS A-2「推進工法用レジンコンクリート管」／ 鋼管 JIS G 3443「水輸送用塗覆装鋼管」<br>単位重量：ヒューム管 24.5 kN/m³ ／ レジン管 21.0 kN/m³ ／ 鋼管 78.5 kN/m³</p></div>
+<div class="card"><h2>測量基準・平面線形</h2><div class="grid"><div class="row"><label>始点 BP  X</label><input class="num" id="instX" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>Y</label><input class="num" id="instY" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>IP1  X</label><input class="num" id="bsX" value="10.000" oninput="calcBaseAz()"></div><div class="row"><label>Y</label><input class="num" id="bsY" value="0.000" oninput="calcBaseAz()"></div><div class="row" style="grid-column:1/-1"><label>基準方向角（自動計算）</label><span id="baseAzDisplay" style="font-family:Consolas,monospace;padding:7px 9px;border:1px solid #b8c0cc;border-radius:6px;background:#f8fafc;display:inline-block">0.000° / 0°0′0.00″</span><input type="hidden" id="baseAz" value="0.000"></div><div class="row" style="grid-column:1/-1"><span id="bpIp1Error" class="bp-ip1-error">⚠ 始点BPとIP1が同一座標です。異なる座標を指定してください。</span></div></div><hr><div id="curves"></div><div class="row final-distance-row"><label>最終IP〜EP距離</label><input class="num" id="finalL" value="2.150"> m</div><button class="add-curve-btn" id="addCurveBtn" onclick="addCurve();updateWorkMenuLocks();">曲線追加</button></div>
 <div class="card toolbar"><button class="ok" onclick="saveProject()">保存JSONを作成</button><button onclick="openModule('01_alignment_calculation.html')">線形計算へ</button><button onclick="openModule('02_alignment_visual.html')">ビジュアル表示へ</button><button onclick="openModule('03_joint_opening_check.html')">目地判定へ</button><button onclick="openModule('04_jacking_force.html')">推力管理へ</button><button onclick="openModule('05_measurement_horizontal_error.html')">測量・水平誤差へ</button></div>
 </div></main><script>
 const PIPE_SIZES=[250,300,350,400,450,500,600,700,800,900,1000,1100,1200,1350,1500,1650,1800,2000,2200,2400,2600,2800,3000];
+
+// ヒューム管 管厚 [mm] — JSWAS A-1「推進工法用ヒューム管」
 const HUME_T={250:55,300:57,350:60,400:63,450:67,500:70,600:76,700:82,800:80,900:90,1000:100,1100:105,1200:115,1350:125,1500:140,1650:150,1800:160,2000:175,2200:190,2400:205,2600:220,2800:235,3000:250};
+
+// レジンコンクリート管 管厚 [mm] — JSWAS A-2「推進工法用レジンコンクリート管」
+const RESIN_T={250:40,300:43,350:46,400:49,450:52,500:56,600:63,700:70,800:78,900:85,1000:93,1100:100,1200:108,1350:120,1500:135,1650:148,1800:162,2000:180,2200:198,2400:216,2600:234,2800:252,3000:270};
+
+// 鋼管 管厚 [mm] — JIS G 3443「水輸送用塗覆装鋼管」および推進工法標準
+const STEEL_T={250:9.5,300:9.5,350:9.5,400:9.5,450:9.5,500:9.5,600:9.5,700:9.5,800:9.5,900:9.5,1000:12.7,1100:12.7,1200:12.7,1350:12.7,1500:16.0,1650:16.0,1800:16.0,2000:19.0,2200:19.0,2400:19.0,2600:19.0,2800:19.0,3000:19.0};
+
+// 土質標準値 — 「下水道推進工法の指針と解説」（公益社団法人 日本下水道協会）
+// γ:単位体積重量[kN/m³]  phi:内部摩擦角[°]  c:粘着力[kN/m²]  N:N値（代表値）
+const SOIL_DEFAULTS={
+  '粘性土':{gamma:16.0, phi:5.0,  c:20.0, N:4},
+  '砂質土':{gamma:18.0, phi:30.0, c:0.0,  N:15},
+  '礫質土':{gamma:19.0, phi:35.0, c:0.0,  N:30}
+};
 
 function hasUsableBase(p=getProject()){
   return !!(p && p.site && String(p.site.name||'').trim() && String(p.site.span||'').trim() && p.alignment && Array.isArray(p.alignment.curves));
@@ -183,20 +213,80 @@ function degToDms(deg){deg=Number(deg)||0;let d=Math.floor(deg),mf=(deg-d)*60,m=
 function calcBaseAz(){
   const ox=n('instX',0),oy=n('instY',0),bx=n('bsX',10),by=n('bsY',0);
   const el=document.getElementById('baseAzDisplay'), hidden=document.getElementById('baseAz');
+  const errEl=document.getElementById('bpIp1Error');
   if(Math.hypot(bx-ox,by-oy)<1e-9){
-    if(el)el.innerHTML='<span style="color:#b91c1c;font-weight:bold">⚠ 測量基準点と後視点が同一座標です。やり直してください。</span>';
+    if(el)el.textContent='---';
     if(hidden)hidden.value='';
+    if(errEl)errEl.style.display='inline';
+    updateAllCurveResults();
     return;
   }
+  if(errEl)errEl.style.display='none';
   let deg=Math.atan2(by-oy,bx-ox)*180/Math.PI;
   while(deg<0)deg+=360; while(deg>=360)deg-=360;
   if(hidden)hidden.value=fmt(deg,3);
   if(el)el.textContent=`${fmt(deg,3)}° / ${degToDms(deg)}`;
+  updateAllCurveResults();
+}
+function updateAllCurveResults(){
+  const baseAzDeg=parseFloat(document.getElementById('baseAz')?.value||'0')||0;
+  let az=baseAzDeg*Math.PI/180;
+  let cx=n('instX',0), cy=n('instY',0);
+  document.querySelectorAll('#curves .curve').forEach((curveEl,idx)=>{
+    const L=parseFloat(curveEl.querySelector('.cL')?.value||'0')||0;
+    const R=parseFloat(curveEl.querySelector('.cR')?.value||'0')||0;
+    const dir=curveEl.querySelector('.cDir')?.value||'L';
+    const deg2=parseFloat(curveEl.querySelector('.cDeg')?.value||'0')||0;
+    const min2=parseFloat(curveEl.querySelector('.cMin')?.value||'0')||0;
+    const sec2=parseFloat(curveEl.querySelector('.cSec')?.value||'0')||0;
+    const IA=(deg2+min2/60+sec2/3600)*Math.PI/180;
+    const panel=curveEl.querySelector('.curve-result-panel');
+    if(!panel){const ipX=cx+L*Math.cos(az),ipY=cy+L*Math.sin(az);if(R>1e-9&&IA>1e-9){const sign=(dir==='R')?1:-1;az=az+sign*IA;cx=ipX;cy=ipY;}return;}
+    if(R<1e-9||IA<1e-9||L<1e-9){panel.classList.remove('active');const ipX=cx+L*Math.cos(az),ipY=cy+L*Math.sin(az);cx=ipX;cy=ipY;return;}
+    const TL=R*Math.tan(IA/2);
+    const sign=(dir==='R')?1:-1;
+    const ipX=cx+L*Math.cos(az), ipY=cy+L*Math.sin(az);
+    const bcX=ipX-TL*Math.cos(az), bcY=ipY-TL*Math.sin(az);
+    const roAz=az+sign*Math.PI/2;
+    const roX=bcX+R*Math.cos(roAz), roY=bcY+R*Math.sin(roAz);
+    const bcDirFromRo=az-sign*Math.PI/2;
+    const spAz=bcDirFromRo+sign*IA/2;
+    const spX=roX+R*Math.cos(spAz), spY=roY+R*Math.sin(spAz);
+    const ecAz=bcDirFromRo+sign*IA;
+    const ecX=roX+R*Math.cos(ecAz), ecY=roY+R*Math.sin(ecAz);
+    const outAz=az+sign*IA;
+    const outDegRaw=outAz*180/Math.PI;
+    const outDeg=((outDegRaw%360)+360)%360;
+    const curveNo=idx+1;
+    panel.classList.add('active');
+    const nxtLabel=panel.querySelector('.r-nextAz-label');
+    if(nxtLabel)nxtLabel.textContent=`第${curveNo+1}直線 方向角`;
+    const setVal=(cls,val)=>{const e=panel.querySelector(cls);if(e)e.textContent=val;};
+    setVal('.r-nextAz',`${fmt(outDeg,3)}° / ${degToDms(outDeg)}`);
+    setVal('.r-tl',fmt(TL,3));
+    setVal('.r-bcx',fmt(bcX,3)); setVal('.r-bcy',fmt(bcY,3));
+    setVal('.r-spx',fmt(spX,3)); setVal('.r-spy',fmt(spY,3));
+    setVal('.r-ecx',fmt(ecX,3)); setVal('.r-ecy',fmt(ecY,3));
+    setVal('.r-rox',fmt(roX,3)); setVal('.r-roy',fmt(roY,3));
+    cx=ipX; cy=ipY; az=outAz;
+  });
 }
 function pipeDefault(size,cat='ヒューム管'){
-  const inner=size/1000; let t=(HUME_T[size]||125)/1000; let unitW=24.5;
-  if(cat==='レジン管'){t=Math.max(0.02, inner*0.045); unitW=19.5}
-  if(cat==='鋼管'){t=size>=2000?0.019:(size>=1500?0.016:(size>=1000?0.0127:0.0095)); unitW=78.5}
+  const inner=size/1000;
+  let t, unitW;
+  if(cat==='レジン管'){
+    // JSWAS A-2「推進工法用レジンコンクリート管」管厚テーブル使用
+    t=(RESIN_T[size]||Math.round(size*0.09))/1000;
+    unitW=21.0; // レジンコンクリート単位重量 [kN/m³]
+  } else if(cat==='鋼管'){
+    // JIS G 3443「水輸送用塗覆装鋼管」管厚テーブル使用
+    t=(STEEL_T[size]||12.7)/1000;
+    unitW=78.5; // 鋼材単位重量 [kN/m³]
+  } else {
+    // JSWAS A-1「推進工法用ヒューム管」管厚テーブル使用
+    t=(HUME_T[size]||125)/1000;
+    unitW=24.5; // 鉄筋コンクリート単位重量 [kN/m³]
+  }
   const outer=inner+2*t; const area=Math.PI/4*(outer*outer-inner*inner); const weight=area*unitW; const len=size<350?2.0:2.43;
   return {inner,outer,t,area,weight,len,centerR:(inner+t)/2};
 }
@@ -316,12 +406,17 @@ function calcGeometry(p){
 function calcJoint(p,c){const L=p.pipe.length, D=p.pipe.inner, t=p.pipe.thickness, R=c.R, S4=p.pipe.cushion||0; const den=Math.max(0.0001,R-D/2); const S1=(L*D/den)*1000+S4; const S2=(L*Math.max(0,D-t)/den)*1000+S4; const S3=(L*t/den)*1000+S4; const simple=(D*2*Math.sin((L/R)/2))*1000+S4; return {S1,S2,S3,S4,simple,margin:(p.pipe.allowOpen||60)-S1,ok:S1<=(p.pipe.allowOpen||60)};}
 
 function renumberCurves(){
-  document.querySelectorAll('#curves .curve').forEach((curve,i)=>{
+  const allCurves=document.querySelectorAll('#curves .curve');
+  allCurves.forEach((curve,i)=>{
     const no=i+1;
     const h=curve.querySelector('h2');
-    if(h)h.textContent=`第${no}曲線`;
-    const l=curve.querySelector('.curve-l-row label');
-    if(l)l.textContent=no===1?'第1直線（BP→IP1）':`第${no}直線（IP${no-1}→IP${no}）`;
+    if(h)h.textContent=`曲線${no}`;
+    const l=curve.querySelector('.ip-dist-label');
+    if(l)l.textContent=no===1?'BP〜IP1間距離':`IP${no-1}〜IP${no}間距離`;
+    const nxtLabel=curve.querySelector('.r-nextAz-label');
+    if(nxtLabel)nxtLabel.textContent=`第${no+1}直線 方向角`;
+    const delBtn=curve.querySelector('button.danger');
+    if(delBtn)delBtn.style.display=allCurves.length<=1?'none':'';
   });
 }
 function setupSectionMinimize(){
@@ -340,19 +435,32 @@ function expandActiveSection(active){
   });
 }
 function init(){PIPE_SIZES.forEach(s=>document.getElementById('pipeSize').add(new Option(s,s)));set('inputDate',today());set('pipeSize',1350);calcPipe();renderCurves([{L:39.471,dir:'L',R:40,deg:56,min:32,sec:14}]);}
+function soilChanged(){
+  const d=SOIL_DEFAULTS[v('soilType','粘性土')];
+  if(!d)return;
+  set('soilWeight',fmt(d.gamma,3));
+  set('soilPhi',fmt(d.phi,3));
+  set('soilC',fmt(d.c,3));
+  set('soilN',fmt(d.N,1));
+}
 function calcPipe(){const p=pipeDefault(+v('pipeSize',1350),v('pipeCategory','ヒューム管'));set('pipeInner',fmt(p.inner,3));set('pipeOuter',fmt(p.outer,3));set('pipeT',fmt(p.t,3));set('pipeArea',fmt(p.area,4));set('pipeWeight',fmt(p.weight,3));if(!String(v('pipeLength','')).trim())set('pipeLength',fmt(p.len,4));const sigma=13;set('allowForce',fmt(1000*sigma*p.area,0));jointChanged(false)}
 function jointChanged(force=true){const j=v('jointType','JC');set('allowOpen',j==='JC'?'60.0':j==='JB'?'40.0':'30.0')}
 function renderCurves(arr){document.getElementById('curves').innerHTML='';(arr||[]).forEach(c=>addCurve(c));}
-function addCurve(c={L:30,dir:'L',R:50,deg:15,min:0,sec:0}){const div=document.createElement('div');div.className='card curve';div.innerHTML=`<h2>曲線</h2><div class="grid"><div class="row curve-l-row"><label>IP間距離</label><input class="num cL" value="${fmt(c.L,3)}"> m</div><div class="row"><label>方向</label><select class="cDir"><option value="L">左</option><option value="R">右</option></select></div><div class="row"><label>半径 R</label><input class="num cR" value="${fmt(c.R,3)}"> m</div><div class="row dms-part dms-start"><label>IA 度</label><input class="num cDeg" value="${c.deg||0}"></div><div class="row dms-part"><label>分</label><input class="num cMin" value="${c.min||0}"></div><div class="row dms-part"><label>秒</label><input class="num cSec" value="${c.sec||0}"></div></div><button class="danger" onclick="this.closest('.curve').remove();renumberCurves();updateWorkMenuLocks();">削除</button>`;document.getElementById('curves').appendChild(div);div.querySelector('.cDir').value=c.dir||'L';div.querySelectorAll('input,select').forEach(el=>{el.addEventListener('input',updateWorkMenuLocks);el.addEventListener('change',updateWorkMenuLocks);el.addEventListener('focusin',()=>expandActiveSection(div.closest('.base-section')));});renumberCurves();}
+function addCurve(c={L:30,dir:'L',R:50,deg:15,min:0,sec:0}){const div=document.createElement('div');div.className='card curve';div.innerHTML=`<h2>曲線</h2><div class="grid"><div class="row curve-l-row"><label class="ip-dist-label">IP間距離</label><input class="num cL" value="${fmt(c.L,3)}"> m</div><div class="row"><label>曲線方向</label><select class="cDir"><option value="L">左</option><option value="R">右</option></select></div><div class="row"><label>曲線半径 R</label><input class="num cR" value="${fmt(c.R,3)}"> m</div><div class="row dms-part dms-start"><label>IA 度</label><input class="num cDeg" value="${c.deg||0}"></div><div class="row dms-part"><label>分</label><input class="num cMin" value="${c.min||0}"></div><div class="row dms-part"><label>秒</label><input class="num cSec" value="${c.sec||0}"></div></div><div class="curve-result-panel"><div class="crp-title">▼ 計算結果</div><div class="crp-row"><span class="crp-label r-nextAz-label">第2直線 方向角</span><span class="crp-val r-nextAz">---</span></div><div class="crp-row"><span class="crp-label">TL</span><span class="crp-val r-tl">---</span> m</div><table class="crp-table"><tr><th>点名</th><th>X（縦）</th><th>Y（横）</th></tr><tr><td class="pt-name">BC</td><td class="coord r-bcx">---</td><td class="coord r-bcy">---</td></tr><tr><td class="pt-name">SP</td><td class="coord r-spx">---</td><td class="coord r-spy">---</td></tr><tr><td class="pt-name">EC</td><td class="coord r-ecx">---</td><td class="coord r-ecy">---</td></tr><tr><td class="pt-name">RO</td><td class="coord r-rox">---</td><td class="coord r-roy">---</td></tr></table></div><button class="danger" onclick="this.closest('.curve').remove();renumberCurves();updateWorkMenuLocks();updateAllCurveResults();">削除</button>`;document.getElementById('curves').appendChild(div);div.querySelector('.cDir').value=c.dir||'L';div.querySelectorAll('input,select').forEach(el=>{el.addEventListener('input',()=>{updateWorkMenuLocks();updateAllCurveResults();});el.addEventListener('change',()=>{updateWorkMenuLocks();updateAllCurveResults();});el.addEventListener('focusin',()=>expandActiveSection(div.closest('.base-section')));});const secInput=div.querySelector('.cSec');if(secInput){secInput.addEventListener('keydown',e=>{if(e.key==='Tab'){const addBtn=document.getElementById('addCurveBtn');if(addBtn){e.preventDefault();addBtn.focus();}}});}renumberCurves();updateAllCurveResults();}
 function saveProject(){saveCurrentBase(true)}
 function openModule(fn){if(!saveCurrentBase(false))return;if(fn==='02_alignment_visual.html'){window.open('./'+fn,'_blank','noopener');return}showFramePage('作業ページ',fn)}
 function renumberCurves(){
-  document.querySelectorAll('#curves .curve').forEach((curve,i)=>{
+  const allCurves=document.querySelectorAll('#curves .curve');
+  allCurves.forEach((curve,i)=>{
     const no=i+1;
     const h=curve.querySelector('h2');
-    if(h)h.textContent=`第${no}曲線`;
-    const l=curve.querySelector('.curve-l-row label');
-    if(l)l.textContent=no===1?'第1直線（BP→IP1）':`第${no}直線（IP${no-1}→IP${no}）`;
+    if(h)h.textContent=`曲線${no}`;
+    const l=curve.querySelector('.ip-dist-label');
+    if(l)l.textContent=no===1?'BP〜IP1間距離':`IP${no-1}〜IP${no}間距離`;
+    const nxtLabel=curve.querySelector('.r-nextAz-label');
+    if(nxtLabel)nxtLabel.textContent=`第${no+1}直線 方向角`;
+    const delBtn=curve.querySelector('button.danger');
+    if(delBtn)delBtn.style.display=allCurves.length<=1?'none':'';
   });
 }
 function setupSectionMinimize(){
@@ -754,7 +862,8 @@ function showFramePage(title, file){
 function openModule(fn){
   if(!ensureBaseUnlocked())return;
   showFramePage('作業ページ',fn);
-}document.addEventListener('focusin',e=>{if(e.target.matches('input'))setTimeout(()=>e.target.select?.(),0);});document.body.classList.add('base-ready','base-form-visible','work-menu-collapsed');init();setupSaveWizard();setupSectionMinimize();renumberCurves();enterMobileHome();</script>
+}document.addEventListener('focusin',e=>{if(e.target.matches('input'))setTimeout(()=>e.target.select?.(),0);});document.body.classList.add('base-ready','base-form-visible','work-menu-collapsed');init();setupSaveWizard();setupSectionMinimize();renumberCurves();enterMobileHome();
+window.addEventListener('message',function(e){if(e.data&&e.data.action==='goToBase'){showBasicPane();toggleWorkMenuCollapse(false);}});</script>
 <script>
 function openPage(file){
   window.location.href='./'+file;
@@ -798,9 +907,6 @@ function openPage(file){
   #alignmentStageCard > h2{font-size:19px!important}
   #alignmentStageCard > .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   #alignmentStageCard .az-row{grid-column:1 / -1!important}
-  #alignmentStageCard .az-row .az-box{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:6px;align-items:end}
-  #alignmentStageCard .az-box label{font-size:12px;color:#374151;font-weight:700}
-  #alignmentStageCard .az-box input{width:100%!important}
   .curve{padding:12px 10px!important;margin:12px 0!important}
   .curve h2{font-size:18px!important;margin-bottom:10px!important}
   .curve .grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px 10px!important}
@@ -836,28 +942,11 @@ function openPage(file){
       const row = baseAz?.closest('.row');
       if(row && !row.classList.contains('az-row')){
         row.classList.add('az-row');
-        row.innerHTML = '<label>基準方向角</label><div class="az-box"><label>10進法<input class="num" id="baseAz" value="'+(baseAz.value||'0.000')+'"></label><label>度<input class="num" id="baseAzDeg" value="0"></label><label>分<input class="num" id="baseAzMin" value="0"></label><label>秒<input class="num" id="baseAzSec" value="0"></label></div>';
-        const syncDms = () => {
-          const deg = Math.abs(parseFloat(document.getElementById('baseAz').value)||0);
-          const d = Math.floor(deg);
-          const mFloat = (deg - d) * 60;
-          const m = Math.floor(mFloat);
-          const s = (mFloat - m) * 60;
-          document.getElementById('baseAzDeg').value = d;
-          document.getElementById('baseAzMin').value = m;
-          document.getElementById('baseAzSec').value = s.toFixed(1);
-        };
-        const syncDecimal = () => {
-          const d = parseFloat(document.getElementById('baseAzDeg').value)||0;
-          const m = parseFloat(document.getElementById('baseAzMin').value)||0;
-          const s = parseFloat(document.getElementById('baseAzSec').value)||0;
-          document.getElementById('baseAz').value = (d + m/60 + s/3600).toFixed(6);
-          updateWorkMenuLocks?.();
-          scheduleDraftSave?.();
-        };
-        document.getElementById('baseAz').addEventListener('input', syncDms);
-        ['baseAzDeg','baseAzMin','baseAzSec'].forEach(id => document.getElementById(id).addEventListener('input', syncDecimal));
-        syncDms();
+        const storedVal = baseAz.value || '0.000';
+        row.innerHTML = '<label>基準方向角（自動計算）</label>'
+          + '<span id="baseAzDisplay" style="font-family:Consolas,monospace;padding:7px 9px;border:1px solid #b8c0cc;border-radius:6px;background:#f8fafc;display:inline-block;user-select:all">---</span>'
+          + '<input type="hidden" id="baseAz" value="' + storedVal + '">';
+        if(typeof calcBaseAz === 'function') calcBaseAz();
       }
     }
   }

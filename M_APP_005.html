@@ -1520,35 +1520,65 @@ function setProjectData(d) {
   if (d.site) { setV('siteName', d.site.name||''); setV('siteSpan', d.site.span||''); setV('siteDate', d.site.date||''); }
   if (d.method) setMethod(d.method);
   if (d.pipe) {
-    setV('pipeDia', d.pipe.dia||800);
-    setV('pipeGrade', d.pipe.grade||'1shu');
+    // 旧フォーマット(split-*)互換: size→dia, strength→grade, joint→jointType, length→len
+    const dia = d.pipe.dia || d.pipe.size || 800;
+    const gradeRaw = d.pipe.grade || d.pipe.strength || '1shu';
+    const gradeMap = {'1種':'1shu','2種':'2shu','3種':'3shu'};
+    const grade = gradeMap[gradeRaw] || gradeRaw;
+    setV('pipeDia', dia);
+    setV('pipeGrade', grade);
     // 標準値テーブルから再計算（古いlocalStorageデータの誤値を上書き）
     onPipeDiaChange();
-    // 有効長・クッション・Bs は保存値を優先
-    if (d.pipe.len) setV('pipeLen', d.pipe.len);
+    // 有効長・クッション・Bs・継手 は保存値を優先
+    const len = d.pipe.len || d.pipe.length;
+    if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
-    if (d.pipe.jointType) setV('pipeJointType', d.pipe.jointType);
+    const joint = d.pipe.jointType || d.pipe.joint;
+    if (joint) setV('pipeJointType', joint);
   }
   if (d.soil) {
     setV('soilType', d.soil.type||'sand');
     setV('soilGamma', d.soil.gamma||18); setV('soilPhi', d.soil.phi||30);
-    setV('soilPhiPipe', d.soil.phiPipe||20); setV('soilC', d.soil.C||0);
+    setV('soilPhiPipe', d.soil.phiPipe||20);
+    // C フィールド: 旧フォーマットは小文字 c
+    setV('soilC', d.soil.C ?? d.soil.c ?? 0);
     setV('soilN', d.soil.N||15);
-    setV('soilHmin', d.soil.Hmin||2.0); setV('soilHmax', d.soil.Hmax||5.0);
+    // 土被り: 旧フォーマット(cover単一値)→Hmin=Hmax=cover
+    const cover = d.soil.cover;
+    setV('soilHmin', d.soil.Hmin ?? (cover ? cover * 0.7 : 2.0));
+    setV('soilHmax', d.soil.Hmax ?? (cover ?? 5.0));
     setV('soilAdh', d.soil.adh||10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
     setV('soilAlpha', d.soil.alpha||0.625); setV('soilBeta', d.soil.beta||1.20);
   }
   if (d.alignment) {
-    setV('totalLength', d.alignment.totalLength||100);
     curves = [];
     curveCounter = 0;
-    (d.alignment.curves || []).forEach(c => {
+    const cvArr = d.alignment.curves || [];
+    cvArr.forEach((c, i) => {
       const id = ++curveCounter;
-      curves.push({ id, R: c.R||30, dir: c.dir||'R', CL: c.CL||0 });
+      // 旧フォーマット: curves[0].L = BP→IP1距離, curves[i≥1].L = IP間距離
+      curves.push({ id, L: c.L||50, R: c.R||30, dir: c.dir||'R',
+                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0 });
     });
     renderCurves();
+    // seg_L0: 旧フォーマットは curves[0].L に相当
+    if (cvArr.length > 0) {
+      setV('seg_L0', cvArr[0].L || 50);
+      // 2曲線以降のIP間距離は各 cL_${id} に設定
+      cvArr.forEach((c, i) => {
+        if (i >= 1) {
+          const el = document.getElementById('cL_' + curves[i].id);
+          if (el) el.value = c.L || 50;
+        }
+      });
+    }
+    // seg_Lf: finalL または lastL
+    const finalL = d.alignment.finalL || d.alignment.lastL;
+    if (finalL) setV('seg_Lf', finalL);
+    if (d.alignment.totalLength) setV('totalLength', d.alignment.totalLength);
+    calcAlignment();
   }
   if (d.shaft) {
     const sh = d.shaft;

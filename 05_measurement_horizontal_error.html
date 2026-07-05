@@ -423,7 +423,7 @@ body.vr015-screen-flash::before{
     </div>
     <div class="side-actions">
       <div class="side-group"><div class="side-group-title">&#12488;&#12483;&#12503;</div>
-        <button class="secondary" type="button" id="vr015BaseJsonLoadBtn" onclick="location.href='00_basic_input.html'">&#127968; &#12488;&#12483;&#12503;&#12506;&#12540;&#12472;&#12395;&#25147;&#12427;</button>
+        <button class="secondary" type="button" id="vr015BaseJsonLoadBtn" onclick="goToBasePage()">&#127968; &#12488;&#12483;&#12503;&#12506;&#12540;&#12472;&#12395;&#25147;&#12427;</button>
       </div>
       <div class="side-group"><div class="side-group-title">&#28204;&#37327;</div>
         <button class="secondary" type="button" onclick="openSection('historyStage');closeNav()">&#128338; &#23653;&#27508;&#12434;&#38283;&#12367;</button>
@@ -3119,6 +3119,13 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(!byId(id)) return;
     showOnly([id], id);
   };
+  window.goToBasePage=function(){
+    if(window.self!==window.top){
+      window.parent.postMessage({action:'goToBase'},'*');
+    } else {
+      location.href='00_basic_input.html';
+    }
+  };
   window.showResultStage=function(){
     try{ renderSummary(); renderTable(); renderProcess(); }catch(e){ console.error(e); }
     showOnly(['summaryStage','resultStage','processStage'], 'summaryStage');
@@ -3473,7 +3480,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(!actions) return;
     actions.innerHTML=
       '<div class="side-group"><div class="side-group-title">'+J.base+'</div>'+
-        btn('&#127968;',J.baseLoad,"location.href='00_basic_input.html'")+
+        btn('&#127968;',J.baseLoad,"goToBasePage()")+
       '</div>'+
       '<div class="side-group"><div class="side-group-title">'+J.survey+'</div>'+
         btn('&#128338;',J.history,"openSection('historyStage');closeNav()")+
