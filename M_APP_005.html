@@ -222,7 +222,8 @@ tr.row-ng td{color:var(--ng)}
       <div class="field-row"><label>φ 地盤 [°]</label><input id="soilPhi" class="mono" type="number" step="1" value="30" oninput="autoSave()"><span class="unit">°</span></div>
       <div class="field-row"><label>C [kN/m²]</label><input id="soilC" class="mono" type="number" step="0.5" value="0" oninput="autoSave()"><span class="unit">kN/m²</span></div>
       <div class="field-row"><label>N値</label><input id="soilN" class="mono" type="number" step="1" value="15" oninput="autoSave()"><span class="unit">—</span></div>
-      <div class="field-row"><label>土被り H [m]</label><input id="soilH" class="mono" type="number" step="0.1" value="3.5" oninput="autoSave()"><span class="unit">m</span></div>
+      <div class="field-row"><label>土被り H 最小 [m]</label><input id="soilHmin" class="mono" type="number" step="0.1" value="2.0" oninput="autoSave()"><span class="unit">m</span></div>
+      <div class="field-row"><label>土被り H 最大 [m]</label><input id="soilHmax" class="mono" type="number" step="0.1" value="5.0" oninput="autoSave()"><span class="unit">m</span></div>
       <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="soilAdh" class="mono" type="number" step="0.5" value="10" oninput="autoSave()"><span class="unit">kN/m²</span></div>
     </div>
     <!-- 泥水/土圧/泥濃 共通: 地下水位 -->
@@ -929,7 +930,9 @@ function calculate() {
   const phi_pipe = n('soilPhiPipe') || phi_soil;
   const C = n('soilC');
   const N = n('soilN');
-  const H = n('soilH');
+  const Hmin = n('soilHmin') || 2.0;
+  const Hmax = n('soilHmax') || 5.0;
+  const H = Hmax; // 推進力計算は最大土被り（最大推進力）を使用
   const adh = n('soilAdh');
   const GL_wl = n('soilWater') || 0;
   const G = n('soilGravel');
@@ -937,8 +940,13 @@ function calculate() {
   const alpha_coef = n('soilAlpha') || 0.625;
   const beta_coef = n('soilBeta') || 1.20;
 
-  if (!D || !lp || !H) {
-    errEl.textContent = '必須入力: 外径 D, 有効長 l′, 土被り H を入力してください';
+  if (!D || !lp || !Hmax) {
+    errEl.textContent = '必須入力: 外径 D, 有効長 l′, 土被り H最大 を入力してください';
+    errEl.style.display = '';
+    return;
+  }
+  if (Hmin > Hmax) {
+    errEl.textContent = '土被り H最小 ≤ H最大 にしてください';
     errEl.style.display = '';
     return;
   }
@@ -950,13 +958,20 @@ function calculate() {
   const arrivalDist = calcShaftDist('arrival');
   const groundLen = Math.max(0, total - launchDist - arrivalDist);
 
-  // テルツァーギ土圧
-  const tz = calcTerzaghi(gamma, phi_soil, C, H, D);
+  // テルツァーギ土圧（最大土被りで計算 → 最大推進力）
+  const tz = calcTerzaghi(gamma, phi_soil, C, Hmax, D);
   const { Be, k0, Ce, q, p_live, q_total } = tz;
 
-  // fo・Fo
+  // 最小土被りの土圧（参考値）
+  const tz_min = calcTerzaghi(gamma, phi_soil, C, Hmin, D);
+
+  // fo・Fo（最大土被りで計算）
   const params = { D, W, N, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
   const { Fo, fo, foDetail } = calcFoFo(currentMethod, params);
+
+  // fo（最小土被り）
+  const params_min = { ...params, q_total: tz_min.q_total, H: Hmin };
+  const { fo: fo_min } = calcFoFo(currentMethod, params_min);
 
   // 区間分割: 曲線区間を EP→SP 方向で処理
   // curves配列順 = SP側（発進側）から到達側の順とする
@@ -1037,7 +1052,7 @@ function calculate() {
     return { name: `BC.${bc.idx+1}`, FBC: bc.F, FaBC_1, FaBC_2, ok1, ok2 };
   });
 
-  lastCalcResult = { F_total, Fo, fo, Fa, segments, extCheck, bcResults, q_total, foDetail, tz };
+  lastCalcResult = { F_total, Fo, fo, fo_min, Fa, segments, extCheck, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax };
 
   // ── 表示 ──
   renderResults(lastCalcResult);
@@ -1048,14 +1063,16 @@ function calculate() {
 }
 
 function renderResults(res) {
-  const { F_total, Fo, fo, Fa, segments, extCheck, bcResults, q_total, foDetail, tz } = res;
+  const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
   const okForce = F_total <= Fa;
 
   // サマリーメトリクス
   const sm = document.getElementById('summaryMetrics');
   sm.innerHTML = `
-    <div class="metric-card"><div class="metric-label">最大推進力 F</div><div class="metric-value ${okForce?'ok':'ng'}">${F_total.toFixed(0)}</div><div class="metric-sub">kN</div></div>
+    <div class="metric-card"><div class="metric-label">最大推進力 F（H最大=${Hmax}m）</div><div class="metric-value ${okForce?'ok':'ng'}">${F_total.toFixed(0)}</div><div class="metric-sub">kN ← 設計値</div></div>
     <div class="metric-card"><div class="metric-label">許容耐荷力 Fa</div><div class="metric-value">${Fa.toFixed(0)}</div><div class="metric-sub">kN</div></div>
+    <div class="metric-card"><div class="metric-label">fo 周面摩擦（H最大）</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
+    <div class="metric-card"><div class="metric-label">fo 周面摩擦（H最小=${Hmin}m）</div><div class="metric-value">${fo_min.toFixed(2)}</div><div class="metric-sub">kN/m（参考）</div></div>
     <div class="metric-card"><div class="metric-label">先端抵抗 Fo</div><div class="metric-value">${Fo.toFixed(0)}</div><div class="metric-sub">kN</div></div>
     <div class="metric-card"><div class="metric-label">周面摩擦 fo</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
     <div class="metric-card"><div class="metric-label">Mr/M（外圧）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${extCheck.ratio.toFixed(2)}</div><div class="metric-sub">≥1.2 要求</div></div>
@@ -1071,14 +1088,19 @@ function renderResults(res) {
   // 計算根拠表
   const { Be, k0, Ce, q, p_live } = tz;
   const basisRows = [
+    ['土被り H 最小', Hmin.toFixed(1), 'm', '参考計算用'],
+    ['土被り H 最大', Hmax.toFixed(1), 'm', '設計計算用（推進力最大）'],
     ['Be 等価幅', Be.toFixed(3), 'm', '1.5×D+0.4'],
     ['k₀ 静止土圧係数', k0.toFixed(3), '—', '1-sin(φ)'],
-    ['Ce サイロ係数', Ce.toFixed(3), '—', 'テルツァーギ式'],
-    ['q 鉛直土圧', q.toFixed(1), 'kN/m²', 'γBeCe+2CCe'],
+    ['Ce サイロ係数（H最大）', Ce.toFixed(3), '—', 'テルツァーギ式'],
+    ['q 鉛直土圧（H最大）', q.toFixed(1), 'kN/m²', 'γBeCe+2CCe'],
+    ['q 鉛直土圧（H最小）', tz_min.q.toFixed(1), 'kN/m²', '参考値'],
     ['p_live 活荷重', p_live.toFixed(2), 'kN/m²', 'T-25道路荷重'],
-    ['q_total 合計土圧', q_total.toFixed(1), 'kN/m²', 'q+p_live'],
+    ['q_total 合計土圧（H最大）', q_total.toFixed(1), 'kN/m²', '設計値'],
+    ['q_total 合計土圧（H最小）', tz_min.q_total.toFixed(1), 'kN/m²', '参考値'],
     ['Fo 先端抵抗力', Fo.toFixed(1), 'kN', '工法別計算'],
-    ['fo 周面摩擦力', fo.toFixed(3), 'kN/m', '工法別計算'],
+    ['fo 周面摩擦力（H最大）', fo.toFixed(3), 'kN/m', '設計値'],
+    ['fo 周面摩擦力（H最小）', fo_min.toFixed(3), 'kN/m', '参考値'],
     ['r 管壁中心半径', extCheck.r.toFixed(3), 'm', '(Di/2)+t/2'],
     ['M 外圧曲げモーメント', extCheck.M.toFixed(3), 'kN·m/m', '0.275×q×r²'],
     ['Mr 抵抗モーメント', extCheck.Mr.toFixed(3), 'kN·m/m', '0.318×Pext×r+0.239×W×r'],
@@ -1327,7 +1349,7 @@ function getProjectData() {
     soil: {
       type: v('soilType'), gamma: n('soilGamma'), phi: n('soilPhi'),
       phiPipe: n('soilPhiPipe'), C: n('soilC'), N: n('soilN'),
-      H: n('soilH'), adh: n('soilAdh'), water: n('soilWater'),
+      Hmin: n('soilHmin'), Hmax: n('soilHmax'), adh: n('soilAdh'), water: n('soilWater'),
       gravel: n('soilGravel'), gravelM: n('soilGravelM'),
       alpha: n('soilAlpha'), beta: n('soilBeta')
     },
@@ -1370,7 +1392,8 @@ function setProjectData(d) {
     setV('soilType', d.soil.type||'sand');
     setV('soilGamma', d.soil.gamma||18); setV('soilPhi', d.soil.phi||30);
     setV('soilPhiPipe', d.soil.phiPipe||20); setV('soilC', d.soil.C||0);
-    setV('soilN', d.soil.N||15); setV('soilH', d.soil.H||3.5);
+    setV('soilN', d.soil.N||15);
+    setV('soilHmin', d.soil.Hmin||2.0); setV('soilHmax', d.soil.Hmax||5.0);
     setV('soilAdh', d.soil.adh||10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
     setV('soilAlpha', d.soil.alpha||0.625); setV('soilBeta', d.soil.beta||1.20);
@@ -1465,7 +1488,7 @@ function updateProjectSummary() {
     <b>現場名:</b> ${d.site.name||'—'} / スパン: ${d.site.span||'—'}<br>
     <b>工法:</b> ${{blade:'刃口推進',slurry:'泥水推進',epb:'泥土圧推進',deinoh:'泥濃推進'}[d.method]||'—'}<br>
     <b>管仕様:</b> φ${d.pipe.dia}mm, D=${d.pipe.outer}m, l′=${d.pipe.len}m, W=${d.pipe.weight}kN/m, Fa=${d.pipe.allow}kN<br>
-    <b>土質:</b> γ=${d.soil.gamma}, φ=${d.soil.phi}°, N=${d.soil.N}, H=${d.soil.H}m<br>
+    <b>土質:</b> γ=${d.soil.gamma}, φ=${d.soil.phi}°, N=${d.soil.N}, H=${d.soil.Hmin}〜${d.soil.Hmax}m<br>
     <b>総推進延長:</b> ${d.alignment.totalLength}m / 曲線区間: ${d.alignment.curves.length}箇所<br>
     <b>最終保存:</b> ${d.savedAt ? new Date(d.savedAt).toLocaleString('ja-JP') : '—'}
   `;
