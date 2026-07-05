@@ -528,56 +528,92 @@ tr.row-tip{background:#eff6ff}
 <!-- ─── TAB 4: 支圧壁・バックロック ─── -->
 <section class="page" id="p3">
 
+  <!-- ══ 立坑種別と基本制約 ══ -->
   <div class="card">
-    <div class="card-title">🧱 支圧壁（反力壁）仕様</div>
+    <div class="card-title">🏗️ 発進立坑 種別（支圧壁制約）</div>
 
-    <!-- 立坑形状連動 -->
-    <div class="note-box" id="wallShaftNote" style="margin-bottom:8px">
-      立坑タブで形状を設定すると、利用可能な最大幅・高さが自動反映されます。
-    </div>
-
-    <div class="field-row full">
-      <label>発進立坑の形状（支圧壁制約に使用）</label>
-      <div class="shaft-chips" id="wallShaftShape" style="grid-template-columns:repeat(3,1fr)">
-        <div class="shaft-chip active" data-val="rect" onclick="setWallShaft('rect',this)">矩形立坑</div>
-        <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)">円形立坑</div>
-        <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)">オープンカット</div>
+    <div class="shaft-chips" id="wallShaftShapeChips" style="grid-template-columns:repeat(2,1fr);gap:8px">
+      <div class="shaft-chip active" data-val="rect" onclick="setWallShaft('rect',this)">
+        <div style="font-size:20px">⬛</div><b>矩形立坑</b>
+        <div style="font-size:11px;color:var(--sub);margin-top:2px">一体型支圧壁 可</div>
+      </div>
+      <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)">
+        <div style="font-size:20px">⭕</div><b>円形立坑（コンクリート）</b>
+        <div style="font-size:11px;color:var(--sub);margin-top:2px">一体型 可・弦長制約あり</div>
+      </div>
+      <div class="shaft-chip" data-val="casing" onclick="setWallShaft('casing',this)">
+        <div style="font-size:20px">🔩</div><b>鋼製ケーシング立坑</b>
+        <div style="font-size:11px;color:var(--sub);margin-top:2px">底版一体型 不可・独立型のみ</div>
+      </div>
+      <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)">
+        <div style="font-size:20px">🌿</div><b>オープンカット</b>
+        <div style="font-size:11px;color:var(--sub);margin-top:2px">幅制約なし</div>
       </div>
     </div>
 
-    <!-- 矩形立坑の場合 -->
-    <div id="wallRectInputs">
+    <!-- 種別ごとの注意書き -->
+    <div id="wallTypeNote" style="margin-top:8px"></div>
+
+    <!-- 矩形立坑 -->
+    <div id="wallRectInputs" style="margin-top:8px">
       <div class="two-col">
-        <div class="field-row"><label>立坑内法幅 B_pit [m]</label><input id="wallPitW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
-        <div class="field-row"><label>立坑内法高 H_pit [m]</label><input id="wallPitH" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+        <div class="field-row"><label>立坑内法幅 [m]</label><input id="wallPitW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
+        <div class="field-row"><label>立坑内法長（推進方向）[m]</label><input id="wallPitL" class="mono" type="number" step="0.1" value="4.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       </div>
     </div>
 
-    <!-- 円形立坑の場合 -->
-    <div id="wallCircleInputs" style="display:none">
+    <!-- 円形立坑 / ケーシング共通 -->
+    <div id="wallCircleInputs" style="display:none;margin-top:8px">
       <div class="field-row">
-        <label>立坑内径 φ_pit [m]</label>
+        <label>立坑内径 φ [m]</label>
         <input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()">
         <span class="unit">m</span>
       </div>
-      <div class="field-row">
-        <label>管中心高（底版上面から）[m]</label>
-        <input id="wallCirclePipeH" class="mono" type="number" step="0.05" value="1.0" oninput="calcBacklock()">
-        <span class="unit">m</span>
-      </div>
-      <!-- 円形立坑の有効幅図 -->
-      <div id="circleWallDiagram" class="backlock-vis" style="margin-top:8px">
+      <div class="backlock-vis" style="margin-top:8px;padding:10px">
         <canvas id="circleWallCanvas" style="width:200px;height:200px;display:block;margin:0 auto"></canvas>
         <div id="circleWallInfo" style="font-size:12px;color:var(--sub);margin-top:6px;text-align:center"></div>
       </div>
     </div>
+  </div>
 
-    <div class="two-col" style="margin-top:10px">
-      <div class="field-row"><label>壁幅 Bw [m]</label><input id="wallW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
-      <div class="field-row"><label>壁高 Hw [m]</label><input id="wallH" class="mono" type="number" step="0.1" value="2.0" oninput="calcBacklock()"><span class="unit">m</span></div>
-      <div class="field-row"><label>許容支圧応力 fa [kN/m²]</label><input id="wallFa" class="mono" type="number" step="10" value="350" oninput="calcBacklock()"><span class="unit">kN/m²</span></div>
-      <div class="field-row"><label>推進機軸高（底版上面から）[m]</label><input id="wallAxisH" class="mono" type="number" step="0.1" value="1.0" oninput="calcBacklock()"><span class="unit">m</span></div>
+  <!-- ══ 支圧壁の配置（基礎コンクリート基準）══ -->
+  <div class="card">
+    <div class="card-title">🧱 支圧壁の配置</div>
+
+    <!-- 基礎コンクリート基準の説明図 -->
+    <div style="background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px;color:var(--sub)">
+      <b>基準面 = 基礎コンクリート上面（y = 0）</b><br>
+      ─ 支圧壁の下端は基礎コンクリート上面（根入れ不可）<br>
+      ─ 支圧壁は上方向のみ増設可能<br>
+      ─ 管中心は基礎上面より上にある（h_pipe > 0）
     </div>
+    <canvas id="wallProfileCanvas" style="width:100%;height:180px;display:block;border:1px solid var(--line);border-radius:8px;margin-bottom:10px"></canvas>
+
+    <div class="two-col">
+      <div class="field-row">
+        <label>管中心高（基礎コンクリート上面から）[m]</label>
+        <input id="wallAxisH" class="mono" type="number" step="0.05" value="1.0" oninput="calcBacklock()">
+        <span class="unit">m</span>
+      </div>
+      <div class="field-row">
+        <label>支圧壁の幅 Bw [m]</label>
+        <input id="wallW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()">
+        <span class="unit">m</span>
+      </div>
+      <div class="field-row">
+        <label>支圧壁の高さ Hw [m]（基礎上面→上方）</label>
+        <input id="wallH" class="mono" type="number" step="0.1" value="2.0" oninput="calcBacklock()">
+        <span class="unit">m</span>
+      </div>
+      <div class="field-row">
+        <label>許容支圧応力 fa [kN/m²]</label>
+        <input id="wallFa" class="mono" type="number" step="10" value="350" oninput="calcBacklock()">
+        <span class="unit">kN/m²</span>
+      </div>
+    </div>
+
+    <!-- NG時の改善提案 -->
+    <div id="wallImproveSuggestion" style="display:none"></div>
     <div id="wallConstraintNote"></div>
   </div>
 
@@ -914,15 +950,25 @@ function onManholeChange(){
 }
 
 // ══════════════════════════════════════════════
-//  支圧壁 立坑形状選択
-// ══════════════════════════════════════════════
+//  支圧壁 立坑種別選択
+// ════════════════���═════════════════════════════
 let wallShaftShape = 'rect';
+
+const WALL_TYPE_NOTES = {
+  rect:   {cls:'ok-box',   msg:'矩形立坑: 立坑内法幅・内法長の範囲内で支圧壁を構築可能。一体型も独立型も選択できます。'},
+  circle: {cls:'note-box', msg:'円形立坑（コンクリート）: 管中心高での弦長が最大幅の上限となります。壁高が大きくなると上下端での弦長（→幅制約）が小さくなります。一体型も検討可。'},
+  casing: {cls:'ng-box',   msg:'⚠️ 鋼製ケーシング立坑: 底版（ベースプレート）を壊しての一体型支圧壁は構築不可です。底版上面に設置する独立型支圧壁のみ採用できます。\n改善策: ① 壁高 Hw を上方向に増やす ② バックロック奥行き（厚み）を増やす ③ 鋼製反力フレームを使用'},
+  open:   {cls:'ok-box',   msg:'オープンカット: 幅・高さの制約は地盤条件次第。支圧壁は自由に設計可能です。'},
+};
+
 function setWallShaft(val, el){
   wallShaftShape = val;
   el.closest('.shaft-chips').querySelectorAll('.shaft-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
   document.getElementById('wallRectInputs').style.display   = (val==='rect'||val==='open')?'':'none';
-  document.getElementById('wallCircleInputs').style.display = val==='circle'?'':'none';
+  document.getElementById('wallCircleInputs').style.display = (val==='circle'||val==='casing')?'':'none';
+  const n = WALL_TYPE_NOTES[val];
+  if(n) document.getElementById('wallTypeNote').innerHTML = `<div class="${n.cls}" style="white-space:pre-line">${n.msg}</div>`;
   calcBacklock();
 }
 
@@ -1444,152 +1490,271 @@ function drawForceGraph(){
 
 // ══════════════════════════════════════════════
 //  円形立坑 支圧壁の有効幅計算
-//  圧縮力の作用高さにおける弦長 = 2√((R_pit)²-(|y|)²)
-//  y = 管中心高 - 立坑中心高
+//
+//  【基準】基礎コンクリート上面 y=0（固定下端）
+//  壁高 Hw: y=0 〜 y=Hw（上方向のみ）
+//  立坑中心: 底版から立坑内径/2 の高さ
+//
+//  「壁高 Hw が大きいほど、矩形の上端が円の中心から
+//  　遠くなり、上端での弦長（=幅の制約）が短くなる」
+//  → 壁幅 Bw は、壁高さ範囲内で最も狭い弦長に制約される
 // ══════════════════════════════════════════════
 function getCircleWallConstraint(pitD, pipeAxisH){
-  // pitD: 立坑内径 [m]  pipeAxisH: 底版上面から管中心まで [m]
+  // pitD      : 立坑内径 [m]
+  // pipeAxisH : 基礎コンクリート上面から管中心まで [m]
   const R = pitD/2;
-  const pitCenterH = pitD/2; // 立坑中心高(底版から)
-  const y = pipeAxisH - pitCenterH; // 管中心の偏心量（上が正）
+  // 立坑中心の高さ（基礎コンクリート上面から）
+  // 一般的な円形立坑: 底板上面が基礎コンクリート上面 → 立坑中心 = R
+  const pitCenterH = R;
 
-  // 管中心高での弦長（支圧壁最大幅）
-  const chordY = 2*Math.sqrt(Math.max(0, R**2 - y**2));
+  // 管中心の立坑中心からの偏心量（上が正）
+  const dy_pipe = pipeAxisH - pitCenterH;
 
-  // 支圧壁の高さ = 管中心から上下に同等広がる幅で、円弧に収まる最大矩形を求める
-  // 最大矩形: 幅 w, 高さ h で w = 2√(R²-(y±h/2)²) を満たすもの
-  // 単純化: 壁中心を管中心と一致させ、壁高 Hw の場合の有効幅を計算
-  function effectiveWidth(Hw){
-    const topY = y + Hw/2;
-    const botY = y - Hw/2;
-    const wTop = 2*Math.sqrt(Math.max(0, R**2 - topY**2));
-    const wBot = 2*Math.sqrt(Math.max(0, R**2 - botY**2));
-    return Math.min(wTop, wBot); // 最小弦長（矩形が内接するため）
+  // 任意の高さ h（基礎上面基準）での弦長
+  // h → 立坑中心からの距離 dy = h - pitCenterH
+  function chordAtH(h){
+    const dy = h - pitCenterH;
+    return 2*Math.sqrt(Math.max(0, R**2 - dy**2));
   }
 
-  return {R, y, chordY, effectiveWidth};
+  // 管中心高での弦長
+  const chordAtPipe = chordAtH(pipeAxisH);
+
+  // 壁高 Hw（基礎上面〜Hw）の範囲内での最小弦長
+  // = 壁として使える有効幅 Bw の上限
+  // 壁の下端は y=0（基礎上面）固定
+  function effectiveWidth(Hw){
+    if(Hw <= 0) return 0;
+    // 壁範囲 [0, Hw] を20分割してチェック
+    let minChord = Infinity;
+    const steps = 20;
+    for(let i=0; i<=steps; i++){
+      const h = (i/steps)*Hw;
+      const c = chordAtH(h);
+      if(c < minChord) minChord = c;
+    }
+    return Math.max(0, minChord);
+  }
+
+  return {R, pitCenterH, dy_pipe, chordAtPipe, chordAtH, effectiveWidth};
 }
 
 function drawCircleWallCanvas(pitD, pipeAxisH, wallW, wallH){
   const canvas = document.getElementById('circleWallCanvas');
   if(!canvas) return;
   const dpr = window.devicePixelRatio||1;
-  const size = Math.min(canvas.clientWidth, canvas.clientHeight) || 200;
+  const size = Math.min(canvas.clientWidth||200, 200);
   canvas.width = size*dpr; canvas.height = size*dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,size,size);
 
-  const R = pitD/2;
-  const scale = (size*0.42)/R;
-  const cx = size/2, cy = size/2;
-  const pitCenterH = R; // 底版から立坑中心まで
-  const y = (pipeAxisH - pitCenterH) * scale; // 画面Y（下が正）→ 上が正なのでマイナス
+  const con = getCircleWallConstraint(pitD, pipeAxisH);
+  const R = con.R;
+  const mg = size*0.1;
+  const scale = (size - mg*2) / pitD;
+  const groundY = size - mg*0.5; // 基礎上面のY
+  const cx = size/2;
+  const pitCyScreen = groundY - con.pitCenterH*scale;
+
+  // 基礎コンクリート上面ライン
+  ctx.strokeStyle='#92400e'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(mg, groundY); ctx.lineTo(size-mg, groundY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(180,120,30,.15)';
+  ctx.fillRect(mg, groundY, size-mg*2, size-groundY);
+  ctx.fillStyle='#92400e'; ctx.font='9px Meiryo'; ctx.textAlign='center';
+  ctx.fillText('基礎コンクリート上面(y=0)', cx, groundY+10);
 
   // 立坑円
   ctx.strokeStyle='#64748b'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(cx,cy,R*scale,0,Math.PI*2); ctx.stroke();
-  ctx.fillStyle='rgba(148,163,184,.1)'; ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, pitCyScreen, R*scale, 0, Math.PI*2); ctx.stroke();
+  ctx.fillStyle='rgba(148,163,184,.08)'; ctx.fill();
+  ctx.fillStyle='#475569'; ctx.font='bold 10px Meiryo'; ctx.textAlign='center';
+  ctx.fillText(`φ${pitD*1000|0}mm`, cx, pitCyScreen - R*scale - 4);
 
-  // 支圧壁（矩形）
-  const hw2 = (wallH/2)*scale;
-  const bw2 = (wallW/2)*scale;
-  const wallCy = cy - y; // 管中心Y（画面上）
-  ctx.fillStyle='rgba(37,99,235,.25)';
-  ctx.strokeStyle='#1d6fd8'; ctx.lineWidth=1.5;
-  ctx.fillRect(cx-bw2, wallCy-hw2, bw2*2, hw2*2);
-  ctx.strokeRect(cx-bw2, wallCy-hw2, bw2*2, hw2*2);
+  // 支圧壁（y=0から上方へ Hw）
+  const effW = con.effectiveWidth(wallH);
+  const usedW = Math.min(wallW, effW);
+  const bw2 = (usedW/2)*scale;
+  const wallTopY = groundY - wallH*scale;
+  ctx.fillStyle='rgba(37,99,235,.2)'; ctx.strokeStyle='#1d6fd8'; ctx.lineWidth=1.5;
+  ctx.fillRect(cx-bw2, wallTopY, bw2*2, wallH*scale);
+  ctx.strokeRect(cx-bw2, wallTopY, bw2*2, wallH*scale);
+
+  // 壁高さ注釈
+  ctx.fillStyle='#1d6fd8'; ctx.font='bold 10px Meiryo'; ctx.textAlign='right';
+  ctx.fillText(`Hw=${wallH}m`, cx-bw2-3, (wallTopY+groundY)/2+4);
 
   // 管断面
+  const pipeCyScreen = groundY - pipeAxisH*scale;
   const pipeD = +document.getElementById('pipeOuter').value||0.96;
-  const pr = (pipeD/2)*scale;
+  const pr = Math.max(3, (pipeD/2)*scale);
   ctx.strokeStyle='#dc2626'; ctx.lineWidth=2;
-  ctx.beginPath(); ctx.arc(cx, wallCy, pr, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, pipeCyScreen, pr, 0, Math.PI*2); ctx.stroke();
 
-  // 有効幅線（管中心での弦）
-  const chordHalf = Math.sqrt(Math.max(0, (R*scale)**2 - y**2));
+  // 管中心での弦長（参考線）
+  const chordAtPipe = con.chordAtPipe;
+  const ch2 = (chordAtPipe/2)*scale;
   ctx.strokeStyle='#16a34a'; ctx.lineWidth=1.5; ctx.setLineDash([4,3]);
-  ctx.beginPath(); ctx.moveTo(cx-chordHalf, wallCy); ctx.lineTo(cx+chordHalf, wallCy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-ch2, pipeCyScreen); ctx.lineTo(cx+ch2, pipeCyScreen); ctx.stroke();
   ctx.setLineDash([]);
 
-  // 寸法ラベル
-  ctx.fillStyle='#1d6fd8'; ctx.font=`bold ${Math.max(9,size*0.055)}px Meiryo`; ctx.textAlign='center';
-  ctx.fillText(`φ${pitD*1000|0}mm`, cx, cy-R*scale-6);
-
-  const {effectiveWidth} = getCircleWallConstraint(pitD,pipeAxisH);
-  const effW = effectiveWidth(wallH);
+  const exceedsBw = wallW > effW;
   document.getElementById('circleWallInfo').innerHTML =
-    `管中心高(底版上面から): <b>${pipeAxisH}m</b> &nbsp;|&nbsp; ` +
-    `管中心での弦長: <b>${(chordHalf*2/scale).toFixed(3)}m</b><br>` +
-    `壁高 ${wallH}m 時の有効幅: <b style="color:${effW<wallW?'#dc2626':'#16a34a'}">${effW.toFixed(3)}m</b>` +
-    (effW<wallW?` ← ⚠️ 指定幅 ${wallW}m 超過`:'');
+    `管中心高: <b>${pipeAxisH}m</b> | 管中心での弦長: <b>${chordAtPipe.toFixed(3)}m</b><br>` +
+    `壁高Hw=${wallH}m 時の有効幅（最小弦長）: ` +
+    `<b style="color:${exceedsBw?'#dc2626':'#16a34a'}">${effW.toFixed(3)}m</b>` +
+    (exceedsBw ? ` ⚠️ 指定幅${wallW}m超過` : ` ✅ 指定幅${wallW}m は範囲内`);
+}
+
+// 支圧壁プロファイル図（基礎コンクリート上面基準の側面図）
+function drawWallProfile(axisH, wallH, effectiveBw, F){
+  const canvas = document.getElementById('wallProfileCanvas');
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = canvas.clientWidth*dpr;
+  canvas.height = canvas.clientHeight*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  const W=canvas.clientWidth, H=canvas.clientHeight;
+  ctx.clearRect(0,0,W,H);
+
+  const mL=60,mR=20,mT=16,mB=24;
+  const gw=W-mL-mR, gh=H-mT-mB;
+  const maxHeight = Math.max(wallH, axisH)*1.35 || 3;
+  const sy = h => mT + gh*(1 - h/maxHeight);
+  const midX = mL + gw*0.35;
+
+  // 目盛り
+  ctx.strokeStyle='#e5e7eb'; ctx.lineWidth=0.5;
+  ctx.fillStyle='#64748b'; ctx.font='10px Meiryo'; ctx.textAlign='right';
+  for(let h=0; h<=Math.ceil(maxHeight*2)/2; h+=0.5){
+    const y=sy(h);
+    ctx.beginPath(); ctx.moveTo(mL,y); ctx.lineTo(W-mR,y); ctx.stroke();
+    ctx.fillText(h.toFixed(1), mL-4, y+4);
+  }
+
+  // 基礎コンクリート上面
+  const y0 = sy(0);
+  ctx.strokeStyle='#92400e'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(mL,y0); ctx.lineTo(W-mR,y0); ctx.stroke();
+  ctx.fillStyle='rgba(180,120,30,.15)'; ctx.fillRect(mL,y0,gw,mB);
+  ctx.fillStyle='#92400e'; ctx.font='10px Meiryo'; ctx.textAlign='left';
+  ctx.fillText('基礎上面 y=0', mL+4, y0-3);
+
+  // 支圧壁（基礎上面から上方向のみ）
+  const wallTopY = sy(wallH);
+  const wallPx = Math.min(gw*0.45, 60);
+  ctx.fillStyle='rgba(37,99,235,.18)';
+  ctx.strokeStyle='#1d6fd8'; ctx.lineWidth=2;
+  ctx.fillRect(midX, wallTopY, wallPx, y0-wallTopY);
+  ctx.strokeRect(midX, wallTopY, wallPx, y0-wallTopY);
+  ctx.fillStyle='#1d6fd8'; ctx.font='bold 10px Meiryo'; ctx.textAlign='left';
+  ctx.fillText(`Hw=${wallH}m`, midX+wallPx+6, (wallTopY+y0)/2+4);
+
+  // 管中心ライン（赤）
+  const pipeY = sy(axisH);
+  if(axisH > 0 && axisH <= wallH+0.01){
+    ctx.strokeStyle='#dc2626'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(mL, pipeY); ctx.lineTo(W-mR, pipeY); ctx.stroke();
+    ctx.fillStyle='#dc2626'; ctx.font='bold 10px Meiryo'; ctx.textAlign='right';
+    ctx.fillText(`管中心 h=${axisH}m`, midX-4, pipeY+4);
+    // 推進力矢印
+    ctx.strokeStyle='#b91c1c'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(mL+8, pipeY); ctx.lineTo(midX-4, pipeY); ctx.stroke();
+    const ax=midX-4;
+    ctx.fillStyle='#b91c1c';
+    ctx.beginPath(); ctx.moveTo(ax,pipeY-5); ctx.lineTo(ax+10,pipeY); ctx.lineTo(ax,pipeY+5); ctx.fill();
+    ctx.font='10px Meiryo'; ctx.textAlign='left';
+    ctx.fillText(`F=${F?F.toFixed(0):'?'}kN`, mL+10, pipeY-5);
+  } else {
+    // 管中心が壁外
+    ctx.fillStyle='#dc2626'; ctx.font='bold 10px Meiryo'; ctx.textAlign='left';
+    ctx.fillText(`⚠️ 管中心 h=${axisH}m が壁高${wallH}mを超過`, mL+4, mT+12);
+  }
+
+  // 偏心量 e の表示
+  const e = axisH - wallH/2;
+  const wallCenterY = (wallTopY+y0)/2;
+  ctx.strokeStyle='#94a3b8'; ctx.lineWidth=1; ctx.setLineDash([2,2]);
+  ctx.beginPath(); ctx.moveTo(midX-16, wallCenterY); ctx.lineTo(midX-16, pipeY); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#64748b'; ctx.font='9px Meiryo'; ctx.textAlign='right';
+  ctx.fillText(`e=${e.toFixed(2)}m`, midX-18, (wallCenterY+pipeY)/2+4);
 }
 
 // ══════════════════════════════════════════════
-//  バックロック計算
+//  バックロック計算（支圧壁3段階照査）
+//  【設計方針】
+//  ・壁下端 = 基礎コンクリート上面（固定）
+//  ・壁は上方向にのみ伸ばせる
+//  ・鋼製ケーシングは底版一体型不可 → 独立型のみ
+//  ・幅制約: 矩形→内法幅, 円形/ケーシング→弦長
+//  ・容量不足時の対応: Hw増加 or BL奥行き増加
 // ══════════════════════════════════════════════
 function calcBacklock(){
   const mode = document.getElementById('blocklockMode').value;
   document.getElementById('blocklockManual').style.display = mode==='manual'?'':'none';
 
-  const Bw     = +document.getElementById('wallW').value||3.0;
-  const Hw     = +document.getElementById('wallH').value||2.0;
-  const fa     = +document.getElementById('wallFa').value||350;
-  const axisH  = +document.getElementById('wallAxisH').value||1.0;
-  const fc     = +document.getElementById('blConcrete').value||21;
-  const F      = calcResult ? calcResult.maxF : 1000;
-  const phi    = calcResult ? calcResult.inp.phi : 30;
-  const gamma  = calcResult ? calcResult.inp.gamma : 18;
+  const Bw    = +document.getElementById('wallW').value||3.0;
+  const Hw    = +document.getElementById('wallH').value||2.0;
+  const fa    = +document.getElementById('wallFa').value||350;
+  const axisH = +document.getElementById('wallAxisH').value||1.0;  // 基礎上面から管中心まで
+  const fc    = +document.getElementById('blConcrete').value||21;
+  const F     = calcResult ? calcResult.maxF : 1000;
+  const phi   = calcResult ? calcResult.inp.phi : 30;
+  const gamma = calcResult ? calcResult.inp.gamma : 18;
 
-  // ── 立坑形状による支圧壁の最大幅・高さ制約 ──
-  let maxBw = Infinity, maxHw = Infinity;
+  // ── 壁有効幅の算出（立坑形状制約）──
+  let effectiveBw = Bw;
   let constraintDesc = '';
+  let exceedsBw = false;
+  let isCasing = wallShaftShape === 'casing';
 
   if(wallShaftShape==='rect'||wallShaftShape==='open'){
     const pitW = +document.getElementById('wallPitW').value||3.0;
-    const pitH = +document.getElementById('wallPitH').value||3.5;
-    maxBw = pitW; maxHw = pitH;
-    constraintDesc = `矩形立坑 内法幅 ${pitW}m × 内法高 ${pitH}m`;
-    // wallW/wallH を超えていたら警告
-  } else if(wallShaftShape==='circle'){
-    const pitD   = +document.getElementById('wallCircleD').value||3.5;
-    const pipeH  = axisH;
-    const {effectiveWidth} = getCircleWallConstraint(pitD, pipeH);
-    maxBw = effectiveWidth(Hw);
-    maxHw = pitD; // 高さ方向は直径が上限（実際には弦長）
-    constraintDesc = `円形立坑 φ${pitD}m: 壁高${Hw}m時の有効幅 ${maxBw.toFixed(3)}m`;
-    drawCircleWallCanvas(pitD, pipeH, Math.min(Bw,maxBw), Hw);
+    effectiveBw = Math.min(Bw, pitW);
+    exceedsBw = Bw > pitW;
+    constraintDesc = `矩形立坑内法幅 ${pitW}m`;
+  } else if(wallShaftShape==='circle'||wallShaftShape==='casing'){
+    const pitD  = +document.getElementById('wallCircleD').value||3.5;
+    const con   = getCircleWallConstraint(pitD, axisH);
+    effectiveBw = Math.min(Bw, con.effectiveWidth(Hw));
+    exceedsBw   = Bw > con.effectiveWidth(Hw);
+    constraintDesc = `${wallShaftShape==='casing'?'ケーシング':'円形立坑'} φ${pitD}m: 壁高${Hw}m時の有効幅${con.effectiveWidth(Hw).toFixed(3)}m`;
+    drawCircleWallCanvas(pitD, axisH, Math.min(Bw, con.effectiveWidth(Hw)), Hw);
   } else {
     constraintDesc = 'オープンカット: 制約なし';
   }
 
-  const effectiveBw = Math.min(Bw, maxBw);
-  const exceedsBw   = Bw > maxBw;
+  // 壁側面プロファイル図を更新
+  drawWallProfile(axisH, Hw, effectiveBw, F);
 
   document.getElementById('wallConstraintNote').innerHTML =
     exceedsBw
-      ? `<div class="ng-box">⚠️ 指定壁幅 ${Bw}m > 立坑制約 ${maxBw.toFixed(3)}m — 有効幅 <b>${effectiveBw.toFixed(3)}m</b> で計算します<br>${constraintDesc}</div>`
-      : `<div class="ok-box">立坑制約: ${constraintDesc} — 指定幅 ${Bw}m は範囲内 ✅</div>`;
+      ? `<div class="ng-box">⚠️ 指定壁幅 ${Bw}m > 立坑制約 — 有効幅 <b>${effectiveBw.toFixed(3)}m</b> で計算\n${constraintDesc}</div>`
+      : `<div class="ok-box">立坑制約: ${constraintDesc} — 指定幅 ${Bw}m は範囲内</div>`;
 
-  // コンクリート圧縮許容応力（f′c×0.6）
-  const fa_conc = fc*0.6*1000; // kN/m²
+  // 管中心が壁内に収まるか確認（管中心 > Hw はNG）
+  const pipeAboveWall = axisH > Hw;
+
+  // コンクリート圧縮許容応力
+  const fa_conc = fc * 0.6 * 1000; // kN/m²
 
   // ── バックロック選定 ──
   let selectedBL, blCount=1;
   if(mode==='auto'){
-    const requiredA = F / fa_conc;
-    // 立坑制約内で選定（幅・高さがそれぞれ effectiveBw, Hw を超えない）
-    selectedBL = BACKLOCK_STD.find(bl=>{
-      return bl.w*bl.h>=requiredA && bl.w<=effectiveBw && bl.h<=Hw;
-    });
+    const reqA = F / fa_conc;
+    selectedBL = BACKLOCK_STD.find(bl => bl.w*bl.h >= reqA && bl.w <= effectiveBw && bl.h <= Hw);
     if(!selectedBL){
-      // 1個で収まらない → 複数個で対応（並列配置）
-      blCount = Math.ceil(requiredA / (effectiveBw * Hw));
+      blCount = Math.max(1, Math.ceil(reqA / (effectiveBw * Hw)));
+      const side = Math.sqrt(reqA / blCount);
       selectedBL = {
-        w: Math.min(effectiveBw, Math.sqrt(requiredA/blCount)),
-        h: Math.min(Hw, Math.sqrt(requiredA/blCount)),
+        w: Math.min(effectiveBw, side),
+        h: Math.min(Hw, side),
         d: 0.8,
-        label: `自動調整(${blCount}個配置)`,
+        label: `自動調整(${blCount}個)`
       };
     }
   } else {
@@ -1606,106 +1771,124 @@ function calcBacklock(){
   const sigma_bl = F / Math.max(A_bl, 1e-9);
   const ok_bl    = sigma_bl <= fa_conc;
 
-  // ── 支圧壁3段階照査（有効幅使用）──
-  const A_wall   = effectiveBw * Hw;
-  const f_wall   = F / Math.max(A_wall, 1e-9);
-  const ok_f     = f_wall <= fa;
+  // ── 支圧壁3段階照査 ──
+  // 偏心: 壁下端=基礎上面固定 → 壁中心 = Hw/2, 管中心 = axisH
+  const A_wall    = effectiveBw * Hw;
+  const f_wall    = F / Math.max(A_wall, 1e-9);
+  const ok_f      = f_wall <= fa;
 
-  const e         = axisH - Hw/2;
+  const e         = axisH - Hw/2;   // 正 = 管中心が壁中心より上
   const M_eccen   = F * Math.abs(e);
   const Z_wall    = effectiveBw * Hw**2 / 6;
   const sigma_max = F/A_wall + M_eccen/Z_wall;
-  const ok_bending= sigma_max <= fa;
+  const ok_bending= sigma_max <= fa && !pipeAboveWall;
 
   const phiR = phi*Math.PI/180;
   const Kp   = Math.tan(Math.PI/4 + phiR/2)**2;
   const Ep   = 0.5 * gamma * Hw**2 * Kp * effectiveBw;
   const ok_ep= Ep >= F;
-  const allOk= ok_f && ok_bending && ok_ep;
+  const allOk= ok_f && ok_bending && ok_ep && ok_bl && !pipeAboveWall;
 
-  const blVisW = Math.round(Math.max(30, Math.min(80, selectedBL.w*60)));
-  const blVisH = Math.round(Math.max(30, Math.min(70, selectedBL.h*60)));
+  // ── NG時の改善提案 ──
+  let improvements = [];
+  if(pipeAboveWall){
+    improvements.push(`<b>❌ 管中心(${axisH}m) > 壁高(${Hw}m)</b>: Hw を最低 <b>${(axisH+0.2).toFixed(1)}m</b> 以上に増やしてください`);
+  }
+  if(!ok_ep){
+    const hwNeeded = Math.sqrt(2*F/(gamma*Kp*effectiveBw))*1.05;
+    improvements.push(`③受働土圧NG: Hw を <b>${hwNeeded.toFixed(2)}m</b> 以上にする（現在${Hw}m）`);
+  }
+  if(!ok_f){
+    const hwNeeded = F/(fa*effectiveBw);
+    improvements.push(`①基礎反力NG: Bw×Hw を <b>${(F/fa).toFixed(2)}m²</b> 以上に（Hw増加 or Bw増加）`);
+  }
+  if(!ok_bl){
+    const thickNeeded = F/fa_conc/A_wall;
+    improvements.push(`BL面圧NG: バックロック奥行き（厚み）を増す or 配置数を増やす`);
+  }
+  if(isCasing && improvements.length === 0 && allOk){
+    improvements.push(`鋼製ケーシング: 底版上面設置の独立型支圧壁として成立 ✅`);
+  }
+  if(isCasing && !allOk){
+    improvements.push(`鋼製ケーシング: 底版一体型不可のため、独立型の強度向上が必要 — <b>鋼製反力フレーム</b>の使用も検討`);
+  }
+
+  const improveHtml = improvements.length
+    ? `<div id="wallImproveSuggestion" class="${allOk?'ok-box':'ng-box'}" style="white-space:pre-line">${improvements.join('\n')}</div>`
+    : '';
+
+  const blVisW = Math.round(Math.max(30, Math.min(70, selectedBL.w*55)));
+  const blVisH = Math.round(Math.max(25, Math.min(55, selectedBL.h*55)));
 
   const html = `
     <div class="card">
       <div class="card-title accent">🔩 バックロック選定結果</div>
+      ${isCasing?'<div class="ng-box" style="margin-bottom:8px">⚠️ 鋼製ケーシング: 底版一体型不可 → 独立型のみ。容量不足時は奥行き増加・鋼製フレームを検討。</div>':''}
       <div class="backlock-vis">
-        <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin:8px 0">
-          <div style="text-align:center;font-size:12px;color:var(--sub)">推進力<br>F=${F.toFixed(0)}kN</div>
-          <span style="font-size:24px;color:var(--ng);font-weight:bold">→</span>
-          <div style="display:flex;gap:3px;align-items:center">
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:6px 0">
+          <div style="font-size:11px;color:var(--sub);text-align:center">F=${F.toFixed(0)}kN<br>→</div>
+          <div style="display:flex;gap:3px">
             ${Array(blCount).fill(0).map((_,bi)=>`
-              <div style="display:flex;flex-direction:column;align-items:center">
-                <div class="backlock-diagram" style="width:${blVisW}px;height:${blVisH}px;display:flex;align-items:center;justify-content:center;font-size:9px">
-                  W${(selectedBL.w*100|0)}<br>H${(selectedBL.h*100|0)}
+              <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+                <div class="backlock-diagram" style="width:${blVisW}px;height:${blVisH}px;display:flex;align-items:center;justify-content:center;font-size:9px;line-height:1.2">
+                  W${(selectedBL.w*100|0)}<br>H${(selectedBL.h*100|0)}<br>D${(selectedBL.d*100|0)}
                 </div>
                 ${blCount>1?`<div style="font-size:9px;color:var(--sub)">${bi+1}</div>`:''}
               </div>`).join('')}
           </div>
-          <span style="font-size:24px;color:var(--ng);font-weight:bold">→</span>
-          <div style="background:#8b9eb5;width:14px;height:${Math.max(40,Hw*28)}px;border-radius:2px;position:relative">
-            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);white-space:nowrap;font-size:9px;color:#fff;writing-mode:vertical-rl">支圧壁</div>
-          </div>
+          <div style="font-size:11px;color:var(--sub)">→</div>
+          <div style="background:#8b9eb5;width:10px;height:${Math.max(30,Hw*25)}px;border-radius:2px"></div>
+          <div style="font-size:10px;color:var(--sub)">支圧壁<br>Hw=${Hw}m</div>
         </div>
-        <div style="font-size:12px;color:var(--sub)">
-          ${selectedBL.label} × ${blCount}個 &nbsp;
-          (W=${selectedBL.w.toFixed(2)}m × H=${selectedBL.h.toFixed(2)}m × D=${selectedBL.d.toFixed(2)}m)<br>
-          有効壁幅: ${effectiveBw.toFixed(3)}m ${exceedsBw?'<span style="color:#dc2626">(立坑制約で縮小)</span>':''}
+        <div style="font-size:11px;color:var(--sub);text-align:center">
+          ${selectedBL.label} × ${blCount}個 (W=${selectedBL.w.toFixed(2)}×H=${selectedBL.h.toFixed(2)}×D=${selectedBL.d.toFixed(2)}m)<br>
+          有効壁幅: ${effectiveBw.toFixed(3)}m${exceedsBw?' <span style="color:#dc2626">← 立坑制約で縮小</span>':''}
         </div>
       </div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <div class="metric-label">BL接触面積 A</div>
+          <div class="metric-label">BL接触面積</div>
           <div class="metric-value">${A_bl.toFixed(3)}</div><div class="metric-sub">m²</div>
         </div>
         <div class="metric-card">
           <div class="metric-label">BL面圧 σ</div>
           <div class="metric-value ${ok_bl?'ok':'ng'}">${(sigma_bl/1000).toFixed(2)}</div>
-          <div class="metric-sub">N/mm² ≤ ${(fa_conc/1000).toFixed(1)}(${ok_bl?'OK':'NG'})</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">必要面積</div>
-          <div class="metric-value">${(F/fa_conc).toFixed(3)}</div>
-          <div class="metric-sub">m²</div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">安全率</div>
-          <div class="metric-value ${ok_bl?'ok':'ng'}">${(fa_conc/sigma_bl).toFixed(2)}</div>
-          <div class="metric-sub">— (≥1.0)</div>
+          <div class="metric-sub">N/mm² ≤${(fa_conc/1000).toFixed(0)} (${ok_bl?'OK':'NG'})</div>
         </div>
       </div>
-      ${!ok_bl?'<div class="ng-box">BL圧縮照査NG — 配置数を増やすかサイズアップが必要</div>':'<div class="ok-box">バックロック圧縮照査 OK</div>'}
+      ${improveHtml}
     </div>
 
     <div class="card">
-      <div class="card-title">🧱 支圧壁 3段階照査（有効壁幅 ${effectiveBw.toFixed(3)}m 使用）</div>
+      <div class="card-title">🧱 支圧壁 3段階照査</div>
+      ${pipeAboveWall?'<div class="ng-box">❌ 管中心高('+axisH+'m) > 壁高('+Hw+'m) — 壁高を増やしてください</div>':''}
       <div class="tbl-wrap"><table>
-        <tr><th>照査項目</th><th>計算式</th><th>計算値</th><th>許容値</th><th>判定</th></tr>
+        <tr><th>照査</th><th>計算式</th><th>計算値</th><th>許容値</th><th>判定</th></tr>
         <tr>
           <td class="left">① 基礎反力 f</td>
           <td class="left mono small">F/(Bw×Hw)</td>
           <td class="mono">${f_wall.toFixed(1)} kN/m²</td>
-          <td class="mono">≤ ${fa} kN/m²</td>
+          <td class="mono">≤${fa}</td>
           <td><span class="pill ${ok_f?'ok':'ng'}">${ok_f?'OK':'NG'}</span></td>
         </tr>
         <tr>
           <td class="left">② 偏心曲げ σmax</td>
-          <td class="left mono small">F/A + M/Z<br>e=${e.toFixed(3)}m</td>
+          <td class="left mono small">F/A+M/Z<br>e=${e.toFixed(3)}m${e>0?' (管中心が壁中心より上)':' (管中心が壁中心より下)'}</td>
           <td class="mono">${sigma_max.toFixed(1)} kN/m²</td>
-          <td class="mono">≤ ${fa} kN/m²</td>
+          <td class="mono">≤${fa}</td>
           <td><span class="pill ${ok_bending?'ok':'ng'}">${ok_bending?'OK':'NG'}</span></td>
         </tr>
         <tr>
           <td class="left">③ 受働土圧 Ep</td>
           <td class="left mono small">½γHw²×Kp×Bw<br>Kp=${Kp.toFixed(3)}</td>
           <td class="mono">${Ep.toFixed(1)} kN</td>
-          <td class="mono">≥ ${F.toFixed(0)} kN</td>
+          <td class="mono">≥${F.toFixed(0)}</td>
           <td><span class="pill ${ok_ep?'ok':'ng'}">${ok_ep?'OK':'NG'}</span></td>
         </tr>
         <tr style="background:${allOk?'#f0fdf4':'#fef2f2'}">
-          <td class="left"><b>総合判定</b></td>
-          <td class="left small">φ=${phi}° γ=${gamma}kN/m³</td>
-          <td colspan="2">F=${F.toFixed(0)}kN Bw=${effectiveBw.toFixed(2)}m Hw=${Hw}m</td>
+          <td class="left"><b>総合</b></td>
+          <td class="left small">φ=${phi}° γ=${gamma}kN/m³<br>Bw=${effectiveBw.toFixed(2)}m</td>
+          <td colspan="2">F=${F.toFixed(0)}kN Hw=${Hw}m</td>
           <td><span class="pill ${allOk?'ok':'ng'}">${allOk?'✅ OK':'❌ NG'}</span></td>
         </tr>
       </table></div>
@@ -1714,6 +1897,7 @@ function calcBacklock(){
   document.getElementById('backlockResult').innerHTML = html;
   document.getElementById('wallCheckResult').innerHTML = '';
 }
+
 
 // ══════════════════════════════════════════════
 //  チェックリスト
