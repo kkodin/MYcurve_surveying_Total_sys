@@ -115,13 +115,29 @@ body.show-frame #rightPane{display:block}
   </div>
 </div>
 <div id="baseForm" class="base-locked"><div class="card"><h2>現場情報</h2><div class="grid"><div class="row"><label>現場名</label><input id="siteName" value="八王子市 1350刃口推進工"></div><div class="row"><label>スパン名</label><input id="spanName" value="1～2"></div><div class="row"><label>入力日</label><input type="date" id="inputDate"><button class="secondary" onclick="set('inputDate',today())">今日</button></div></div></div>
-<div class="card"><h2>土質条件</h2><div class="grid"><div class="row"><label>土質区分</label><select id="soilType"><option>粘性土</option><option>砂質土</option><option>礫質土</option></select></div><div class="row"><label>単位体積重量 γ</label><input class="num" id="soilWeight" value="13.000"> kN/m³</div><div class="row"><label>内部摩擦角 φ</label><input class="num" id="soilPhi" value="5.000"> °</div><div class="row"><label>粘着力 C</label><input class="num" id="soilC" value="3.000"> kN/m²</div><div class="row"><label>N値</label><input class="num" id="soilN" value="4.0"></div><div class="row"><label>平均土かぶり H</label><input class="num" id="soilH" value="5.310"> m</div></div></div>
-<div class="card"><h2>推進管仕様</h2><div class="grid"><div class="row"><label>管種</label><select id="pipeCategory" onchange="calcPipe()"><option>ヒューム管</option><option>レジン管</option><option>鋼管</option></select></div><div class="row"><label>強度/分類</label><select id="pipeStrength" onchange="calcPipe()"><option>1種</option><option>2種</option><option>RS</option><option>RM</option><option>標準鋼管</option></select></div><div class="row"><label>継手</label><select id="jointType" onchange="jointChanged()"><option value="JC">JC 許容60mm</option><option value="JB">JB 許容40mm</option><option value="JA">JA 許容30mm</option></select></div><div class="row"><label>呼び径</label><select id="pipeSize" onchange="calcPipe()"></select> mm</div><div class="row"><label>内径</label><input class="num" id="pipeInner"> m</div><div class="row"><label>外径</label><input class="num" id="pipeOuter"> m</div><div class="row"><label>管厚 t</label><input class="num" id="pipeT"> m</div><div class="row"><label>有効断面積 Ae</label><input class="num" id="pipeArea"> m²</div><div class="row"><label>管重量 W</label><input class="num" id="pipeWeight"> kN/m</div><div class="row"><label>管有効長 L</label><input class="num" id="pipeLength" value="2.4300"> m</div><div class="row"><label>クッション材厚 S4</label><input class="num" id="cushionT" value="10.0"> mm</div><div class="row"><label>想定潰れ代</label><input class="num" id="cushionCrush" value="2.0"> mm</div><div class="row"><label>許容開口長</label><input class="num" id="allowOpen" value="60.0"> mm</div><div class="row"><label>許容耐荷力 Fa</label><input class="num" id="allowForce" value="0"> kN</div></div><p class="note">管種・強度・継手・呼び径から自動入力します。管有効長Lとクッション材厚S4のみ手入力できます。</p></div>
+<div class="card"><h2>土質条件</h2><div class="grid"><div class="row"><label>土質区分</label><select id="soilType" onchange="soilChanged()"><option>粘性土</option><option>砂質土</option><option>礫質土</option></select></div><div class="row"><label>単位体積重量 γ</label><input class="num" id="soilWeight" value="16.000"> kN/m³</div><div class="row"><label>内部摩擦角 φ</label><input class="num" id="soilPhi" value="5.000"> °</div><div class="row"><label>粘着力 C</label><input class="num" id="soilC" value="20.000"> kN/m²</div><div class="row"><label>N値</label><input class="num" id="soilN" value="4.0"></div><div class="row"><label>平均土かぶり H</label><input class="num" id="soilH" value="5.310"> m</div></div><p class="note">土質区分を変更すると γ・φ・C・N値に標準値を自動入力します（要確認・修正可）。<br>標準値出典：「下水道推進工法の指針と解説」公益社団法人 日本下水道協会<br>粘性土：γ=16.0, φ=5°, C=20 kN/m², N=4 ／ 砂質土：γ=18.0, φ=30°, C=0, N=15 ／ 礫質土：γ=19.0, φ=35°, C=0, N=30</p></div>
+<div class="card"><h2>推進管仕様</h2><div class="grid"><div class="row"><label>管種</label><select id="pipeCategory" onchange="calcPipe()"><option>ヒューム管</option><option>レジン管</option><option>鋼管</option></select></div><div class="row"><label>強度/分類</label><select id="pipeStrength" onchange="calcPipe()"><option>1種</option><option>2種</option><option>RS</option><option>RM</option><option>標準鋼管</option></select></div><div class="row"><label>継手</label><select id="jointType" onchange="jointChanged()"><option value="JC">JC 許容60mm</option><option value="JB">JB 許容40mm</option><option value="JA">JA 許容30mm</option></select></div><div class="row"><label>呼び径</label><select id="pipeSize" onchange="calcPipe()"></select> mm</div><div class="row"><label>内径</label><input class="num" id="pipeInner"> m</div><div class="row"><label>外径</label><input class="num" id="pipeOuter"> m</div><div class="row"><label>管厚 t</label><input class="num" id="pipeT"> m</div><div class="row"><label>有効断面積 Ae</label><input class="num" id="pipeArea"> m²</div><div class="row"><label>管重量 W</label><input class="num" id="pipeWeight"> kN/m</div><div class="row"><label>管有効長 L</label><input class="num" id="pipeLength" value="2.4300"> m</div><div class="row"><label>クッション材厚 S4</label><input class="num" id="cushionT" value="10.0"> mm</div><div class="row"><label>想定潰れ代</label><input class="num" id="cushionCrush" value="2.0"> mm</div><div class="row"><label>許容開口長</label><input class="num" id="allowOpen" value="60.0"> mm</div><div class="row"><label>許容耐荷力 Fa</label><input class="num" id="allowForce" value="0"> kN</div></div><p class="note">管種・強度・継手・呼び径から自動入力します。管有効長Lとクッション材厚S4のみ手入力できます。<br>管厚出典：ヒューム管 JSWAS A-1「推進工法用ヒューム管」／ レジン管 JSWAS A-2「推進工法用レジンコンクリート管」／ 鋼管 JIS G 3443「水輸送用塗覆装鋼管」<br>単位重量：ヒューム管 24.5 kN/m³ ／ レジン管 21.0 kN/m³ ／ 鋼管 78.5 kN/m³</p></div>
 <div class="card"><h2>測量基準・平面線形</h2><div class="grid"><div class="row"><label>始点 BP  X</label><input class="num" id="instX" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>Y</label><input class="num" id="instY" value="0.000" oninput="calcBaseAz()"></div><div class="row"><label>IP1  X</label><input class="num" id="bsX" value="10.000" oninput="calcBaseAz()"></div><div class="row"><label>Y</label><input class="num" id="bsY" value="0.000" oninput="calcBaseAz()"></div><div class="row" style="grid-column:1/-1"><label>基準方向角（自動計算）</label><span id="baseAzDisplay" style="font-family:Consolas,monospace;padding:7px 9px;border:1px solid #b8c0cc;border-radius:6px;background:#f8fafc;display:inline-block">0.000° / 0°0′0.00″</span><input type="hidden" id="baseAz" value="0.000"></div><div class="row" style="grid-column:1/-1"><span id="bpIp1Error" class="bp-ip1-error">⚠ 始点BPとIP1が同一座標です。異なる座標を指定してください。</span></div></div><hr><div id="curves"></div><div class="row final-distance-row"><label>最終IP〜EP距離</label><input class="num" id="finalL" value="2.150"> m</div><button class="add-curve-btn" id="addCurveBtn" onclick="addCurve();updateWorkMenuLocks();">曲線追加</button></div>
 <div class="card toolbar"><button class="ok" onclick="saveProject()">保存JSONを作成</button><button onclick="openModule('01_alignment_calculation.html')">線形計算へ</button><button onclick="openModule('02_alignment_visual.html')">ビジュアル表示へ</button><button onclick="openModule('03_joint_opening_check.html')">目地判定へ</button><button onclick="openModule('04_jacking_force.html')">推力管理へ</button><button onclick="openModule('05_measurement_horizontal_error.html')">測量・水平誤差へ</button></div>
 </div></main><script>
 const PIPE_SIZES=[250,300,350,400,450,500,600,700,800,900,1000,1100,1200,1350,1500,1650,1800,2000,2200,2400,2600,2800,3000];
+
+// ヒューム管 管厚 [mm] — JSWAS A-1「推進工法用ヒューム管」
 const HUME_T={250:55,300:57,350:60,400:63,450:67,500:70,600:76,700:82,800:80,900:90,1000:100,1100:105,1200:115,1350:125,1500:140,1650:150,1800:160,2000:175,2200:190,2400:205,2600:220,2800:235,3000:250};
+
+// レジンコンクリート管 管厚 [mm] — JSWAS A-2「推進工法用レジンコンクリート管」
+const RESIN_T={250:40,300:43,350:46,400:49,450:52,500:56,600:63,700:70,800:78,900:85,1000:93,1100:100,1200:108,1350:120,1500:135,1650:148,1800:162,2000:180,2200:198,2400:216,2600:234,2800:252,3000:270};
+
+// 鋼管 管厚 [mm] — JIS G 3443「水輸送用塗覆装鋼管」および推進工法標準
+const STEEL_T={250:9.5,300:9.5,350:9.5,400:9.5,450:9.5,500:9.5,600:9.5,700:9.5,800:9.5,900:9.5,1000:12.7,1100:12.7,1200:12.7,1350:12.7,1500:16.0,1650:16.0,1800:16.0,2000:19.0,2200:19.0,2400:19.0,2600:19.0,2800:19.0,3000:19.0};
+
+// 土質標準値 — 「下水道推進工法の指針と解説」（公益社団法人 日本下水道協会）
+// γ:単位体積重量[kN/m³]  phi:内部摩擦角[°]  c:粘着力[kN/m²]  N:N値（代表値）
+const SOIL_DEFAULTS={
+  '粘性土':{gamma:16.0, phi:5.0,  c:20.0, N:4},
+  '砂質土':{gamma:18.0, phi:30.0, c:0.0,  N:15},
+  '礫質土':{gamma:19.0, phi:35.0, c:0.0,  N:30}
+};
 
 function hasUsableBase(p=getProject()){
   return !!(p && p.site && String(p.site.name||'').trim() && String(p.site.span||'').trim() && p.alignment && Array.isArray(p.alignment.curves));
@@ -256,9 +272,21 @@ function updateAllCurveResults(){
   });
 }
 function pipeDefault(size,cat='ヒューム管'){
-  const inner=size/1000; let t=(HUME_T[size]||125)/1000; let unitW=24.5;
-  if(cat==='レジン管'){t=Math.max(0.02, inner*0.045); unitW=19.5}
-  if(cat==='鋼管'){t=size>=2000?0.019:(size>=1500?0.016:(size>=1000?0.0127:0.0095)); unitW=78.5}
+  const inner=size/1000;
+  let t, unitW;
+  if(cat==='レジン管'){
+    // JSWAS A-2「推進工法用レジンコンクリート管」管厚テーブル使用
+    t=(RESIN_T[size]||Math.round(size*0.09))/1000;
+    unitW=21.0; // レジンコンクリート単位重量 [kN/m³]
+  } else if(cat==='鋼管'){
+    // JIS G 3443「水輸送用塗覆装鋼管」管厚テーブル使用
+    t=(STEEL_T[size]||12.7)/1000;
+    unitW=78.5; // 鋼材単位重量 [kN/m³]
+  } else {
+    // JSWAS A-1「推進工法用ヒューム管」管厚テーブル使用
+    t=(HUME_T[size]||125)/1000;
+    unitW=24.5; // 鉄筋コンクリート単位重量 [kN/m³]
+  }
   const outer=inner+2*t; const area=Math.PI/4*(outer*outer-inner*inner); const weight=area*unitW; const len=size<350?2.0:2.43;
   return {inner,outer,t,area,weight,len,centerR:(inner+t)/2};
 }
@@ -407,6 +435,14 @@ function expandActiveSection(active){
   });
 }
 function init(){PIPE_SIZES.forEach(s=>document.getElementById('pipeSize').add(new Option(s,s)));set('inputDate',today());set('pipeSize',1350);calcPipe();renderCurves([{L:39.471,dir:'L',R:40,deg:56,min:32,sec:14}]);}
+function soilChanged(){
+  const d=SOIL_DEFAULTS[v('soilType','粘性土')];
+  if(!d)return;
+  set('soilWeight',fmt(d.gamma,3));
+  set('soilPhi',fmt(d.phi,3));
+  set('soilC',fmt(d.c,3));
+  set('soilN',fmt(d.N,1));
+}
 function calcPipe(){const p=pipeDefault(+v('pipeSize',1350),v('pipeCategory','ヒューム管'));set('pipeInner',fmt(p.inner,3));set('pipeOuter',fmt(p.outer,3));set('pipeT',fmt(p.t,3));set('pipeArea',fmt(p.area,4));set('pipeWeight',fmt(p.weight,3));if(!String(v('pipeLength','')).trim())set('pipeLength',fmt(p.len,4));const sigma=13;set('allowForce',fmt(1000*sigma*p.area,0));jointChanged(false)}
 function jointChanged(force=true){const j=v('jointType','JC');set('allowOpen',j==='JC'?'60.0':j==='JB'?'40.0':'30.0')}
 function renderCurves(arr){document.getElementById('curves').innerHTML='';(arr||[]).forEach(c=>addCurve(c));}
