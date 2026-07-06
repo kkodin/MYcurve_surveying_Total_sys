@@ -357,7 +357,13 @@ tr.row-ng td{color:var(--ng)}
       </div>
       <div id="launchCircleIn" style="display:none">
         <div class="field-row"><label>立坑内径 φ [m]</label><input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="autoSave()"><span class="unit">m</span></div>
-        <div class="field-row"><label>管中心〜立坑中心 オフセット [m]</label><input id="launchCircleOff" class="mono" type="number" step="0.05" value="0.0" oninput="autoSave()"><span class="unit">m</span></div>
+        <div class="field-row full"><label>土留め工法</label>
+          <select id="launchCircleCasing" onchange="autoSave()">
+            <option value="steel">鋼製ケーシング</option>
+            <option value="liner">ライナープレート</option>
+          </select>
+        </div>
+        <div class="field-row"><label>坑口〜ダボ点(BP) 距離 [m]</label><input id="launchCircleOff" class="mono" type="number" step="0.05" value="0.0" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div class="note-box" id="launchShapeNote" style="margin-top:8px"></div>
     </div>
@@ -392,6 +398,7 @@ tr.row-ng td{color:var(--ng)}
             <option value="1.2" selected>φ1200mm（3号）</option>
             <option value="1.5">φ1500mm（4号）</option>
             <option value="1.8">φ1800mm（大型）</option>
+            <option value="2.2">φ2200mm（5号）</option>
           </select>
         </div>
       </div>
@@ -403,6 +410,13 @@ tr.row-ng td{color:var(--ng)}
       </div>
       <div id="arrivalCircleIn" style="display:none">
         <div class="field-row"><label>立坑内径 φ [m]</label><input id="arrivalCircleD" class="mono" type="number" step="0.1" value="3.0" oninput="autoSave()"><span class="unit">m</span></div>
+        <div class="field-row full"><label>土留め工法</label>
+          <select id="arrivalCircleCasing" onchange="autoSave()">
+            <option value="steel">鋼製ケーシング</option>
+            <option value="liner">ライナープレート</option>
+          </select>
+        </div>
+        <div class="field-row"><label>到達芯〜立坑外面 距離 [m]</label><input id="arrivalCircleOff" class="mono" type="number" step="0.05" value="0.0" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div class="note-box" id="arrivalShapeNote" style="margin-top:8px"></div>
     </div>
@@ -613,33 +627,37 @@ function onSoilTypeChange() {
 //  管径選択（標準値自動入力）— PIPE_DB[category][grade][dia]
 // ══════════════════════════════════════
 const PIPE_DB = (() => {
-  // 肉厚Tはカーブ目地開き.xlsx／推進管規格表と一致させた値（呼び径=内径、外径=内径+2T）
+  // 肉厚T・W・Fa5(1種)は推進管詳細.xlsx「推進管寸法表」「推進管耐荷力」と一致させた値
+  // （呼び径=内径、外径=内径+2T。W=π(D+T)T×24.0、Fa=1000×σmean×Ae で検算済み）
   const h1 = {
-    250:{outer:0.360,inner:0.250,t:0.055,W:1.96,Fa:845,Pext:421.7},
-    300:{outer:0.414,inner:0.300,t:0.057,W:2.71,Fa:1030,Pext:421.7},
-    350:{outer:0.470,inner:0.350,t:0.060,W:3.56,Fa:1248,Pext:421.7},
-    400:{outer:0.526,inner:0.400,t:0.063,W:4.55,Fa:1510,Pext:421.7},
-    450:{outer:0.584,inner:0.450,t:0.067,W:5.69,Fa:1813,Pext:421.7},
-    500:{outer:0.640,inner:0.500,t:0.070,W:6.97,Fa:2164,Pext:421.7},
-    600:{outer:0.752,inner:0.600,t:0.076,W:9.80,Fa:2975,Pext:421.7},
-    700:{outer:0.864,inner:0.700,t:0.082,W:13.10,Fa:3780,Pext:636.4},
-    800:{outer:0.960,inner:0.800,t:0.080,W:7.36,Fa:3921,Pext:1273.7},
-    900:{outer:1.080,inner:0.900,t:0.090,W:9.33,Fa:4900,Pext:1273.7},
-    1000:{outer:1.200,inner:1.000,t:0.100,W:11.57,Fa:6000,Pext:1273.7},
-    1100:{outer:1.310,inner:1.100,t:0.105,W:14.03,Fa:7200,Pext:1273.7},
-    1200:{outer:1.430,inner:1.200,t:0.115,W:16.65,Fa:8400,Pext:1273.7},
-    1350:{outer:1.600,inner:1.350,t:0.125,W:21.08,Fa:10500,Pext:1273.7},
-    1500:{outer:1.780,inner:1.500,t:0.140,W:26.05,Fa:12600,Pext:1273.7},
-    1650:{outer:1.950,inner:1.650,t:0.150,W:31.55,Fa:14800,Pext:1273.7},
-    1800:{outer:2.120,inner:1.800,t:0.160,W:37.59,Fa:17100,Pext:1273.7},
-    2000:{outer:2.350,inner:2.000,t:0.175,W:46.40,Fa:21200,Pext:1273.7},
-    2200:{outer:2.580,inner:2.200,t:0.190,W:56.10,Fa:25700,Pext:1273.7},
-    2400:{outer:2.810,inner:2.400,t:0.205,W:66.70,Fa:30600,Pext:1273.7},
+    250:{outer:0.360,inner:0.250,t:0.055,W:1.26,Fa:521,Pext:421.7},
+    300:{outer:0.414,inner:0.300,t:0.057,W:1.53,Fa:642,Pext:421.7},
+    350:{outer:0.470,inner:0.350,t:0.060,W:1.85,Fa:789,Pext:421.7},
+    400:{outer:0.526,inner:0.400,t:0.063,W:2.20,Fa:950,Pext:421.7},
+    450:{outer:0.584,inner:0.450,t:0.067,W:2.61,Fa:1146,Pext:421.7},
+    500:{outer:0.640,inner:0.500,t:0.070,W:3.01,Fa:1334,Pext:421.7},
+    600:{outer:0.752,inner:0.600,t:0.076,W:4.10,Fa:1780,Pext:421.7},
+    700:{outer:0.864,inner:0.700,t:0.082,W:5.36,Fa:2391,Pext:636.4},
+    800:{outer:0.960,inner:0.800,t:0.080,W:5.31,Fa:2296,Pext:1273.7},
+    900:{outer:1.080,inner:0.900,t:0.090,W:6.72,Fa:2986,Pext:1273.7},
+    1000:{outer:1.200,inner:1.000,t:0.100,W:8.29,Fa:3766,Pext:1273.7},
+    1100:{outer:1.310,inner:1.100,t:0.105,W:9.54,Fa:4374,Pext:1273.7},
+    1200:{outer:1.430,inner:1.200,t:0.115,W:11.40,Fa:5309,Pext:1273.7},
+    1350:{outer:1.600,inner:1.350,t:0.125,W:13.90,Fa:6239,Pext:1273.7},
+    1500:{outer:1.780,inner:1.500,t:0.140,W:17.31,Fa:7939,Pext:1273.7},
+    1650:{outer:1.950,inner:1.650,t:0.150,W:20.36,Fa:9450,Pext:1273.7},
+    1800:{outer:2.120,inner:1.800,t:0.160,W:23.64,Fa:11092,Pext:1273.7},
+    2000:{outer:2.350,inner:2.000,t:0.175,W:28.70,Fa:13642,Pext:1273.7},
+    2200:{outer:2.580,inner:2.200,t:0.190,W:34.24,Fa:16455,Pext:1273.7},
+    2400:{outer:2.810,inner:2.400,t:0.205,W:40.26,Fa:18966,Pext:1273.7},
   };
-  // ヒューム管 2種: 同じ外形、Fa×1.40、Pext×1.40
+  // ヒューム管 2種(70N/mm²): 外形はσmeanが違うだけで1種と同一。Faは推進管耐荷力表のFa7列（σmean=17.5）を使用
+  const FA7 = {250:702,300:864,350:1063,400:1278,450:1542,500:1796,600:2396,700:3219,800:3091,
+               900:4020,1000:5070,1100:5888,1200:7147,1350:8399,1500:10688,1650:12722,1800:14932,
+               2000:18364,2200:22151,2400:25532};
   const h2 = {};
   for (const [d,b] of Object.entries(h1)) {
-    h2[d] = {...b, Fa:Math.round(b.Fa*1.40), Pext:+(b.Pext*1.40).toFixed(1)};
+    h2[d] = {...b, Fa: FA7[d] || Math.round(b.Fa*1.40), Pext:+(b.Pext*1.40).toFixed(1)};
   }
   // レジン管: ヒューム管と外径共通（掘削径・立坑寸法の互換性維持）、肉厚は薄く高剛性で同等強度、内径は外径から導出（ヒューム管より大きくなる）
   const mkR = (tf, wf, ff, pf) => {
@@ -1084,14 +1102,8 @@ function calcShaftDist(side) {
       const off = n('launchOffset');
       return Lpit / 2 + off;
     } else if (type === 'circle') {
-      const pitD = n('launchCircleD');
-      const off = n('launchCircleOff');
-      const D = n('pipeOuter') || 0.96;
-      const halfChord = Math.sqrt(Math.max(0, (pitD/2)**2 - off**2));
-      const dist = halfChord + (pitD/2 - halfChord) * 0 + D/2;
-      const note = document.getElementById('launchShapeNote');
-      if (note) note.textContent = `弦幅: ${(halfChord*2).toFixed(2)}m → 坑内距離: ${(halfChord).toFixed(2)}m`;
-      return halfChord;
+      // 坑口は常にBP-IP1の基準線上にあるため、坑口〜ダボ点(BP)間はそのまま除外距離として使う
+      return n('launchCircleOff') || 0;
     }
     return n('launchDirect');
   } else {
@@ -1101,7 +1113,8 @@ function calcShaftDist(side) {
     } else if (type === 'rect') {
       return n('arrivalLdim') / 2;
     } else if (type === 'circle') {
-      return n('arrivalCircleD') / 2;
+      // 到達芯は常にIPn〜EPの基準線上にあるため、到達芯〜立坑外面間はそのまま除外距離として使う
+      return n('arrivalCircleOff') || 0;
     }
     return n('arrivalDirect');
   }
@@ -1717,10 +1730,11 @@ function getProjectData() {
       launchMode: shaftModes.launch, launchDirect: n('launchDirect'),
       launchType: shaftTypes.launch, launchW: n('launchW'), launchL: n('launchLdim'),
       launchOffset: n('launchOffset'), launchCircleD: n('launchCircleD'),
-      launchCircleOff: n('launchCircleOff'),
+      launchCircleOff: n('launchCircleOff'), launchCircleCasing: v('launchCircleCasing'),
       arrivalMode: shaftModes.arrival, arrivalDirect: n('arrivalDirect'),
       arrivalType: shaftTypes.arrival, manholeSize: v('manholeSize'),
-      arrivalW: n('arrivalW'), arrivalL: n('arrivalLdim'), arrivalCircleD: n('arrivalCircleD')
+      arrivalW: n('arrivalW'), arrivalL: n('arrivalLdim'), arrivalCircleD: n('arrivalCircleD'),
+      arrivalCircleOff: n('arrivalCircleOff'), arrivalCircleCasing: v('arrivalCircleCasing')
     },
     wall: {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
@@ -1818,12 +1832,15 @@ function setProjectData(d) {
     setV('launchW', sh.launchW||3); setV('launchLdim', sh.launchL||4);
     setV('launchOffset', sh.launchOffset||0.3); setV('launchCircleD', sh.launchCircleD||3.5);
     setV('launchCircleOff', sh.launchCircleOff||0);
+    setV('launchCircleCasing', sh.launchCircleCasing||'steel');
     shaftModes.launch = sh.launchMode||'direct';
     shaftTypes.launch = sh.launchType||'rect';
     setV('arrivalDirect', sh.arrivalDirect||0.8);
     setV('manholeSize', sh.manholeSize||1.2);
     setV('arrivalW', sh.arrivalW||3); setV('arrivalLdim', sh.arrivalL||3);
     setV('arrivalCircleD', sh.arrivalCircleD||3);
+    setV('arrivalCircleOff', sh.arrivalCircleOff||0);
+    setV('arrivalCircleCasing', sh.arrivalCircleCasing||'steel');
     shaftModes.arrival = sh.arrivalMode||'direct';
     shaftTypes.arrival = sh.arrivalType||'manhole';
     setShaftMode('launch', shaftModes.launch);
