@@ -1757,11 +1757,15 @@ function setProjectData(d) {
     if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
+    // 継手種別: 旧フォーマットはJC/JB/JA表記、新フォーマットは許容mm値(60/40/30)
+    const jointMap = {'JC':'60','JB':'40','JA':'30','60':'60','40':'40','30':'30'};
     const joint = d.pipe.jointType || d.pipe.joint;
-    if (joint) setV('pipeJointType', joint);
+    if (joint) setV('pipeJointType', jointMap[joint] || joint);
   }
   if (d.soil) {
-    setV('soilType', d.soil.type||'sand');
+    // 土質種別: 旧フォーマットは日本語表記、新フォーマットは英字キー
+    const soilTypeMap = {'粘性土':'clay','砂質土':'sand','礫質土':'gravel','clay':'clay','sand':'sand','gravel':'gravel'};
+    setV('soilType', soilTypeMap[d.soil.type] || d.soil.type || 'sand');
     setV('soilGamma', d.soil.gamma||18); setV('soilPhi', d.soil.phi||30);
     setV('soilPhiPipe', d.soil.phiPipe||20);
     // C フィールド: 旧フォーマットは小文字 c
