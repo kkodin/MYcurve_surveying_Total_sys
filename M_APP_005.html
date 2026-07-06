@@ -310,9 +310,17 @@ tr.row-ng td{color:var(--ng)}
   <div class="card" id="pipeLenOptCard">
     <div class="card-title">📏 管長さ最適化アドバイス</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
-      S₁ = D×l′/(2(R−D/2)) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
+      S₁ = D×l′/(R−D/2) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
     </div>
     <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
+  </div>
+
+  <div class="card" id="pipeScheduleCard">
+    <div class="card-title">🔧 管本数・目地仕様 集計</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      管長・総延長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。
+    </div>
+    <div id="pipeScheduleResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
   </div>
 
 </section>
@@ -605,39 +613,42 @@ function onSoilTypeChange() {
 //  管径選択（標準値自動入力）— PIPE_DB[category][grade][dia]
 // ══════════════════════════════════════
 const PIPE_DB = (() => {
+  // 肉厚Tはカーブ目地開き.xlsx／推進管規格表と一致させた値（呼び径=内径、外径=内径+2T）
   const h1 = {
-    250:{outer:0.320,inner:0.250,t:0.035,W:1.96,Fa:845,Pext:421.7},
-    300:{outer:0.380,inner:0.300,t:0.040,W:2.71,Fa:1030,Pext:421.7},
-    350:{outer:0.440,inner:0.350,t:0.045,W:3.56,Fa:1248,Pext:421.7},
-    400:{outer:0.500,inner:0.400,t:0.050,W:4.55,Fa:1510,Pext:421.7},
-    450:{outer:0.560,inner:0.450,t:0.055,W:5.69,Fa:1813,Pext:421.7},
-    500:{outer:0.620,inner:0.500,t:0.060,W:6.97,Fa:2164,Pext:421.7},
-    600:{outer:0.740,inner:0.600,t:0.070,W:9.80,Fa:2975,Pext:421.7},
-    700:{outer:0.860,inner:0.700,t:0.080,W:13.10,Fa:3780,Pext:636.4},
+    250:{outer:0.360,inner:0.250,t:0.055,W:1.96,Fa:845,Pext:421.7},
+    300:{outer:0.414,inner:0.300,t:0.057,W:2.71,Fa:1030,Pext:421.7},
+    350:{outer:0.470,inner:0.350,t:0.060,W:3.56,Fa:1248,Pext:421.7},
+    400:{outer:0.526,inner:0.400,t:0.063,W:4.55,Fa:1510,Pext:421.7},
+    450:{outer:0.584,inner:0.450,t:0.067,W:5.69,Fa:1813,Pext:421.7},
+    500:{outer:0.640,inner:0.500,t:0.070,W:6.97,Fa:2164,Pext:421.7},
+    600:{outer:0.752,inner:0.600,t:0.076,W:9.80,Fa:2975,Pext:421.7},
+    700:{outer:0.864,inner:0.700,t:0.082,W:13.10,Fa:3780,Pext:636.4},
     800:{outer:0.960,inner:0.800,t:0.080,W:7.36,Fa:3921,Pext:1273.7},
     900:{outer:1.080,inner:0.900,t:0.090,W:9.33,Fa:4900,Pext:1273.7},
     1000:{outer:1.200,inner:1.000,t:0.100,W:11.57,Fa:6000,Pext:1273.7},
-    1100:{outer:1.320,inner:1.100,t:0.110,W:14.03,Fa:7200,Pext:1273.7},
-    1200:{outer:1.440,inner:1.200,t:0.120,W:16.65,Fa:8400,Pext:1273.7},
-    1350:{outer:1.620,inner:1.350,t:0.135,W:21.08,Fa:10500,Pext:1273.7},
-    1500:{outer:1.800,inner:1.500,t:0.150,W:26.05,Fa:12600,Pext:1273.7},
-    1650:{outer:1.980,inner:1.650,t:0.165,W:31.55,Fa:14800,Pext:1273.7},
-    1800:{outer:2.160,inner:1.800,t:0.180,W:37.59,Fa:17100,Pext:1273.7},
-    2000:{outer:2.400,inner:2.000,t:0.200,W:46.40,Fa:21200,Pext:1273.7},
-    2200:{outer:2.640,inner:2.200,t:0.220,W:56.10,Fa:25700,Pext:1273.7},
-    2400:{outer:2.880,inner:2.400,t:0.240,W:66.70,Fa:30600,Pext:1273.7},
+    1100:{outer:1.310,inner:1.100,t:0.105,W:14.03,Fa:7200,Pext:1273.7},
+    1200:{outer:1.430,inner:1.200,t:0.115,W:16.65,Fa:8400,Pext:1273.7},
+    1350:{outer:1.600,inner:1.350,t:0.125,W:21.08,Fa:10500,Pext:1273.7},
+    1500:{outer:1.780,inner:1.500,t:0.140,W:26.05,Fa:12600,Pext:1273.7},
+    1650:{outer:1.950,inner:1.650,t:0.150,W:31.55,Fa:14800,Pext:1273.7},
+    1800:{outer:2.120,inner:1.800,t:0.160,W:37.59,Fa:17100,Pext:1273.7},
+    2000:{outer:2.350,inner:2.000,t:0.175,W:46.40,Fa:21200,Pext:1273.7},
+    2200:{outer:2.580,inner:2.200,t:0.190,W:56.10,Fa:25700,Pext:1273.7},
+    2400:{outer:2.810,inner:2.400,t:0.205,W:66.70,Fa:30600,Pext:1273.7},
   };
   // ヒューム管 2種: 同じ外形、Fa×1.40、Pext×1.40
   const h2 = {};
   for (const [d,b] of Object.entries(h1)) {
     h2[d] = {...b, Fa:Math.round(b.Fa*1.40), Pext:+(b.Pext*1.40).toFixed(1)};
   }
-  // レジン管: 内径共通、肉厚係数で外径変化、材質が軽い
+  // レジン管: ヒューム管と外径共通（掘削径・立坑寸法の互換性維持）、肉厚は薄く高剛性で同等強度、内径は外径から導出（ヒューム管より大きくなる）
   const mkR = (tf, wf, ff, pf) => {
     const r = {};
     for (const [d,b] of Object.entries(h1)) {
       const t = +(b.t*tf).toFixed(3);
-      r[d] = {outer:+(b.inner+2*t).toFixed(3), inner:b.inner, t,
+      const outer = b.outer;
+      const inner = +(outer - 2*t).toFixed(3);
+      r[d] = {outer, inner, t,
                W:+(b.W*wf).toFixed(2), Fa:Math.round(b.Fa*ff), Pext:+(b.Pext*pf).toFixed(1)};
     }
     return r;
@@ -707,7 +718,7 @@ let curveCounter = 0;
 function addCurve() {
   const id = ++curveCounter;
   const Li = curves.length === 0 ? 0 : 50; // IP間距離（2本目以降のデフォルト）
-  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0});
+  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, cushion:null});
   renderCurves();
   calcAlignment();
 }
@@ -736,14 +747,16 @@ function renderCurves() {
         <input id="cL_${c.id}" class="mono" type="number" step="0.1" value="${c.L}" oninput="onCurveChange(${c.id})">
         <span class="unit">m</span>
       </div>` : ''}
+      <div class="field-row"><label>曲線半径 R [m]</label><input id="cR_${c.id}" class="mono" type="number" step="1" value="${c.R}" oninput="onCurveChange(${c.id})"><span class="unit">m</span></div>
+      <div id="cJoint_${c.id}" style="border-radius:8px;padding:8px;font-size:12px;margin:2px 0 6px"></div>
       <div class="two-col">
-        <div class="field-row"><label>曲線半径 R [m]</label><input id="cR_${c.id}" class="mono" type="number" step="1" value="${c.R}" oninput="onCurveChange(${c.id})"><span class="unit">m</span></div>
         <div class="field-row full"><label>曲線方向</label>
           <select id="cDir_${c.id}" onchange="onCurveChange(${c.id})">
             <option value="R" ${c.dir==='R'?'selected':''}>右カーブ (R)</option>
             <option value="L" ${c.dir==='L'?'selected':''}>左カーブ (L)</option>
           </select>
         </div>
+        <div class="field-row"><label>クッション厚 S4 [mm]</label><input id="cCushion_${c.id}" class="mono" type="number" step="1" placeholder="共通設定を使用" value="${c.cushion ?? ''}" oninput="onCurveChange(${c.id})"><span class="unit">mm</span></div>
       </div>
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin:4px 0 2px">交角 IA（度 分 秒）</div>
       <div class="three-col">
@@ -765,7 +778,42 @@ function onCurveChange(id) {
   c.deg = parseFloat(document.getElementById('cDeg_'+id).value)  || 0;
   c.min = parseFloat(document.getElementById('cMin_'+id).value)  || 0;
   c.sec = parseFloat(document.getElementById('cSec_'+id).value)  || 0;
+  const cushionEl = document.getElementById('cCushion_'+id);
+  const cushionVal = cushionEl ? parseFloat(cushionEl.value) : NaN;
+  c.cushion = Number.isFinite(cushionVal) ? cushionVal : null;
   calcAlignment();
+}
+
+// 曲線の実効クッション厚（個別指定が無ければ共通設定を使う）
+function effectiveCushion(c) {
+  return (c.cushion != null && Number.isFinite(c.cushion)) ? c.cushion : (n('pipeCushion') || 20);
+}
+
+function updateCurveJoint(id) {
+  const c = curves.find(x => x.id === id);
+  const el = document.getElementById('cJoint_'+id);
+  if (!c || !el) return;
+  const D = n('pipeOuter') || 0.96;
+  const lp = n('pipeLen') || 2.43;
+  const allowMm = n('pipeJointType') || 40;
+  const S4mm = effectiveCushion(c);
+  if (!(c.R > D/2)) {
+    el.innerHTML = `<span style="color:var(--ng)">半径Rが管外径に対して小さすぎます</span>`;
+    return;
+  }
+  const { S1, spec } = calcCurveJointCheck(c.R, lp, D, S4mm);
+  const ok = spec && spec.allowOpen <= allowMm ? S1 <= allowMm : false;
+  let html = `目地開口 S₁=<b>${S1.toFixed(1)}mm</b>（クッションS4=${S4mm}mm）　`;
+  if (spec) {
+    html += `必要継手: <b>${spec.label}</b> <span class="pill ${ok?'ok':'warn'}">${ok?'現設定でOK':'現設定は継手を要変更'}</span>`;
+  } else {
+    html += `<span class="pill ng">JC(${JOINT_SPEC[JOINT_SPEC.length-1].allowOpen}mm)でも超過</span>`;
+    const best = bestPipeLenFor(D, c.R, S4mm, JOINT_SPEC[JOINT_SPEC.length-1].allowOpen);
+    html += best ? `　→ 推奨管長: <b style="color:var(--ok)">${best}m</b>以下` : `　→ 規格管長で適合なし、特注管を検討`;
+  }
+  el.style.background = spec ? (ok ? '#f0fdf4' : '#fffbeb') : '#fef2f2';
+  el.style.color = spec ? (ok ? 'var(--ok)' : 'var(--warn)') : 'var(--ng)';
+  el.innerHTML = html;
 }
 
 function calcCurveElements(c) {
@@ -806,7 +854,7 @@ function calcAlignment() {
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
-      segments.push({ label:`曲線${i+1} (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg });
+      segments.push({ label:`曲線${i+1} (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: effectiveCushion(c) });
       // 次の直線
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
@@ -824,6 +872,10 @@ function calcAlignment() {
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
 
+  // 本数集計用の累積距離
+  let accDist = 0;
+  segments.forEach(seg => { seg.startDist = accDist; accDist += seg.L; seg.endDist = accDist; });
+
   // 総推進延長をセット（readonlyフィールド）
   setV('totalLength', totalLen.toFixed(2));
 
@@ -831,6 +883,7 @@ function calcAlignment() {
   const resEl = document.getElementById('alignmentCalcResult');
   if (!valid) {
     resEl.innerHTML = `<div class="ng-box" style="font-size:12px;white-space:pre-wrap">${warnMsg}</div>`;
+    buildPipeSchedule([]);
   } else {
     let html = '<div style="font-size:12px">';
     segments.forEach(seg => {
@@ -851,10 +904,13 @@ function calcAlignment() {
     });
     html += '</div>';
     resEl.innerHTML = html;
+    buildPipeSchedule(segments);
   }
 
   // 内部curves配列にCLを保存
   curves.forEach((c, i) => { c.CL = elems[i].CL; });
+  // 曲線ごとの目地開口・推奨継手（半径入力のたびに即時更新）
+  curves.forEach(c => updateCurveJoint(c.id));
   updatePipeLenOpt();
   updateGroundLen();
   autoSave();
@@ -862,14 +918,39 @@ function calcAlignment() {
 
 function getCurves() {
   return curves.map(c => ({
-    R: c.R, dir: c.dir, CL: c.CL
+    R: c.R, dir: c.dir, CL: c.CL, cushion: c.cushion,
+    deg: c.deg, min: c.min, sec: c.sec, L: c.L
   }));
 }
 
 // ══════════════════════════════════════
-//  管長最適化
+//  目地開口・継手判定（S1 = D・L/(R-D/2)×1000 + S4、カーブ目地開き.xlsx実例と整合確認済み）
 // ══════════════════════════════════════
 const STD_PIPE_LENGTHS = [1.00, 1.20, 1.50, 1.80, 2.00, 2.43, 2.50, 3.00, 3.50, 4.00];
+const JOINT_SPEC = [
+  {key:'JA', label:'JA型', allowOpen:30},
+  {key:'JB', label:'JB型', allowOpen:40},
+  {key:'JC', label:'JC型', allowOpen:60},
+]; // 安い順（JA→JC）。allowOpenは抜出し長=推進完了後の理論開口S1と比較する許容値
+
+function calcS1(D, L, R, S4mm) {
+  if (R <= D/2) return Infinity;
+  return D * L / (R - D/2) * 1000 + S4mm;
+}
+
+// S1に対して、足りる中で最も安い継手を返す。どれも足りなければnull
+function calcCurveJointCheck(R, pipeLen, D, cushionMm) {
+  const S1 = calcS1(D, pipeLen, R, cushionMm);
+  const spec = JOINT_SPEC.find(j => S1 <= j.allowOpen) || null;
+  return { S1, spec };
+}
+
+// D・R・S4固定で、allowMm以内に収まる最長の規格管長を返す（無ければnull）
+function bestPipeLenFor(D, R, S4mm, allowMm) {
+  if (R <= D/2) return null;
+  const fit = STD_PIPE_LENGTHS.filter(l => calcS1(D, l, R, S4mm) <= allowMm);
+  return fit.length ? fit[fit.length - 1] : null;
+}
 
 function updatePipeLenOpt() {
   const D = n('pipeOuter') || 0.96;
@@ -887,12 +968,11 @@ function updatePipeLenOpt() {
   curList.forEach((c, i) => {
     const R = c.R;
     if (R <= D/2) return;
-    const denom = 2*(R - D/2);
+    const denom = R - D/2;
     const L_max = (availMm / 1000) * denom / D;
-    const S1_cur = D * lp / denom * 1000 + S4mm;
+    const S1_cur = calcS1(D, lp, R, S4mm);
     const ok = S1_cur <= allowMm;
-    const recommend = STD_PIPE_LENGTHS.filter(l => (D * l / denom * 1000 + S4mm) <= allowMm);
-    const best = recommend.length ? recommend[recommend.length - 1] : null;
+    const best = bestPipeLenFor(D, R, S4mm, allowMm);
     html += `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
       <b>曲線${i+1} R=${R}m</b>
       <div style="font-size:12px;margin-top:4px">
@@ -904,6 +984,61 @@ function updatePipeLenOpt() {
     </div>`;
   });
   resultEl.innerHTML = html || '<div class="ok-box">全曲線区間で現在管長が許容範囲内です。</div>';
+}
+
+// ══════════════════════════════════════
+//  本数ベースの管列集計（何本目〜何本目はどの継手・クッションか）
+// ══════════════════════════════════════
+function buildPipeSchedule(segments) {
+  const resultEl = document.getElementById('pipeScheduleResult');
+  if (!resultEl) return;
+  const curveSegs = (segments || []).filter(s => s.isCurve);
+  const D = n('pipeOuter') || 0.96;
+  const lp = n('pipeLen') || 2.43;
+  const totalLen = segments && segments.length ? segments[segments.length - 1].endDist : 0;
+  if (!curveSegs.length || !(lp > 0) || !(totalLen > 0)) {
+    resultEl.innerHTML = '<div class="note-box">曲線区間を追加すると表示されます。</div>';
+    return;
+  }
+  const N = Math.ceil(totalLen / lp);
+  const rows = [];
+  for (let i = 0; i < N; i++) {
+    const start = i * lp, end = Math.min(totalLen, (i + 1) * lp);
+    // またがる曲線のうち最も目地が広く開く曲線に準ずる（例外ルール）
+    let bestS1 = 0, bestSeg = null;
+    curveSegs.forEach(seg => {
+      const overlap = Math.min(end, seg.endDist) - Math.max(start, seg.startDist);
+      if (overlap > 1e-9) {
+        const S1 = calcS1(D, lp, seg.R, seg.cushion);
+        if (S1 > bestS1) { bestS1 = S1; bestSeg = seg; }
+      }
+    });
+    const spec = bestSeg ? (JOINT_SPEC.find(j => bestS1 <= j.allowOpen) || null) : JOINT_SPEC[0];
+    rows.push({ no: i + 1, curveNo: bestSeg ? bestSeg.curveNo : null, S1: bestS1, spec, cushion: bestSeg ? bestSeg.cushion : null });
+  }
+  // 連続する同一判定（曲線番号＋継手）をまとめて範囲表示
+  const groups = [];
+  rows.forEach(r => {
+    const key = (r.curveNo || 'straight') + '|' + (r.spec ? r.spec.key : 'NG');
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) { last.to = r.no; last.maxS1 = Math.max(last.maxS1, r.S1); }
+    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, spec: r.spec, maxS1: r.S1, cushion: r.cushion });
+  });
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">本数</th><th>区間</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr>';
+  groups.forEach(g => {
+    const rangeLabel = g.from === g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
+    const segLabel = g.curveNo ? `曲線${g.curveNo}` : '直線';
+    const specLabel = g.spec ? g.spec.label : '<span style="color:var(--ng)">JCでも超過</span>';
+    html += `<tr><td style="padding:4px;border-bottom:1px solid var(--line);text-align:center">${rangeLabel}</td>`
+      + `<td style="text-align:center">${segLabel}</td>`
+      + `<td style="text-align:center" class="mono">${g.maxS1.toFixed(1)}mm</td>`
+      + `<td style="text-align:center;font-weight:bold">${specLabel}</td>`
+      + `<td style="text-align:center" class="mono">${g.cushion != null ? g.cushion + 'mm' : '—'}</td></tr>`;
+  });
+  html += '</table>';
+  html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（管長 l′=${lp}m、総延長${totalLen.toFixed(2)}m）</div>`;
+  resultEl.innerHTML = html;
 }
 
 // ══════════════════════════════════════
@@ -1551,6 +1686,7 @@ function autoSave() {
   try { localStorage.setItem('curvedJackingProjectDraft', JSON.stringify(getProjectData())); } catch(e){}
   updateGroundLen();
   updatePipeLenOpt();
+  curves.forEach(c => updateCurveJoint(c.id));
 }
 
 function getProjectData() {
@@ -1574,7 +1710,8 @@ function getProjectData() {
       alpha: n('soilAlpha'), beta: n('soilBeta')
     },
     alignment: {
-      totalLength: n('totalLength'), curves: getCurves()
+      totalLength: n('totalLength'), curves: getCurves(),
+      seg_L0: n('seg_L0'), finalL: n('seg_Lf')
     },
     shaft: {
       launchMode: shaftModes.launch, launchDirect: n('launchDirect'),
@@ -1613,17 +1750,15 @@ function setProjectData(d) {
     setV('pipeCategory', category);
     onPipeCategoryChange();  // gradeセレクトのoptionを更新
     setV('pipeGrade', grade);
-    // 標準値テーブルから再計算
-    onPipeDiaChange();
-    // 有効長・クッション・Bs・継手 は保存値を優先
+    setV('pipeDia', dia);
+    onPipeDiaChange();  // 標準値テーブルから再計算（dia確定後に一度だけ）
+    // 有効長・クッション・Bs・継手 は保存値を優先（標準値再計算の後に上書きしないと消えてしまうため最後に適用）
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
     const joint = d.pipe.jointType || d.pipe.joint;
     if (joint) setV('pipeJointType', joint);
-    setV('pipeDia', dia);
-    onPipeDiaChange();  // dia設定後に再計算
   }
   if (d.soil) {
     setV('soilType', d.soil.type||'sand');
@@ -1648,12 +1783,17 @@ function setProjectData(d) {
       const id = ++curveCounter;
       // 旧フォーマット: curves[0].L = BP→IP1距離, curves[i≥1].L = IP間距離
       curves.push({ id, L: c.L||50, R: c.R||30, dir: c.dir||'R',
-                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0 });
+                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0,
+                    cushion: Number.isFinite(c.cushion) ? c.cushion : null });
     });
     renderCurves();
-    // seg_L0: 旧フォーマットは curves[0].L に相当
-    if (cvArr.length > 0) {
+    // seg_L0: 新形式は alignment.seg_L0、旧フォーマットは curves[0].L に相当
+    if (d.alignment.seg_L0 != null) {
+      setV('seg_L0', d.alignment.seg_L0);
+    } else if (cvArr.length > 0) {
       setV('seg_L0', cvArr[0].L || 50);
+    }
+    if (cvArr.length > 0) {
       // 2曲線以降のIP間距離は各 cL_${id} に設定
       cvArr.forEach((c, i) => {
         if (i >= 1) {
