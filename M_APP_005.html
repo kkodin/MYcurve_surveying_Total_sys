@@ -390,16 +390,24 @@ tr.row-ng td{color:var(--ng)}
         <div class="shaft-chip" data-val="circle" onclick="setShaftType('arrival','circle',this)">円形立坑</div>
       </div>
       <div id="arrivalManholeIn">
-        <div class="field-row full">
-          <label>マンホール内径</label>
-          <select id="manholeSize" onchange="autoSave()">
-            <option value="0.6">φ600mm（1号）</option>
-            <option value="0.9">φ900mm（2号）</option>
-            <option value="1.2" selected>φ1200mm（3号）</option>
-            <option value="1.5">φ1500mm（4号）</option>
-            <option value="1.8">φ1800mm（大型）</option>
-            <option value="2.2">φ2200mm（5号）</option>
-          </select>
+        <div class="two-col">
+          <div class="field-row full">
+            <label>マンホール内径</label>
+            <select id="manholeSize" onchange="autoSave()">
+              <option value="0.9">φ900mm（1号）</option>
+              <option value="1.2" selected>φ1200mm（2号）</option>
+              <option value="1.5">φ1500mm（3号）</option>
+              <option value="1.8">φ1800mm（4号）</option>
+              <option value="2.2">φ2200mm（5号）</option>
+            </select>
+          </div>
+          <div class="field-row full">
+            <label>種別</label>
+            <select id="manholeGrade" onchange="autoSave()">
+              <option value="1">I種</option>
+              <option value="2">II種</option>
+            </select>
+          </div>
         </div>
       </div>
       <div id="arrivalRectIn" style="display:none">
@@ -1091,6 +1099,15 @@ function setShaftType(side, type, el) {
   updateGroundLen();
 }
 
+// 組立マンホール壁厚[mm]（JSWASA-11 I種・II種登録品）
+const MANHOLE_WALL_T = {
+  0.9:  {1:75,  2:100},
+  1.2:  {1:100, 2:125},
+  1.5:  {1:125, 2:150},
+  1.8:  {1:160, 2:160},
+  2.2:  {1:190, 2:190},
+};
+
 function calcShaftDist(side) {
   if (shaftModes[side] === 'direct') {
     return n(side === 'launch' ? 'launchDirect' : 'arrivalDirect');
@@ -1108,8 +1125,11 @@ function calcShaftDist(side) {
     return n('launchDirect');
   } else {
     if (type === 'manhole') {
+      // 推進距離は人孔の壁厚を含まないため、除外距離は外径(内径+壁厚×2)/2 = 内径/2＋壁厚
       const mhD = n('manholeSize') || 1.2;
-      return mhD / 2;
+      const grade = v('manholeGrade') || '1';
+      const t = (MANHOLE_WALL_T[mhD] && MANHOLE_WALL_T[mhD][grade]) || 0;
+      return mhD / 2 + t / 1000;
     } else if (type === 'rect') {
       return n('arrivalLdim') / 2;
     } else if (type === 'circle') {
@@ -1732,7 +1752,7 @@ function getProjectData() {
       launchOffset: n('launchOffset'), launchCircleD: n('launchCircleD'),
       launchCircleOff: n('launchCircleOff'), launchCircleCasing: v('launchCircleCasing'),
       arrivalMode: shaftModes.arrival, arrivalDirect: n('arrivalDirect'),
-      arrivalType: shaftTypes.arrival, manholeSize: v('manholeSize'),
+      arrivalType: shaftTypes.arrival, manholeSize: v('manholeSize'), manholeGrade: v('manholeGrade'),
       arrivalW: n('arrivalW'), arrivalL: n('arrivalLdim'), arrivalCircleD: n('arrivalCircleD'),
       arrivalCircleOff: n('arrivalCircleOff'), arrivalCircleCasing: v('arrivalCircleCasing')
     },
@@ -1837,6 +1857,7 @@ function setProjectData(d) {
     shaftTypes.launch = sh.launchType||'rect';
     setV('arrivalDirect', sh.arrivalDirect||0.8);
     setV('manholeSize', sh.manholeSize||1.2);
+    setV('manholeGrade', sh.manholeGrade||'1');
     setV('arrivalW', sh.arrivalW||3); setV('arrivalLdim', sh.arrivalL||3);
     setV('arrivalCircleD', sh.arrivalCircleD||3);
     setV('arrivalCircleOff', sh.arrivalCircleOff||0);
