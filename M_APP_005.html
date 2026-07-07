@@ -100,6 +100,8 @@ tr.row-ng td{color:var(--ng)}
   .page{max-width:720px;margin:0 auto}
   .metrics-grid{grid-template-columns:repeat(4,1fr)}
 }
+.pc-only{display:none}
+@media(min-width:640px){.pc-only{display:block}}
 </style>
 </head>
 <body>
@@ -311,6 +313,14 @@ tr.row-ng td{color:var(--ng)}
     <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
   </div>
 
+  <div class="card" id="pipeJointPlanCard">
+    <div class="card-title">🔩 管本数・目地仕様 集計</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      各管が通過する曲線区間の最大S₁を継手仕様に使用します（曲線を通過した管は直線区間でも曲線と同等の継手性能が必要）。
+    </div>
+    <div id="pipeJointPlanResult"><div class="note-box">総推進延長・管長・曲線情報を入力すると表示されます。</div></div>
+  </div>
+
 </section>
 
 <!-- ═══ TAB 1: 立坑 ═══ -->
@@ -439,6 +449,11 @@ tr.row-ng td{color:var(--ng)}
     <div class="card">
       <div class="card-title">🔢 計算根拠（基本値）</div>
       <div class="tbl-wrap"><table id="basisTable"></table></div>
+    </div>
+
+    <div class="card pc-only" id="formulaCard">
+      <div class="card-title">📐 計算根拠（計算式）</div>
+      <div id="formulaDetail" style="font-size:12px;line-height:1.8"></div>
     </div>
 
     <div class="card">
@@ -622,6 +637,7 @@ function showPage(idx) {
   document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
   document.querySelectorAll('.tab-item').forEach((t,i) => t.classList.toggle('active', i===idx));
   if (idx === 1) updateGroundLen();
+  if (idx === 2) { requestAnimationFrame(() => { if (lastCalcResult) drawForceGraph(lastCalcResult.segments, lastCalcResult.Fa); }); }
   if (idx === 4) { measRenderTpTable(); measRenderKpTable(); measRenderHistory(); }
   if (idx === 5) updateProjectSummary();
 }
@@ -995,6 +1011,103 @@ function updatePipeLenOpt() {
     </div>`;
   });
   resultEl.innerHTML = html || '<div class="ok-box">全曲線区間で現在管長が許容範囲内です。</div>';
+  updatePipeJointPlan();
+}
+
+function updatePipeJointPlan() {
+  const D  = n('pipeOuter') || 0.96;
+  const lp = n('pipeLen')   || 2.43;
+  const allowMm = n('pipeJointType') || 40;
+  const S4mm    = n('pipeCushion')   || 20;
+  const L       = n('totalLength')   || 0;
+  const el = document.getElementById('pipeJointPlanResult');
+  if (!el || !L || !lp) { if(el) el.innerHTML='<div class="note-box">総推進延長と管長を入力してください。</div>'; return; }
+
+  const N = Math.ceil(L / lp);
+  const curList = getCurves();
+
+  // 各区間のstart位置とS1を構築（SP=0起点: SPから順にEP方向）
+  // 実際の推進方向: SP(発進) → ... → EP(到達)
+  // ただしcalcは「EP側から累積」なので、ここではBP→EP順で計算
+  const L0 = n('seg_L0') || 0;
+  const Lf = n('seg_Lf') || 0;
+
+  // BP側からの位置（区間ごと）
+  const secs = []; // {label, type, start, end, S1}
+  if (curList.length === 0) {
+    secs.push({label:'直線', type:'straight', start:0, end:L, S1:S4mm});
+  } else {
+    const elems = curList.map(c => calcCurveElements(c));
+    const TLs = elems.map(e => e.TL);
+    let pos = 0;
+    const s0 = Math.max(0, L0 - TLs[0]);
+    secs.push({label:'第1直線', type:'straight', start:pos, end:pos+s0, S1:S4mm});
+    pos += s0;
+    for (let i = 0; i < curList.length; i++) {
+      const e = elems[i], R = curList[i].R;
+      const denom = 2*(R - D/2);
+      const S1c = denom > 0 ? D*lp/denom*1000 + S4mm : 99999;
+      secs.push({label:`第${i+1}曲線(R=${R}m)`, type:'curve', start:pos, end:pos+e.CL, S1:S1c, R});
+      pos += e.CL;
+      if (i < curList.length-1) {
+        const sMid = Math.max(0, curList[i+1].L - TLs[i] - TLs[i+1]);
+        secs.push({label:`直線${i+2}`, type:'straight', start:pos, end:pos+sMid, S1:S4mm});
+        pos += sMid;
+      }
+    }
+    const sf = Math.max(0, Lf - TLs[TLs.length-1]);
+    secs.push({label:'最終直線', type:'straight', start:pos, end:pos+sf, S1:S4mm});
+  }
+
+  // 管k(1=最前列=EP側): 最終位置でのback端 = L - k*lp (BP側からの距離)
+  // 管が通過した区間 = back端が到達した位置以下のすべての区間
+  // → max S1 = max(sec.S1 for sec where sec.start <= backPos)
+  const specs = [];
+  for (let k = 1; k <= N; k++) {
+    const backPos = L - k * lp;
+    let maxS1 = S4mm;
+    let bottleneck = secs[0];
+    for (const s of secs) {
+      if (backPos >= s.start && s.S1 >= maxS1) { maxS1 = s.S1; bottleneck = s; }
+    }
+    // 現在の位置（最終区間）
+    let curSec = secs[0];
+    for (const s of secs) { if (backPos >= s.start) curSec = s; }
+    specs.push({k, maxS1, bottleneck, curSec});
+  }
+
+  // 同じ maxS1 の管をグループ化
+  const groups = [];
+  let i = 0;
+  while (i < specs.length) {
+    let j = i+1;
+    while (j < specs.length && specs[j].maxS1 === specs[i].maxS1) j++;
+    groups.push({from:specs[i].k, to:specs[j-1].k, maxS1:specs[i].maxS1, bottleneck:specs[i].bottleneck});
+    i = j;
+  }
+
+  // 描画
+  let html = `<div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+    <thead><tr style="background:rgba(59,130,246,.1)"><th style="padding:4px">本数</th><th>区間（最大S₁の根拠）</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr></thead><tbody>`;
+  groups.forEach(g => {
+    const s1 = g.maxS1;
+    let joint, jcolor, cush;
+    if (s1 <= 30)       { joint='JA型';      jcolor='var(--ok)';   cush=s1>S4mm?`${S4mm}mm`:'—'; }
+    else if (s1 <= 60)  { joint='JC型';      jcolor='var(--warn)'; cush=`${S4mm}mm`; }
+    else                { joint='JCでも超過'; jcolor='var(--ng)';   cush=`${S4mm}mm`; }
+    if (s1 > allowMm) jcolor='var(--ng)';
+    const lbl = g.from===g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
+    html += `<tr>
+      <td style="padding:3px 4px;font-weight:bold">${lbl}</td>
+      <td>${g.bottleneck.label}</td>
+      <td class="mono" style="color:${s1>allowMm?'var(--ng)':''}">${(s1-S4mm).toFixed(1)}mm (+S₄${S4mm}mm)</td>
+      <td style="color:${jcolor};font-weight:bold">${joint}</td>
+      <td>${cush}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>
+  <div class="ok-box" style="margin-top:6px;font-size:11px">合計本数: ${N}本（管長 l′=${lp}m, スパン延長 ${L.toFixed(2)}m）</div>`;
+  el.innerHTML = html;
 }
 
 // ══════════════════════════════════════
@@ -1458,14 +1571,58 @@ function renderResults(res) {
     bcCard.style.display = 'none';
   }
 
+  // 計算根拠（計算式）
+  const fd = document.getElementById('formulaDetail');
+  if (fd) {
+    const method = v('method') || currentMethod || 'blade';
+    const D = res.segments.find(s=>s.fo!=null)?.fo != null ? n('pipeOuter') : n('pipeOuter');
+    const Di = n('pipeInner'), t_p = n('pipeThick'), W = n('pipeWeight'), Bs_v = n('pipeBs');
+    const mu = n('soilPhiPipe'), C_v = n('soilC'), adh_v = n('soilAdh');
+    const { Be, k0, Ce, q, p_live } = res.tz;
+    const qtot = res.q_total;
+    const fo_v = res.fo;
+    const Fo_v = res.Fo;
+    const foDetail = res.foDetail || {};
+    const mn = {blade:'刃口推進',slurry:'泥水推進',epb:'泥土圧推進',deinoh:'泥濃推進'}[method]||method;
+    let fhtml = `<div style="background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:8px">`;
+    fhtml += `<b>工法: ${mn}</b><br>`;
+    fhtml += `<span style="color:var(--sub)">【テルツァーギ土圧】</span><br>`;
+    fhtml += `Be = 1.5×D+0.4 = 1.5×${n('pipeOuter').toFixed(3)}+0.4 = <b>${Be.toFixed(3)} m</b><br>`;
+    fhtml += `k₀ = 1−sin(φ) = 1−sin(${n('soilPhi')}°) = <b>${k0.toFixed(4)}</b><br>`;
+    fhtml += `Ce = (1−e^{−2k₀tanφ×H/Be}) / (2k₀tanφ) = <b>${Ce.toFixed(4)}</b><br>`;
+    fhtml += `q = γ×Be×Ce + 2C×Ce = ${n('soilGamma')}×${Be.toFixed(3)}×${Ce.toFixed(4)} + 2×${n('soilC')}×${Ce.toFixed(4)} = <b>${q.toFixed(2)} kN/m²</b><br>`;
+    fhtml += `q_total = q + p_live = ${q.toFixed(2)} + ${p_live.toFixed(2)} = <b>${qtot.toFixed(2)} kN/m²</b><br><br>`;
+    fhtml += `<span style="color:var(--sub)">【周面摩擦力 fo】</span><br>`;
+    if (method==='blade') {
+      fhtml += `fo = (πD×q_total×tanδ + πD×C') + W×tanδ<br>`;
+      fhtml += `   = (π×${n('pipeOuter').toFixed(3)}×${qtot.toFixed(2)}×tan${mu}° + π×${n('pipeOuter').toFixed(3)}×${adh_v}) + ${W}×tan${mu}°<br>`;
+      fhtml += `   = <b>${fo_v.toFixed(3)} kN/m</b><br>`;
+    } else {
+      fhtml += `fo = 0.4×{(πD×q+W)×μ' + πD×C'}<br>`;
+      fhtml += `   = 0.4×{(π×${n('pipeOuter').toFixed(3)}×${qtot.toFixed(2)}+${W})×tan${mu}° + π×${n('pipeOuter').toFixed(3)}×${adh_v}}<br>`;
+      fhtml += `   = <b>${fo_v.toFixed(3)} kN/m</b><br>`;
+    }
+    fhtml += `<br><span style="color:var(--sub)">【先端抵抗力 Fo】</span><br>`;
+    fhtml += `Fo = (Pe+Pw)×π×(Bs/2)² = ${Fo_v.toFixed(1)} kN<br>`;
+    fhtml += `Bs = ${Bs_v.toFixed(3)} m<br><br>`;
+    fhtml += `<span style="color:var(--sub)">【外圧耐荷力 (Mr/M ≥ 1.2)】</span><br>`;
+    fhtml += `r = Di/2+t/2 = ${Di.toFixed(3)}/2+${t_p.toFixed(3)}/2 = ${res.extCheck.r.toFixed(3)} m<br>`;
+    fhtml += `M = 0.275×q_total×r² = 0.275×${qtot.toFixed(2)}×${res.extCheck.r.toFixed(3)}² = ${res.extCheck.M.toFixed(3)} kN·m/m<br>`;
+    fhtml += `Mr = 0.318×Pext×r+0.239×W×r = ${res.extCheck.Mr.toFixed(3)} kN·m/m<br>`;
+    fhtml += `Mr/M = ${res.extCheck.ratio.toFixed(3)} ${res.extCheck.ok?'≥ 1.2 OK':'< 1.2 NG'}<br>`;
+    fhtml += `</div>`;
+    fd.innerHTML = fhtml;
+  }
+
   // グラフ
-  drawForceGraph(segments, Fa);
+  requestAnimationFrame(() => drawForceGraph(segments, Fa));
 }
 
 function drawForceGraph(segments, Fa) {
   const canvas = document.getElementById('forceGraph');
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  const w = canvas.offsetWidth || canvas.parentElement?.clientWidth || 360;
+  const h = canvas.offsetHeight || 260;
   canvas.width = w * dpr; canvas.height = h * dpr;
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
