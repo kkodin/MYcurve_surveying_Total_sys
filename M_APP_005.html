@@ -503,9 +503,21 @@ tr.row-ng td{color:var(--ng)}
       </div>
       <div class="two-col">
         <div class="field-row"><label>呼径 [mm]</label><input id="wallLinerNominal" class="mono" type="number" step="50" value="4500" oninput="onLinerChange()"><span class="unit">mm</span></div>
-        <div class="field-row"><label>板厚 [mm]</label><input id="wallLinerThick" class="mono" type="number" step="0.1" value="2.7" oninput="onLinerChange()"><span class="unit">mm</span></div>
+        <div class="field-row full">
+          <label>板厚</label>
+          <select id="wallLinerThick" onchange="onLinerChange()">
+            <option value="2.7" selected>2.7mm（標準）</option>
+            <option value="3.2">3.2mm</option>
+            <option value="4.0">4.0mm</option>
+            <option value="4.5">4.5mm</option>
+            <option value="5.3">5.3mm</option>
+            <option value="6.0">6.0mm</option>
+            <option value="7.0">7.0mm</option>
+          </select>
+        </div>
       </div>
       <div id="linerDimNote" class="ok-box" style="font-size:11px;margin-top:4px"></div>
+      <div id="linerSectionNote" class="note-box" style="font-size:11px;margin-top:4px;display:none"></div>
     </div>
   </div>
 
@@ -1702,6 +1714,16 @@ function drawForceGraph(segments, Fa) {
 // ══════════════════════════════════════
 let wallShaftType = 'rect';
 
+const LINER_PLATE_DB = {
+  2.7: { D:49.8, A:19.88, Z:23.0, I:70.5 },
+  3.2: { D:49.3, A:23.56, Z:27.2, I:83.8 },
+  4.0: { D:48.5, A:29.43, Z:33.7, I:105.0 },
+  4.5: { D:48.0, A:33.11, Z:37.9, I:119.0 },
+  5.3: { D:47.2, A:38.95, Z:44.4, I:140.0 },
+  6.0: { D:46.5, A:44.10, Z:50.0, I:160.0 },
+  7.0: { D:45.5, A:51.43, Z:58.1, I:188.0 },
+};
+
 function setWallShaft(type, el) {
   wallShaftType = type;
   document.querySelectorAll('#wallShaftChips .shaft-chip').forEach(c => c.classList.remove('active'));
@@ -1726,12 +1748,18 @@ function setWallShaft(type, el) {
 
 function onLinerChange() {
   const nom_mm = n('wallLinerNominal') || 4500;
-  const t_mm = n('wallLinerThick') || 2.7;
+  const t_mm = parseFloat(document.getElementById('wallLinerThick')?.value) || 2.7;
   const eff_mm = nom_mm - 50;
-  const out_mm = (nom_mm - 50) + 2 * (t_mm + 52.5);
+  const sp = LINER_PLATE_DB[t_mm] || LINER_PLATE_DB[2.7];
+  const out_mm = eff_mm + 2 * (sp.D + t_mm);
   const note = document.getElementById('linerDimNote');
   if (note) {
-    note.textContent = `有効内径 ${eff_mm.toFixed(0)}mm（＝呼径−50mm） ／ 外径 ${out_mm.toFixed(0)}mm（＝呼径+2×(板厚+52.5mm)）`;
+    note.textContent = `有効内径 ${eff_mm.toFixed(0)}mm（＝呼径−50mm） ／ 外径 ${out_mm.toFixed(0)}mm（＝内径+2×(D+t)）`;
+  }
+  const secNote = document.getElementById('linerSectionNote');
+  if (secNote && sp) {
+    secNote.style.display = '';
+    secNote.innerHTML = `断面性能（t=${t_mm}mm）: D=${sp.D}mm ／ A=${sp.A}cm² ／ Z=${sp.Z}cm³ ／ I=${sp.I}cm⁴`;
   }
   calcBacklock();
   autoSave();
@@ -1767,7 +1795,7 @@ function calcBacklock() {
   // ライナープレート立坑: 設計モード
   if (wallShaftType === 'liner') {
     const nom_mm = n('wallLinerNominal') || 4500;
-    const t_mm = n('wallLinerThick') || 2.7;
+    const t_mm = parseFloat(document.getElementById('wallLinerThick')?.value) || 2.7;
     const fa = n('wallFaD') || 3000;
     const F = n('wallForceD');
     const hc = n('wallHcD') || 0.8;
