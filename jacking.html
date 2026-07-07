@@ -480,10 +480,11 @@ tr.row-ng td{color:var(--ng)}
 
   <div class="card">
     <div class="card-title">🏗️ 発進立坑 種別</div>
-    <div class="shaft-chips" id="wallShaftChips" style="grid-template-columns:repeat(2,1fr);gap:8px">
+    <div class="shaft-chips" id="wallShaftChips" style="grid-template-columns:repeat(3,1fr);gap:8px">
       <div class="shaft-chip active" data-val="rect" onclick="setWallShaft('rect',this)"><div style="font-size:18px">⬛</div><b>矩形立坑</b></div>
       <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)"><div style="font-size:18px">⭕</div><b>円形立坑</b></div>
       <div class="shaft-chip" data-val="casing" onclick="setWallShaft('casing',this)"><div style="font-size:18px">🔩</div><b>鋼製ケーシング</b></div>
+      <div class="shaft-chip" data-val="liner" onclick="setWallShaft('liner',this)"><div style="font-size:18px">🌀</div><b>ライナープレート</b></div>
       <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)"><div style="font-size:18px">🌿</div><b>オープンカット</b></div>
     </div>
     <div id="wallTypeNote" class="note-box" style="margin-top:8px"></div>
@@ -496,10 +497,20 @@ tr.row-ng td{color:var(--ng)}
     <div id="wallCircleInputs" style="display:none;margin-top:8px">
       <div class="field-row"><label>立坑内径 φ [m]</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()"><span class="unit">m</span></div>
     </div>
+    <div id="wallLinerInputs" style="display:none;margin-top:8px">
+      <div class="note-box" style="font-size:11px;margin-bottom:6px">
+        ライナープレート立坑：呼径はボルト孔芯径。有効内径＝呼径−50mm（波型凸部）、外径＝呼径+2×(板厚+52.5mm)。
+      </div>
+      <div class="two-col">
+        <div class="field-row"><label>呼径 [mm]</label><input id="wallLinerNominal" class="mono" type="number" step="50" value="4500" oninput="onLinerChange()"><span class="unit">mm</span></div>
+        <div class="field-row"><label>板厚 [mm]</label><input id="wallLinerThick" class="mono" type="number" step="1" value="3" oninput="onLinerChange()"><span class="unit">mm</span></div>
+      </div>
+      <div id="linerDimNote" class="ok-box" style="font-size:11px;margin-top:4px"></div>
+    </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🧱 支圧壁の諸元</div>
+  <div class="card" id="wallDimCard">
+    <div class="card-title">🧱 支圧壁の諸元（照査モード）</div>
     <div class="ok-box" style="font-size:11px">基礎コンクリート上面（y=0）を基準とします。支圧壁の下端は基礎コンクリート上面。</div>
     <div class="two-col">
       <div class="field-row"><label>支圧壁 幅 B_w [m]</label><input id="wallBw" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
@@ -513,6 +524,24 @@ tr.row-ng td{color:var(--ng)}
       <span class="unit">kN</span>
     </div>
     <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">Tab2の計算結果を読込</button>
+  </div>
+
+  <div class="card" id="wallDesignCard" style="display:none">
+    <div class="card-title">🧱 支圧壁 必要強度からの寸法設計</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      ライナープレート立坑では支圧壁幅は管外径から算出した弦長で制約されます。
+      必要推進力から高さ・幅の最小寸法を算出します。
+    </div>
+    <div class="two-col">
+      <div class="field-row"><label>許容支圧応力度 f_a [kN/m²]</label><input id="wallFaD" class="mono" type="number" step="10" value="3000" oninput="calcBacklock()"><span class="unit">kN/m²</span></div>
+      <div class="field-row"><label>管中心高さ h_c [m]</label><input id="wallHcD" class="mono" type="number" step="0.05" value="0.8" oninput="calcBacklock()"><span class="unit">m</span></div>
+    </div>
+    <div class="field-row">
+      <label>推進力 F [kN]</label>
+      <input id="wallForceD" class="mono" type="number" step="1" value="" oninput="calcBacklock()">
+      <span class="unit">kN</span>
+    </div>
+    <button class="big-btn secondary" onclick="syncForceFromCalcDesign()" style="min-height:42px;font-size:14px;margin-top:4px">Tab2の計算結果を読込</button>
   </div>
 
   <div id="backlockResult"></div>
@@ -1636,14 +1665,33 @@ function setWallShaft(type, el) {
   el.classList.add('active');
   document.getElementById('wallRectInputs').style.display = (type === 'rect' || type === 'open') ? '' : 'none';
   document.getElementById('wallCircleInputs').style.display = (type === 'circle' || type === 'casing') ? '' : 'none';
+  document.getElementById('wallLinerInputs').style.display = (type === 'liner') ? '' : 'none';
+  const isLiner = (type === 'liner');
+  document.getElementById('wallDimCard').style.display = isLiner ? 'none' : '';
+  document.getElementById('wallDesignCard').style.display = isLiner ? '' : 'none';
   const notes = {
     rect: '矩形立坑: 底版一体型・独立型どちらも可。立坑内法幅が支圧壁最大幅の制約となります。',
     circle: '円形立坑: 弦長が支圧壁最大幅の制約となります。管中心と立坑中心を合わせてください。',
     casing: '鋼製ケーシング立坑: 底版一体型は不可。独立型（プレキャストコンクリートブロック）のみ。',
+    liner: 'ライナープレート立坑: 必要推進力から支圧壁の必要寸法（幅・高さ）を算出します。弦長が幅の上限制約。',
     open: 'オープンカット: 幅制約なし。地盤状況に応じた支圧設計を行います。'
   };
   document.getElementById('wallTypeNote').textContent = notes[type] || '';
+  if (isLiner) onLinerChange();
+  else calcBacklock();
+}
+
+function onLinerChange() {
+  const nom_mm = n('wallLinerNominal') || 4500;
+  const t_mm = n('wallLinerThick') || 3;
+  const eff_mm = nom_mm - 50;
+  const out_mm = nom_mm + 2 * (t_mm + 52.5);
+  const note = document.getElementById('linerDimNote');
+  if (note) {
+    note.textContent = `有効内径 ${eff_mm.toFixed(0)}mm（＝呼径−50mm） ／ 外径 ${out_mm.toFixed(0)}mm（＝呼径+2×(板厚+52.5mm)）`;
+  }
   calcBacklock();
+  autoSave();
 }
 
 function syncForceFromCalc() {
@@ -1656,15 +1704,125 @@ function syncForceFromCalc() {
   }
 }
 
+function syncForceFromCalcDesign() {
+  if (lastCalcResult) {
+    setV('wallForceD', Math.ceil(lastCalcResult.F_total));
+    calcBacklock();
+    showToast('推進力を読み込みました');
+  } else {
+    showToast('先にTab2で計算を実行してください');
+  }
+}
+
 function calcBacklock() {
+  const gamma = n('soilGamma') || 18;
+  const phi_deg = n('soilPhi') || 30;
+  const phi = phi_deg * Math.PI / 180;
+  const Kp = Math.pow(Math.tan(Math.PI/4 + phi/2), 2);
+  const pipeOuter = n('pipeOuter') || 0.96;
+
+  // ライナープレート立坑: 設計モード
+  if (wallShaftType === 'liner') {
+    const nom_mm = n('wallLinerNominal') || 4500;
+    const t_mm = n('wallLinerThick') || 3;
+    const fa = n('wallFaD') || 3000;
+    const F = n('wallForceD');
+    const hc = n('wallHcD') || 0.8;
+
+    if (!F) {
+      document.getElementById('backlockResult').innerHTML = '<div class="note-box">推進力 F を入力してください。</div>';
+      return;
+    }
+
+    const R_nom = nom_mm / 2000;
+    const R_eff = R_nom - 0.025;
+    const R_pipe = pipeOuter / 2;
+
+    const chord_sq = R_eff * R_eff - R_pipe * R_pipe;
+    if (chord_sq <= 0) {
+      document.getElementById('backlockResult').innerHTML =
+        '<div class="ng-box">管外径が立坑有効内径より大きいため計算できません。</div>';
+      return;
+    }
+    const Beff_max = 2 * Math.sqrt(chord_sq);
+
+    const Hw_f = F / (fa * Beff_max);
+    const Hw_ep = Math.sqrt(2 * F / (gamma * Kp * Beff_max));
+    const Hw_req = Math.max(Hw_f, Hw_ep);
+    const govBy = Hw_ep >= Hw_f ? '受働土圧' : '接触応力';
+
+    const e = Math.abs(Hw_req / 2 - hc);
+    const A = Beff_max * Hw_req;
+    const Z = Beff_max * Hw_req * Hw_req / 6;
+    const sigma_max = F / A + (F * e) / Z;
+    const eccOk = sigma_max <= fa;
+
+    const Ep_check = 0.5 * gamma * Hw_req * Hw_req * Kp * Beff_max;
+    const f_check = F / (Beff_max * Hw_req);
+
+    document.getElementById('backlockResult').innerHTML = `
+      <div class="card">
+        <div class="card-title" style="background:linear-gradient(135deg,#1d6fd8,#0f4a96);color:#fff">📐 ライナープレート立坑 支圧壁 必要寸法</div>
+        <div class="note-box" style="font-size:11px;margin-bottom:8px">
+          呼径 ${nom_mm}mm ／ 有効内径半径 R_eff = ${(R_eff*1000).toFixed(0)}mm ／ 管外径半径 R_pipe = ${(R_pipe*1000).toFixed(0)}mm<br>
+          最大利用可能幅（弦長）= 2×√(R_eff²−R_pipe²) = 2×√(${(R_eff*1000).toFixed(0)}²−${(R_pipe*1000).toFixed(0)}²) = <b>${(Beff_max*1000).toFixed(0)}mm</b>
+        </div>
+
+        <div class="metrics-grid" style="margin-bottom:8px">
+          <div class="metric-card" style="border:2px solid #1d6fd8">
+            <div class="metric-label">必要幅 B_eff</div>
+            <div class="metric-value" style="color:#1d6fd8">${(Beff_max*1000).toFixed(0)}</div>
+            <div class="metric-sub">mm（弦長上限）</div>
+          </div>
+          <div class="metric-card" style="border:2px solid #1d6fd8">
+            <div class="metric-label">必要高さ H_w（最小）</div>
+            <div class="metric-value" style="color:#1d6fd8">${(Hw_req*1000).toFixed(0)}</div>
+            <div class="metric-sub">mm（${govBy}支配）</div>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
+          <b>① 接触応力から必要高さ</b>
+          <div style="font-size:12px;margin-top:4px;color:var(--sub)">
+            H_w ≥ F / (f_a × B_eff) = ${F.toFixed(0)} / (${fa} × ${Beff_max.toFixed(3)}) = <b>${(Hw_f*1000).toFixed(0)} mm</b>
+          </div>
+          <div style="font-size:12px;color:var(--sub)">検証: f = F/(B×H) = ${f_check.toFixed(1)} kN/m² ≤ f_a=${fa} kN/m² <span class="pill ok">OK</span></div>
+        </div>
+
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
+          <b>② 受働土圧から必要高さ</b>
+          <div style="font-size:12px;margin-top:4px;color:var(--sub)">
+            Kp = tan²(45+φ/2) = tan²(45+${(phi_deg/2).toFixed(1)}°) = ${Kp.toFixed(3)}<br>
+            H_w ≥ √(2F / (γ×Kp×B)) = √(2×${F.toFixed(0)} / (${gamma}×${Kp.toFixed(3)}×${Beff_max.toFixed(3)})) = <b>${(Hw_ep*1000).toFixed(0)} mm</b>
+          </div>
+          <div style="font-size:12px;color:var(--sub)">検証: Ep = 0.5×γ×H²×Kp×B = ${Ep_check.toFixed(0)} kN ≥ F=${F.toFixed(0)} kN <span class="pill ok">OK</span></div>
+        </div>
+
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
+          <b>③ 偏心曲げ確認</b>
+          <div style="font-size:12px;margin-top:4px;color:var(--sub)">
+            管中心高さ h_c=${hc}m, H_w/2=${(Hw_req/2).toFixed(3)}m → 偏心 e=${e.toFixed(3)}m<br>
+            σmax = F/A + F×e/Z = ${(F/A).toFixed(1)} + ${(F*e/Z).toFixed(1)} = ${sigma_max.toFixed(1)} kN/m²
+          </div>
+          <div style="font-size:12px;color:var(--sub)">判定: σmax=${sigma_max.toFixed(1)} kN/m² ${eccOk?'≤':'>'} f_a=${fa} kN/m² <span class="pill ${eccOk?'ok':'ng'}">${eccOk?'OK':'要見直し'}</span></div>
+          ${!eccOk ? `<div style="font-size:11px;color:#dc2626;margin-top:4px">管中心高さ h_c を H_w/2 に近づけるか、f_a を増やしてください。算出 H_w = ${(Hw_req*1000).toFixed(0)}mm, 重心一致時 H_w = ${(Hw_f*1000).toFixed(0)}mm</div>` : ''}
+        </div>
+
+        <div class="ok-box" style="margin-top:8px;font-size:12px">
+          ✅ 設計推奨寸法: 幅 B = <b>${(Beff_max*1000).toFixed(0)}mm</b>（弦長）、高さ H = <b>${Math.ceil(Hw_req*1000/50)*50}mm</b>（50mm切上げ）
+          ${!eccOk ? '<br>⚠️ 偏心曲げNGのため、管中心高さの調整が必要です。' : ''}
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 通常立坑: 照査モード
   const Bw = n('wallBw');
   const Hw = n('wallHw');
   const hc = n('wallHc');
   const fa = n('wallFa');
   const F = n('wallForce');
-  const gamma = n('soilGamma');
-  const phi_deg = n('soilPhi');
-  const phi = phi_deg * Math.PI / 180;
 
   if (!Bw || !Hw || !F) {
     document.getElementById('backlockResult').innerHTML = '<div class="note-box">支圧壁諸元と推進力を入力してください。</div>';
@@ -1675,10 +1833,8 @@ function calcBacklock() {
   let maxBw = Bw;
   if (wallShaftType === 'rect' || wallShaftType === 'open') maxBw = n('wallPitW') || Bw;
   else if (wallShaftType === 'circle' || wallShaftType === 'casing') {
-    const pitD = n('wallCircleD');
-    const pipeD = n('pipeOuter') || 0.96;
-    const pitR = pitD / 2;
-    const halfChord = Math.sqrt(Math.max(0, pitR**2 - (pitR - pipeD/2)**2));
+    const pitR = (n('wallCircleD') || 3.5) / 2;
+    const halfChord = Math.sqrt(Math.max(0, pitR * pitR - (pipeOuter / 2) ** 2));
     maxBw = Math.min(Bw, halfChord * 2);
   }
   const Beff = Math.min(Bw, maxBw);
@@ -1696,7 +1852,6 @@ function calcBacklock() {
   const check2_ok = sigma_max <= fa;
 
   // ③ 受働土圧安定照査
-  const Kp = Math.pow(Math.tan(Math.PI/4 + phi/2), 2);
   const Ep = 0.5 * gamma * Hw * Hw * Kp * Beff;
   const check3_ok = Ep >= F;
 
@@ -1709,7 +1864,6 @@ function calcBacklock() {
     {name:'BL-1500',F:1500,W:1.55,H:1.50,B:1.50},
     {name:'BL-2000',F:2000,W:2.05,H:2.00,B:2.00},
   ];
-  const F_kN_each = F / (Math.ceil(Beff / 0.4));
   const selected = BL_TABLE.filter(bl => bl.F * 1000 >= F);
   const blSelected = selected.length ? selected[0] : BL_TABLE[BL_TABLE.length - 1];
 
@@ -1794,8 +1948,10 @@ function getProjectData() {
     },
     wall: {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
-      circleD: n('wallCircleD'), Bw: n('wallBw'), Hw: n('wallHw'),
-      hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce')
+      circleD: n('wallCircleD'), linerNominal: n('wallLinerNominal'), linerThick: n('wallLinerThick'),
+      Bw: n('wallBw'), Hw: n('wallHw'),
+      hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce'),
+      faD: n('wallFaD'), hcD: n('wallHcD'), forceD: n('wallForceD')
     },
     measurements: measurementHistory,
     currentMeasurement: measGetCurrent()
@@ -1903,9 +2059,12 @@ function setProjectData(d) {
     const wl = d.wall;
     setV('wallPitW', wl.pitW||3); setV('wallPitL', wl.pitL||4);
     setV('wallCircleD', wl.circleD||3.5);
+    setV('wallLinerNominal', wl.linerNominal||4500); setV('wallLinerThick', wl.linerThick||3);
     setV('wallBw', wl.Bw||3); setV('wallHw', wl.Hw||2);
     setV('wallHc', wl.hc||0.8); setV('wallFa', wl.fa||3000);
     setV('wallForce', wl.force||0);
+    setV('wallFaD', wl.faD||3000); setV('wallHcD', wl.hcD||0.8);
+    setV('wallForceD', wl.forceD||0);
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
