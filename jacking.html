@@ -499,7 +499,7 @@ tr.row-ng td{color:var(--ng)}
     </div>
     <div id="wallLinerInputs" style="display:none;margin-top:8px">
       <div class="note-box" style="font-size:11px;margin-bottom:6px">
-        ライナープレート立坑：呼径はボルト孔芯径。有効内径＝呼径−50mm（波型凸部）、外径＝呼径+2×(板厚+52.5mm)。
+        ライナープレート立坑：呼径はボルト孔芯径。有効内径＝呼径−50mm（波型凸部）、外径＝内径+2×(板厚+52.5mm)。
       </div>
       <div class="two-col">
         <div class="field-row"><label>呼径 [mm]</label><input id="wallLinerNominal" class="mono" type="number" step="50" value="4500" oninput="onLinerChange()"><span class="unit">mm</span></div>
@@ -1685,7 +1685,7 @@ function onLinerChange() {
   const nom_mm = n('wallLinerNominal') || 4500;
   const t_mm = n('wallLinerThick') || 3;
   const eff_mm = nom_mm - 50;
-  const out_mm = nom_mm + 2 * (t_mm + 52.5);
+  const out_mm = (nom_mm - 50) + 2 * (t_mm + 52.5);
   const note = document.getElementById('linerDimNote');
   if (note) {
     note.textContent = `有効内径 ${eff_mm.toFixed(0)}mm（＝呼径−50mm） ／ 外径 ${out_mm.toFixed(0)}mm（＝呼径+2×(板厚+52.5mm)）`;
