@@ -372,16 +372,26 @@ tr.row-ng td{color:var(--ng)}
         <div class="shaft-chip" data-val="circle" onclick="setShaftType('arrival','circle',this)">円形立坑</div>
       </div>
       <div id="arrivalManholeIn">
-        <div class="field-row full">
-          <label>マンホール内径</label>
-          <select id="manholeSize" onchange="autoSave()">
-            <option value="0.6">φ600mm（1号）</option>
-            <option value="0.9">φ900mm（2号）</option>
-            <option value="1.2" selected>φ1200mm（3号）</option>
-            <option value="1.5">φ1500mm（4号）</option>
-            <option value="1.8">φ1800mm（大型）</option>
-          </select>
+        <div class="two-col">
+          <div class="field-row full">
+            <label>マンホール号数（内径）</label>
+            <select id="manholeSize" onchange="onManholeChange()">
+              <option value="900">1号 φ900mm</option>
+              <option value="1200">2号 φ1200mm</option>
+              <option value="1500" selected>3号 φ1500mm</option>
+              <option value="1800">4号 φ1800mm</option>
+              <option value="2200">5号 φ2200mm</option>
+            </select>
+          </div>
+          <div class="field-row full">
+            <label>種別</label>
+            <select id="manholeGrade" onchange="onManholeChange()">
+              <option value="1shu">I種</option>
+              <option value="2shu">II種</option>
+            </select>
+          </div>
         </div>
+        <div class="note-box" id="manholeNote" style="font-size:11px;margin-top:6px"></div>
       </div>
       <div id="arrivalRectIn" style="display:none">
         <div class="two-col">
@@ -398,9 +408,9 @@ tr.row-ng td{color:var(--ng)}
 
   <div class="card">
     <div class="card-title ok">📏 実地山推進距離の算定</div>
-    <div class="ok-box">実地山区間 = 総推進延長 − 発進側除外距離 − 到達側除外距離<br>立坑・マンホール内では地山摩擦が発生しないため除外します。</div>
+    <div class="ok-box">実地山区間 = スパン延長 − 発進側除外距離 − 到達側除外距離<br>立坑・マンホール内では地山摩擦が発生しないため除外します。</div>
     <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">総推進延長</div><div class="metric-value" id="rs_total">—</div><div class="metric-sub">m</div></div>
+      <div class="metric-card"><div class="metric-label">スパン延長</div><div class="metric-value" id="rs_total">—</div><div class="metric-sub">m</div></div>
       <div class="metric-card"><div class="metric-label">発進側 除外距離</div><div class="metric-value" id="rs_launch">—</div><div class="metric-sub">m</div></div>
       <div class="metric-card"><div class="metric-label">到達側 除外距離</div><div class="metric-value" id="rs_arrival">—</div><div class="metric-sub">m</div></div>
       <div class="metric-card"><div class="metric-label" style="color:var(--blue2)">実地山推進距離</div><div class="metric-value ok" id="rs_ground">—</div><div class="metric-sub">m ← 計算使用</div></div>
@@ -758,6 +768,28 @@ function onPipeDiaChange() {
 }
 
 // ══════════════════════════════════════
+//  マンホールDB（JSWASA-11）
+// ══════════════════════════════════════
+const MANHOLE_DB = {
+  '900':  { '1shu': {t:0.075, outer:1.050}, '2shu': {t:0.100, outer:1.100} },
+  '1200': { '1shu': {t:0.100, outer:1.400}, '2shu': {t:0.125, outer:1.450} },
+  '1500': { '1shu': {t:0.125, outer:1.750}, '2shu': {t:0.150, outer:1.800} },
+  '1800': { '1shu': {t:0.160, outer:2.120}, '2shu': {t:0.160, outer:2.120} },
+  '2200': { '1shu': {t:0.190, outer:2.580}, '2shu': {t:0.190, outer:2.580} },
+};
+function onManholeChange() {
+  const key = v('manholeSize') || '1500';
+  const grade = v('manholeGrade') || '1shu';
+  const spec = (MANHOLE_DB[key]||{})[grade];
+  const note = document.getElementById('manholeNote');
+  if (spec && note) {
+    note.textContent = `外径 ${(spec.outer*1000).toFixed(0)}mm（壁厚 t=${(spec.t*1000).toFixed(0)}mm）→ 除外距離 ${(spec.outer/2).toFixed(3)}m`;
+  }
+  updateGroundLen();
+  autoSave();
+}
+
+// ══════════════════════════════════════
 //  曲線区間管理（線形計算方式）
 // ══════════════════════════════════════
 let curves = [];
@@ -1020,8 +1052,10 @@ function calcShaftDist(side) {
     return n('launchDirect');
   } else {
     if (type === 'manhole') {
-      const mhD = n('manholeSize') || 1.2;
-      return mhD / 2;
+      const key = v('manholeSize') || '1500';
+      const grade = v('manholeGrade') || '1shu';
+      const outerM = (MANHOLE_DB[key] || {})[grade]?.outer || (parseInt(key)/1000 + 0.25);
+      return outerM / 2;
     } else if (type === 'rect') {
       return n('arrivalLdim') / 2;
     } else if (type === 'circle') {
@@ -1738,7 +1772,13 @@ function setProjectData(d) {
     shaftModes.launch = sh.launchMode||'direct';
     shaftTypes.launch = sh.launchType||'rect';
     setV('arrivalDirect', sh.arrivalDirect||0.8);
-    setV('manholeSize', sh.manholeSize||1.2);
+    // 旧フォーマット: manholeSize=0.9(m) → 新フォーマット: '900'(mm)
+    const mhRaw = sh.manholeSize;
+    const mhMap = {'0.6':'900','0.9':'900','1.2':'1200','1.5':'1500','1.8':'1800','2.2':'2200'};
+    const mhKey = mhRaw ? (mhMap[String(mhRaw)] || String(Math.round(parseFloat(mhRaw)*1000))) : '1500';
+    setV('manholeSize', mhKey);
+    if (sh.manholeGrade) setV('manholeGrade', sh.manholeGrade);
+    onManholeChange();
     setV('arrivalW', sh.arrivalW||3); setV('arrivalLdim', sh.arrivalL||3);
     setV('arrivalCircleD', sh.arrivalCircleD||3);
     shaftModes.arrival = sh.arrivalMode||'direct';
