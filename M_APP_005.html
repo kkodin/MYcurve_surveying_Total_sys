@@ -503,7 +503,7 @@ tr.row-ng td{color:var(--ng)}
       </div>
       <div class="two-col">
         <div class="field-row"><label>呼径 [mm]</label><input id="wallLinerNominal" class="mono" type="number" step="50" value="4500" oninput="onLinerChange()"><span class="unit">mm</span></div>
-        <div class="field-row"><label>板厚 [mm]</label><input id="wallLinerThick" class="mono" type="number" step="1" value="3" oninput="onLinerChange()"><span class="unit">mm</span></div>
+        <div class="field-row"><label>板厚 [mm]</label><input id="wallLinerThick" class="mono" type="number" step="0.1" value="2.7" oninput="onLinerChange()"><span class="unit">mm</span></div>
       </div>
       <div id="linerDimNote" class="ok-box" style="font-size:11px;margin-top:4px"></div>
     </div>
@@ -1726,7 +1726,7 @@ function setWallShaft(type, el) {
 
 function onLinerChange() {
   const nom_mm = n('wallLinerNominal') || 4500;
-  const t_mm = n('wallLinerThick') || 3;
+  const t_mm = n('wallLinerThick') || 2.7;
   const eff_mm = nom_mm - 50;
   const out_mm = (nom_mm - 50) + 2 * (t_mm + 52.5);
   const note = document.getElementById('linerDimNote');
@@ -1767,7 +1767,7 @@ function calcBacklock() {
   // ライナープレート立坑: 設計モード
   if (wallShaftType === 'liner') {
     const nom_mm = n('wallLinerNominal') || 4500;
-    const t_mm = n('wallLinerThick') || 3;
+    const t_mm = n('wallLinerThick') || 2.7;
     const fa = n('wallFaD') || 3000;
     const F = n('wallForceD');
     const hc = n('wallHcD') || 0.8;
@@ -2113,7 +2113,7 @@ function setProjectData(d) {
     const wl = d.wall;
     setV('wallPitW', wl.pitW||3); setV('wallPitL', wl.pitL||4);
     setV('wallCircleD', wl.circleD||3.5);
-    setV('wallLinerNominal', wl.linerNominal||4500); setV('wallLinerThick', wl.linerThick||3);
+    setV('wallLinerNominal', wl.linerNominal||4500); setV('wallLinerThick', wl.linerThick||2.7);
     setV('wallBw', wl.Bw||3); setV('wallHw', wl.Hw||2);
     setV('wallHc', wl.hc||0.8); setV('wallFa', wl.fa||3000);
     setV('wallForce', wl.force||0);
