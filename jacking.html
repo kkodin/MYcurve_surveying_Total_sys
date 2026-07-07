@@ -1990,6 +1990,92 @@ function measCalcCoords(data) {
   return {tps, kps};
 }
 
+// ─── 設計線形ジオメトリ構築 ───
+function measBuildGeom(bpX, bpY, baseAzDeg) {
+  const toRad = d => d * Math.PI / 180;
+  const bp = {x: +bpX, y: +bpY};
+  let az = toRad(+baseAzDeg);
+  const L0 = parseFloat(document.getElementById('seg_L0').value) || 0;
+  const Lf = parseFloat(document.getElementById('seg_Lf').value) || 0;
+
+  const sections = [];
+
+  if (curves.length === 0) {
+    const ep = measPtFrom(bp, az, L0 + Lf);
+    sections.push({type:'straight', label:'直線', a:bp, b:ep, az});
+    return sections;
+  }
+
+  const elems = curves.map(c => {
+    const IA_rad = (c.deg + c.min/60 + c.sec/3600) * Math.PI / 180;
+    const TL = c.R * Math.tan(IA_rad/2);
+    const CL = c.R * IA_rad;
+    return {IA_rad, TL, CL, R:c.R, dir:c.dir};
+  });
+
+  let cur = {x:bp.x, y:bp.y};
+
+  for (let i = 0; i < elems.length; i++) {
+    const e = elems[i];
+    const L = i === 0 ? L0 : curves[i].L;
+    const ip = measPtFrom(cur, az, L);
+    const bc = measPtFrom(ip, az + Math.PI, e.TL);
+
+    sections.push({type:'straight', label: i===0?'第1直線':`直線${i+1}`, a:{...cur}, b:{...bc}, az});
+
+    const roAz = az + (e.dir==='R' ? Math.PI/2 : -Math.PI/2);
+    const ro = measPtFrom(bc, roAz, e.R);
+    const outAz = az + (e.dir==='R' ? e.IA_rad : -e.IA_rad);
+    const ec = measPtFrom(ip, outAz, e.TL);
+
+    sections.push({type:'curve', label:`第${i+1}曲線`, bc:{...bc}, ec:{...ec}, ro, R:e.R, dir:e.dir, az, outAz});
+
+    cur = {...ec};
+    az = outAz;
+  }
+
+  const ep = measPtFrom(cur, az, Lf);
+  sections.push({type:'straight', label:'最終直線', a:{...cur}, b:{...ep}, az});
+  return sections;
+}
+
+function measJudgeStraight(p, sec) {
+  const ax=sec.a.x, ay=sec.a.y, bx=sec.b.x, by=sec.b.y;
+  const vx=bx-ax, vy=by-ay, len=Math.hypot(vx,vy)||1;
+  const ux=vx/len, uy=vy/len;
+  const wx=p.x-ax, wy=p.y-ay;
+  const proj = wx*ux + wy*uy;
+  const inside = proj >= -5 && proj <= len+5;
+  const clamped = Math.max(0, Math.min(len, proj));
+  const foot = {x:ax+ux*clamped, y:ay+uy*clamped};
+  const ex=p.x-foot.x, ey=p.y-foot.y;
+  const signed = ux*ey - uy*ex;
+  return { errorMm: Math.abs(signed)*1000, side: signed>0?'右':'左', inside, priority: inside?1:9, section: sec.label };
+}
+
+function measJudgeCurve(p, sec) {
+  const dist = Math.hypot(p.x-sec.ro.x, p.y-sec.ro.y);
+  const radial = dist - sec.R;
+  let side;
+  if (sec.dir === 'R') side = radial >= 0 ? '右' : '左';
+  else                  side = radial >= 0 ? '左' : '右';
+  const angle = Math.atan2(p.y-sec.ro.y, p.x-sec.ro.x);
+  const bcAngle = Math.atan2(sec.bc.y-sec.ro.y, sec.bc.x-sec.ro.x);
+  const ecAngle = Math.atan2(sec.ec.y-sec.ro.y, sec.ec.x-sec.ro.x);
+  const norm = a => { while(a>Math.PI) a-=2*Math.PI; while(a<-Math.PI) a+=2*Math.PI; return a; };
+  const dBc = norm(angle - bcAngle), dEc = norm(ecAngle - bcAngle);
+  const inArc = sec.dir==='R' ? (dBc>=0 && dBc<=dEc+0.01) : (dBc<=0 && dBc>=dEc-0.01);
+  return { errorMm: Math.abs(radial)*1000, side, inside: inArc, priority: inArc?0:8, section: sec.label };
+}
+
+function measJudgePoint(p, sections) {
+  const cands = sections.map(sec =>
+    sec.type==='straight' ? measJudgeStraight(p, sec) : measJudgeCurve(p, sec)
+  );
+  cands.sort((a,b) => a.priority-b.priority || a.errorMm-b.errorMm);
+  return cands[0];
+}
+
 function measCalc() {
   const data = measGetCurrent();
   const {tps, kps} = measCalcCoords(data);
@@ -2006,6 +2092,14 @@ function measCalc() {
       centers.push({label, x:cx, y:cy});
     }
   });
+
+  // 偏差計算
+  const bpX = data.bpX ?? 0, bpY = data.bpY ?? 0, baseAzDeg = data.baseAzDeg ?? 0;
+  let sections = [];
+  try { sections = measBuildGeom(bpX, bpY, baseAzDeg); } catch(e) {}
+
+  const tolOk   = parseFloat(document.getElementById('measTolOk').value)   || 30;
+  const tolWarn  = parseFloat(document.getElementById('measTolWarn').value)  || 50;
 
   const fmt = x => x.toFixed(4);
   let html = '';
@@ -2030,6 +2124,32 @@ function measCalc() {
     centers.map(c=>`<tr><td style="font-weight:bold;padding:2px 4px">${c.label}</td><td class="mono">${fmt(c.x)}</td><td class="mono">${fmt(c.y)}</td></tr>`).join('') +
     '</tbody></table></div>';
   }
+
+  // 設計線形との偏差
+  if (centers.length && sections.length) {
+    html += `<div style="font-size:12px;font-weight:bold;margin:8px 0 4px;color:var(--blue2)">設計線形との偏差</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+    <thead><tr style="background:rgba(147,51,234,.08)"><th style="padding:3px">管</th><th>区間</th><th>偏差(mm)</th><th>方向</th><th>判定</th></tr></thead><tbody>`;
+    centers.forEach(c => {
+      const j = measJudgePoint(c, sections);
+      const mm = j.errorMm.toFixed(1);
+      let badge, color;
+      if (j.errorMm <= tolOk)        { badge='OK';   color='var(--ok)'; }
+      else if (j.errorMm <= tolWarn) { badge='注意'; color='var(--warn)'; }
+      else                           { badge='NG';   color='var(--ng)'; }
+      html += `<tr>
+        <td style="font-weight:bold;padding:2px 4px">${c.label}</td>
+        <td>${j.section}</td>
+        <td class="mono" style="font-weight:bold;color:${color}">${mm}</td>
+        <td>${j.side}</td>
+        <td style="font-weight:bold;color:${color}">${badge}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+  } else if (centers.length && !sections.length) {
+    html += `<div class="note-box" style="font-size:11px">基本情報タブの線形データとBP座標・初期方向角を入力すると偏差を算出します。</div>`;
+  }
+
   el.innerHTML = html || '<div class="note-box">計算結果なし</div>';
 }
 
