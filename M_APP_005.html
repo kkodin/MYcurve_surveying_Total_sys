@@ -109,11 +109,7 @@ tr.row-ng td{color:var(--ng)}
     <h1>推進力設計計算</h1>
     <div class="badge">MYcurve M_APP_005 — JPTA準拠</div>
   </div>
-  <div class="hdr-actions">
-    <button class="hdr-btn" onclick="saveJSON()">💾保存</button>
-    <button class="hdr-btn" onclick="document.getElementById('fileInput').click()">📂読込</button>
-    <input id="fileInput" type="file" accept=".json" style="display:none" onchange="onFileLoad(this)">
-  </div>
+  <input id="fileInput" type="file" accept=".json" style="display:none" onchange="onFileLoad(this)">
 </header>
 
 <div id="pageArea">
@@ -498,8 +494,60 @@ tr.row-ng td{color:var(--ng)}
 
 </section>
 
-<!-- ═══ TAB 4: 出力 ═══ -->
+<!-- ═══ TAB 4: 測量 ═══ -->
 <section class="page" id="p4">
+
+  <div class="card">
+    <div class="card-title">📡 測量条件</div>
+    <div class="two-col">
+      <div class="field-row full"><label>測量日</label><input id="measDate" type="date" oninput="measAutoSave()"></div>
+      <div class="field-row full"><label>推進管本数</label><input id="measPipeCount" class="mono" type="number" step="1" value="" oninput="measAutoSave()"><span class="unit">本</span></div>
+    </div>
+    <div style="font-size:12px;font-weight:bold;color:var(--sub);margin:6px 0 4px">器械点・後視点</div>
+    <div class="two-col">
+      <div class="field-row"><label>器械 X</label><input id="measInstX" class="mono" type="number" step="0.001" value="0.000" oninput="measAutoSave()"><span class="unit">m</span></div>
+      <div class="field-row"><label>器械 Y</label><input id="measInstY" class="mono" type="number" step="0.001" value="0.000" oninput="measAutoSave()"><span class="unit">m</span></div>
+      <div class="field-row"><label>後視 X</label><input id="measBsX" class="mono" type="number" step="0.001" value="10.000" oninput="measAutoSave()"><span class="unit">m</span></div>
+      <div class="field-row"><label>後視 Y</label><input id="measBsY" class="mono" type="number" step="0.001" value="0.000" oninput="measAutoSave()"><span class="unit">m</span></div>
+    </div>
+    <div style="font-size:12px;font-weight:bold;color:var(--sub);margin:6px 0 4px">管径・規格値</div>
+    <div class="two-col">
+      <div class="field-row"><label>管径</label><input id="measPipeDia" class="mono" type="number" step="1" value="800" oninput="measUpdateTol()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>社内規格値（OK）</label><input id="measTolOk" class="mono" type="number" step="1" readonly><span class="unit">mm</span></div>
+      <div class="field-row"><label>規格値（WARN）</label><input id="measTolWarn" class="mono" type="number" step="1" readonly><span class="unit">mm</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔵 TP点（トラバース）</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">器械点→後視点を基準方向とし、順番に多角観測します。角度は後視方向からの右回り角（度分秒）。</div>
+    <div id="tpTableDiv" style="overflow-x:auto"></div>
+    <button class="big-btn secondary" onclick="measAddTp()" style="margin-top:6px">+ TP点追加</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔴 KP点（管先端・後端）</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">最終TP点を器械点として観測。役割: 1F=管1前端 1R=管1後端 2F=管2前端 2R=管2後端</div>
+    <div id="kpTableDiv" style="overflow-x:auto"></div>
+    <button class="big-btn secondary" onclick="measAddKp()" style="margin-top:6px">+ KP点追加</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 座標計算・判定</div>
+    <button class="big-btn ok" onclick="measCalc()" style="margin-bottom:8px">座標計算を実行</button>
+    <div id="measCalcResult"></div>
+    <button class="big-btn" onclick="measSave()" style="margin-top:6px;background:var(--navy);color:#fff">💾 この測量を履歴に保存</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 測量履歴</div>
+    <div id="measHistoryDiv"></div>
+  </div>
+
+</section>
+
+<!-- ═══ TAB 5: 出力 ═══ -->
+<section class="page" id="p5">
 
   <div class="card">
     <div class="card-title">💾 データ保存・読込</div>
@@ -525,11 +573,12 @@ tr.row-ng td{color:var(--ng)}
 
 <!-- タブバー -->
 <nav id="tabBar">
-  <button class="tab-item active" onclick="showPage(0)"><span class="tab-icon">📋</span><span class="tab-label">基本情報</span></button>
+  <button class="tab-item active" onclick="showPage(0)"><span class="tab-icon">📋</span><span class="tab-label">基本</span></button>
   <button class="tab-item" onclick="showPage(1)"><span class="tab-icon">🏗️</span><span class="tab-label">立坑</span></button>
   <button class="tab-item" onclick="showPage(2)"><span class="tab-icon">⚡</span><span class="tab-label">推進力</span></button>
   <button class="tab-item" onclick="showPage(3)"><span class="tab-icon">🧱</span><span class="tab-label">支圧壁</span></button>
-  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">💾</span><span class="tab-label">出力</span></button>
+  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">📡</span><span class="tab-label">測量</span></button>
+  <button class="tab-item" onclick="showPage(5)"><span class="tab-icon">💾</span><span class="tab-label">出力</span></button>
 </nav>
 
 <div id="toast"></div>
@@ -556,7 +605,8 @@ function showPage(idx) {
   document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
   document.querySelectorAll('.tab-item').forEach((t,i) => t.classList.toggle('active', i===idx));
   if (idx === 1) updateGroundLen();
-  if (idx === 4) updateProjectSummary();
+  if (idx === 4) { measRenderTpTable(); measRenderKpTable(); measRenderHistory(); }
+  if (idx === 5) updateProjectSummary();
 }
 
 // ══════════════════════════════════════
@@ -1589,7 +1639,9 @@ function getProjectData() {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
       circleD: n('wallCircleD'), Bw: n('wallBw'), Hw: n('wallHw'),
       hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce')
-    }
+    },
+    measurements: measurementHistory,
+    currentMeasurement: measGetCurrent()
   };
 }
 
@@ -1697,6 +1749,12 @@ function setProjectData(d) {
       if (el) setWallShaft(wl.shaftType, el);
     }
   }
+  // 測量データ復元
+  if (Array.isArray(d.measurements)) {
+    measurementHistory = d.measurements;
+    measRenderHistory();
+  }
+  if (d.currentMeasurement) measSetCurrent(d.currentMeasurement);
   updateGroundLen();
   updatePipeLenOpt();
 }
@@ -1771,6 +1829,266 @@ function updateProjectSummary() {
     updateGroundLen();
   }
 })();
+
+// ══════════════════════════════════════
+//  測量タブ
+// ══════════════════════════════════════
+let measurementHistory = [];
+let measTpRows = [{name:'TP1',dist:'',deg:'',min:'',sec:'',memo:''}];
+let measKpRows = [
+  {name:'KP1',role:'1F',dist:'',deg:'',min:'',sec:'',memo:''},
+  {name:'KP2',role:'1R',dist:'',deg:'',min:'',sec:'',memo:''},
+  {name:'KP3',role:'2F',dist:'',deg:'',min:'',sec:'',memo:''},
+  {name:'KP4',role:'2R',dist:'',deg:'',min:'',sec:'',memo:''},
+];
+
+function measUpdateTol() {
+  const dia = parseFloat(document.getElementById('measPipeDia').value) || 800;
+  const warn = dia <= 700 ? 50 : dia <= 1200 ? 100 : 150;
+  const ok = Math.round(warn * 0.8);
+  document.getElementById('measTolWarn').value = warn;
+  document.getElementById('measTolOk').value = ok;
+  measAutoSave();
+}
+
+function measAutoSave() {
+  try { localStorage.setItem('curvedJackingProjectDraft', JSON.stringify(getProjectData())); } catch(e) {}
+}
+
+function measGetCurrent() {
+  return {
+    measureDate: v('measDate'), pipeCount: v('measPipeCount'),
+    instX: n('measInstX'), instY: n('measInstY'),
+    bsX: n('measBsX'), bsY: n('measBsY'),
+    pipeDiaMm: n('measPipeDia'),
+    tpRows: measReadTpRows(), kpRows: measReadKpRows()
+  };
+}
+
+function measSetCurrent(c) {
+  if (!c) return;
+  if (c.measureDate) setV('measDate', c.measureDate);
+  if (c.pipeCount != null) setV('measPipeCount', c.pipeCount);
+  if (c.instX != null) setV('measInstX', c.instX);
+  if (c.instY != null) setV('measInstY', c.instY);
+  if (c.bsX != null) setV('measBsX', c.bsX);
+  if (c.bsY != null) setV('measBsY', c.bsY);
+  if (c.pipeDiaMm != null) setV('measPipeDia', c.pipeDiaMm);
+  if (Array.isArray(c.tpRows)) measTpRows = c.tpRows;
+  if (Array.isArray(c.kpRows)) measKpRows = c.kpRows;
+  measRenderTpTable(); measRenderKpTable(); measUpdateTol();
+}
+
+// ─── TP テーブル ───
+function measRenderTpTable() {
+  const el = document.getElementById('tpTableDiv');
+  if (!el) return;
+  if (!measTpRows.length) { el.innerHTML = '<div class="note-box">TP点なし（器械から直接KPを観測）</div>'; return; }
+  el.innerHTML = `<table style="width:100%;font-size:13px;border-collapse:collapse">
+    <thead><tr style="background:var(--line)">
+      <th style="padding:4px;text-align:left">名称</th><th>距離(m)</th><th>度</th><th>分</th><th>秒</th><th>備考</th><th></th>
+    </tr></thead><tbody>` +
+    measTpRows.map((r,i) => `<tr style="background:${i%2?'transparent':'rgba(59,130,246,.07)'}">
+      <td><input style="width:48px;font-size:12px" value="${r.name||''}" oninput="measTpRows[${i}].name=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:60px" type="number" step="0.001" value="${r.dist||''}" oninput="measTpRows[${i}].dist=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:40px" type="number" step="1" value="${r.deg||''}" oninput="measTpRows[${i}].deg=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:36px" type="number" step="1" max="59" value="${r.min||''}" oninput="measTpRows[${i}].min=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:36px" type="number" step="1" max="59" value="${r.sec||''}" oninput="measTpRows[${i}].sec=this.value;measAutoSave()"></td>
+      <td><input style="width:64px;font-size:12px" value="${r.memo||''}" oninput="measTpRows[${i}].memo=this.value;measAutoSave()"></td>
+      <td><button style="border:0;background:transparent;color:var(--ng);font-size:16px;cursor:pointer" onclick="measRemoveTp(${i})">✕</button></td>
+    </tr>`).join('') +
+    '</tbody></table>';
+}
+
+function measReadTpRows() {
+  return measTpRows.map(r => ({...r}));
+}
+
+function measAddTp() {
+  const n2 = measTpRows.length + 1;
+  measTpRows.push({name:`TP${n2}`,dist:'',deg:'',min:'',sec:'',memo:''});
+  measRenderTpTable();
+}
+
+function measRemoveTp(i) {
+  measTpRows.splice(i,1);
+  measRenderTpTable();
+}
+
+// ─── KP テーブル ───
+const KP_ROLES = ['','1F','1R','2F','2R'];
+
+function measRenderKpTable() {
+  const el = document.getElementById('kpTableDiv');
+  if (!el) return;
+  if (!measKpRows.length) { el.innerHTML = '<div class="note-box">KP点なし</div>'; return; }
+  el.innerHTML = `<table style="width:100%;font-size:13px;border-collapse:collapse">
+    <thead><tr style="background:var(--line)">
+      <th style="padding:4px;text-align:left">名称</th><th>役割</th><th>距離(m)</th><th>度</th><th>分</th><th>秒</th><th>備考</th><th></th>
+    </tr></thead><tbody>` +
+    measKpRows.map((r,i) => `<tr style="background:${i%2?'transparent':'rgba(239,68,68,.06)'}">
+      <td><input style="width:44px;font-size:12px" value="${r.name||''}" oninput="measKpRows[${i}].name=this.value;measAutoSave()"></td>
+      <td><select style="font-size:12px" onchange="measKpRows[${i}].role=this.value;measAutoSave()">${KP_ROLES.map(ro=>`<option${ro===r.role?' selected':''}>${ro}</option>`).join('')}</select></td>
+      <td><input class="mono" style="width:60px" type="number" step="0.001" value="${r.dist||''}" oninput="measKpRows[${i}].dist=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:40px" type="number" step="1" value="${r.deg||''}" oninput="measKpRows[${i}].deg=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:36px" type="number" step="1" max="59" value="${r.min||''}" oninput="measKpRows[${i}].min=this.value;measAutoSave()"></td>
+      <td><input class="mono" style="width:36px" type="number" step="1" max="59" value="${r.sec||''}" oninput="measKpRows[${i}].sec=this.value;measAutoSave()"></td>
+      <td><input style="width:56px;font-size:12px" value="${r.memo||''}" oninput="measKpRows[${i}].memo=this.value;measAutoSave()"></td>
+      <td><button style="border:0;background:transparent;color:var(--ng);font-size:16px;cursor:pointer" onclick="measRemoveKp(${i})">✕</button></td>
+    </tr>`).join('') +
+    '</tbody></table>';
+}
+
+function measReadKpRows() {
+  return measKpRows.map(r => ({...r}));
+}
+
+function measAddKp() {
+  const n2 = measKpRows.length + 1;
+  measKpRows.push({name:`KP${n2}`,role:'',dist:'',deg:'',min:'',sec:'',memo:''});
+  measRenderKpTable();
+}
+
+function measRemoveKp(i) {
+  measKpRows.splice(i,1);
+  measRenderKpTable();
+}
+
+// ─── 座標計算 ───
+function dmsDeg(d,m,s){ return (+d||0)+(+m||0)/60+(+s||0)/3600; }
+function measAzBetween(a,b){ return Math.atan2(b.y-a.y, b.x-a.x); }
+function measPtFrom(a,az,d){ return {x:a.x+d*Math.cos(az), y:a.y+d*Math.sin(az)}; }
+function degFmt(r){ let d=r*180/Math.PI; while(d<0)d+=360; while(d>=360)d-=360; return d.toFixed(4)+'°'; }
+
+function measCalcCoords(data) {
+  const inst = {x:+(data.instX||0), y:+(data.instY||0)};
+  const bs   = {x:+(data.bsX||10),  y:+(data.bsY||0)};
+  let cur = {...inst}, prev = {...bs};
+  const tps = [];
+  (data.tpRows||[]).forEach((r,i) => {
+    const dist = parseFloat(r.dist);
+    if (!isFinite(dist)||dist===0) return;
+    const ang = dmsDeg(r.deg,r.min,r.sec)*Math.PI/180;
+    const bsAz = measAzBetween(cur,prev);
+    const fwAz = bsAz + ang;
+    const p = measPtFrom(cur, fwAz, dist);
+    tps.push({...p, name:r.name||`TP${i+1}`, dist, fwAz});
+    prev = cur; cur = p;
+  });
+  const station  = tps.length ? tps[tps.length-1] : inst;
+  const back     = tps.length>=2 ? tps[tps.length-2] : (tps.length===1?inst:bs);
+  const stBsAz   = measAzBetween(station, back);
+  const kps = [];
+  (data.kpRows||[]).forEach((r,i) => {
+    const dist = parseFloat(r.dist);
+    if (!isFinite(dist)||dist===0) return;
+    const ang = dmsDeg(r.deg,r.min,r.sec)*Math.PI/180;
+    const fwAz = stBsAz + ang;
+    const p = measPtFrom(station, fwAz, dist);
+    kps.push({...p, name:r.name||`KP${i+1}`, role:r.role||'', dist, fwAz});
+  });
+  return {tps, kps};
+}
+
+function measCalc() {
+  const data = measGetCurrent();
+  const {tps, kps} = measCalcCoords(data);
+  const el = document.getElementById('measCalcResult');
+  if (!tps.length && !kps.length) { el.innerHTML = '<div class="ng-box">入力データがありません</div>'; return; }
+
+  // 管中心計算: 1F+1R / 2F+2R ペア
+  const roles = {};
+  kps.forEach(k => { if(k.role) roles[k.role] = k; });
+  const centers = [];
+  [['1F','1R','管1'],['2F','2R','管2']].forEach(([f,r,label]) => {
+    if (roles[f] && roles[r]) {
+      const cx = (roles[f].x+roles[r].x)/2, cy = (roles[f].y+roles[r].y)/2;
+      centers.push({label, x:cx, y:cy});
+    }
+  });
+
+  const fmt = x => x.toFixed(4);
+  let html = '';
+  if (tps.length) {
+    html += `<div style="font-size:12px;font-weight:bold;margin-bottom:4px">TP点座標</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+    <thead><tr style="background:rgba(59,130,246,.1)"><th style="padding:3px">名称</th><th>X</th><th>Y</th><th>距離</th><th>方向角</th></tr></thead><tbody>` +
+    tps.map(t=>`<tr><td style="font-weight:bold;padding:2px 4px">${t.name}</td><td class="mono">${fmt(t.x)}</td><td class="mono">${fmt(t.y)}</td><td class="mono">${t.dist.toFixed(3)}</td><td class="mono">${degFmt(t.fwAz)}</td></tr>`).join('') +
+    '</tbody></table></div>';
+  }
+  if (kps.length) {
+    html += `<div style="font-size:12px;font-weight:bold;margin:8px 0 4px">KP点座標</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+    <thead><tr style="background:rgba(239,68,68,.08)"><th style="padding:3px">名称</th><th>役割</th><th>X</th><th>Y</th></tr></thead><tbody>` +
+    kps.map(k=>`<tr><td style="font-weight:bold;padding:2px 4px">${k.name}</td><td>${k.role||'—'}</td><td class="mono">${fmt(k.x)}</td><td class="mono">${fmt(k.y)}</td></tr>`).join('') +
+    '</tbody></table></div>';
+  }
+  if (centers.length) {
+    html += `<div style="font-size:12px;font-weight:bold;margin:8px 0 4px">管中心座標（1F+1R, 2F+2R 平均）</div>
+    <div style="overflow-x:auto"><table style="width:100%;font-size:12px;border-collapse:collapse">
+    <thead><tr style="background:rgba(22,163,74,.1)"><th style="padding:3px">管</th><th>中心X</th><th>中心Y</th></tr></thead><tbody>` +
+    centers.map(c=>`<tr><td style="font-weight:bold;padding:2px 4px">${c.label}</td><td class="mono">${fmt(c.x)}</td><td class="mono">${fmt(c.y)}</td></tr>`).join('') +
+    '</tbody></table></div>';
+  }
+  el.innerHTML = html || '<div class="note-box">計算結果なし</div>';
+}
+
+// ─── 保存・履歴 ───
+function measSave() {
+  const data = measGetCurrent();
+  data.updatedAt = new Date().toISOString();
+  measurementHistory.push(data);
+  measRenderHistory();
+  measAutoSave();
+  showToast('測量データを保存しました（' + (data.measureDate||'日付なし') + '）');
+}
+
+function measRenderHistory() {
+  const el = document.getElementById('measHistoryDiv');
+  if (!el) return;
+  if (!measurementHistory.length) { el.innerHTML = '<div class="note-box">保存済み測量データはありません</div>'; return; }
+  el.innerHTML = [...measurementHistory].reverse().map((h,ri) => {
+    const i = measurementHistory.length - 1 - ri;
+    const tpCount = (h.tpRows||[]).filter(r=>r.dist).length;
+    const kpCount = (h.kpRows||[]).filter(r=>r.dist).length;
+    return `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <b>${h.measureDate||'日付なし'}</b>
+          <span style="font-size:12px;color:var(--sub);margin-left:8px">${h.pipeCount||'?'}本推進</span>
+          <span style="font-size:12px;color:var(--sub);margin-left:8px">TP${tpCount} / KP${kpCount}</span>
+        </div>
+        <div>
+          <button class="big-btn secondary" style="font-size:11px;padding:4px 8px;min-height:28px" onclick="measLoadHistory(${i})">読込</button>
+          <button class="big-btn warn" style="font-size:11px;padding:4px 8px;min-height:28px" onclick="measDeleteHistory(${i})">削除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function measLoadHistory(i) {
+  const h = measurementHistory[i];
+  if (!h) return;
+  measSetCurrent(h);
+  showPage(4);
+  showToast('測量データを読み込みました: ' + (h.measureDate||'—'));
+}
+
+function measDeleteHistory(i) {
+  if (!confirm('この測量データを削除しますか？')) return;
+  measurementHistory.splice(i,1);
+  measRenderHistory();
+  measAutoSave();
+}
+
+// 初期化
+document.addEventListener('DOMContentLoaded', () => {
+  measUpdateTol();
+  measRenderTpTable();
+  measRenderKpTable();
+  document.getElementById('measDate').value = new Date().toISOString().slice(0,10);
+});
 </script>
 </body>
 </html>
