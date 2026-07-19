@@ -1,7 +1,7 @@
 {
-  "name": "M_APP_001 オフライン現場アプリ",
-  "short_name": "M_APP_001",
-  "description": "曲線推進管理システム Vr015 のスマホ・オフライン運用版",
+  "name": "M_APP_005 推進力設計計算",
+  "short_name": "M_APP_005",
+  "description": "JPTA準拠 推進工設計計算ツール（推進力・支圧壁・立坑・測量誤差判定）のオフライン運用版",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -15,26 +15,26 @@
   --blue:#0055a4;--blue2:#1d6fd8;--navy:#003366;
   --ok:#17803d;--warn:#b45309;--ng:#b91c1c;
   --bg:#f4f6f8;--card:#fff;--line:#dde3ec;--text:#1f2937;--sub:#64748b;
-  --tab-h:62px;--tab-bg:#fff;--safe-b:env(safe-area-inset-bottom,0px);
-  --accent:#c9641a;
+  --tab-h:62px;--tab-bg:#fff;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+  --accent:#c9641a;--row-curve-bg:#fef9eb;
 }
 @media(prefers-color-scheme:dark){
-  :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--text:#e2e8f0;--sub:#94a3b8;--tab-bg:#1e293b}
+  :root{--bg:#0f172a;--card:#1e293b;--line:#334155;--text:#e2e8f0;--sub:#94a3b8;--tab-bg:#1e293b;--row-curve-bg:#4a3c12}
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden}
 body{font-family:Meiryo,"Yu Gothic UI","Hiragino Sans",sans-serif;background:var(--bg);color:var(--text);font-size:14px;display:flex;flex-direction:column}
-#appHeader{background:var(--navy);color:#fff;padding:10px 14px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:50px}
+#appHeader{background:var(--navy);color:#fff;padding:calc(10px + var(--safe-t)) 14px 8px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;min-height:50px}
 #appHeader h1{font-size:16px;font-weight:bold;margin:0;line-height:1.2}
 #appHeader .badge{font-size:10px;background:rgba(255,255,255,.18);border-radius:4px;padding:2px 6px;margin-top:3px}
-.hdr-actions{display:flex;gap:6px}
-.hdr-btn{background:rgba(255,255,255,.15);border:0;color:#fff;border-radius:7px;padding:7px 10px;font-size:13px;font-weight:bold;cursor:pointer}
 #pageArea{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--tab-h) + var(--safe-b) + 8px)}
-#tabBar{position:fixed;bottom:0;left:0;right:0;background:var(--tab-bg);border-top:1px solid var(--line);display:flex;z-index:100;padding-bottom:var(--safe-b);height:calc(var(--tab-h) + var(--safe-b));box-shadow:0 -2px 12px rgba(0,0,0,.08)}
-.tab-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;border:0;background:transparent;color:var(--sub);padding:4px 2px;transition:color .15s}
+#tabBar{position:fixed;bottom:0;left:0;right:0;background:var(--tab-bg);border-top:1px solid var(--line);display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;z-index:100;padding-bottom:var(--safe-b);height:calc(var(--tab-h) + var(--safe-b));box-shadow:0 -2px 12px rgba(0,0,0,.08);cursor:grab;user-select:none}
+#tabBar.dragging{cursor:grabbing;scroll-snap-type:none}
+#tabBar::-webkit-scrollbar{display:none}
+.tab-item{flex:0 0 auto;min-width:88px;scroll-snap-align:start;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;border:0;background:transparent;color:var(--sub);padding:6px 12px;transition:color .15s}
 .tab-item.active{color:var(--blue2)}
-.tab-item .tab-icon{font-size:20px;line-height:1}
-.tab-item .tab-label{font-size:10px;font-weight:bold}
+.tab-item .tab-icon{font-size:27px;line-height:1}
+.tab-item .tab-label{font-size:12px;font-weight:bold;white-space:nowrap}
 .page{display:none;padding:10px 12px}
 .page.active{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 2px 8px rgba(0,0,0,.05)}
@@ -55,6 +55,10 @@ body{font-family:Meiryo,"Yu Gothic UI","Hiragino Sans",sans-serif;background:var
 .big-btn.ok{background:var(--ok)}
 .big-btn.secondary{background:var(--sub)}
 .big-btn.warn{background:var(--warn)}
+.icon-action-btn{flex:1;display:flex;align-items:center;justify-content:center;min-height:64px;border:0;border-radius:12px;font-size:32px;cursor:pointer;background:var(--blue2);color:#fff;transition:opacity .15s,transform .1s}
+.icon-action-btn:active{opacity:.8;transform:scale(.98)}
+.icon-action-btn.ok{background:var(--ok)}
+.icon-action-btn.secondary{background:var(--sub)}
 .method-chips{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
 .method-chip{border:2px solid var(--line);border-radius:10px;padding:10px 8px;text-align:center;cursor:pointer;background:var(--card);transition:all .15s}
 .method-chip.active{border-color:var(--blue2);background:#eff6ff;color:var(--blue2)}
@@ -89,16 +93,25 @@ td.left{text-align:left}
 .mode-btn.active{border-color:var(--blue2);background:#eff6ff;color:var(--blue2)}
 #toast{position:fixed;bottom:calc(var(--tab-h) + var(--safe-b) + 12px);left:50%;transform:translateX(-50%) translateY(20px);background:#1f2937;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:bold;opacity:0;transition:all .3s;z-index:200;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-tr.row-curve{background:#fef9eb}
+tr.row-curve{background:var(--row-curve-bg)}
 tr.row-ok td{color:var(--ok)}
 tr.row-ng td{color:var(--ng)}
 .curve-block{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin:8px 0}
 .curve-block-title{font-size:13px;font-weight:bold;color:var(--navy);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 .del-btn{background:var(--ng);color:#fff;border:0;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+.kpcard{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--bg);margin:8px 0}
+.kpcard .name{font-size:14px;font-weight:bold}
+.kpcard .big{font-size:22px;font-weight:bold;margin:0;text-align:right;white-space:nowrap}
+.kpcard .line{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:2px 0}
+.kpcard .sub{font-size:12px;color:var(--sub);line-height:1.35}
+.kpcard.ok{background:#f0fdf4;border-color:#86efac}
+.kpcard.warn{background:#fffbeb;border-color:#fcd34d}
+.kpcard.ng{background:#fef2f2;border-color:#fecaca}
 @media(min-width:640px){
   #pageArea{padding:14px 20px calc(var(--tab-h) + var(--safe-b) + 12px)}
   .page{max-width:720px;margin:0 auto}
   .metrics-grid{grid-template-columns:repeat(4,1fr)}
+  #tabBar{justify-content:center}
 }
 </style>
 </head>
@@ -109,17 +122,37 @@ tr.row-ng td{color:var(--ng)}
     <h1>推進力設計計算</h1>
     <div class="badge">MYcurve M_APP_005 — JPTA準拠</div>
   </div>
-  <div class="hdr-actions">
-    <button class="hdr-btn" onclick="saveJSON()">💾保存</button>
-    <button class="hdr-btn" onclick="document.getElementById('fileInput').click()">📂読込</button>
-    <input id="fileInput" type="file" accept=".json" style="display:none" onchange="onFileLoad(this)">
-  </div>
+  <input id="fileInput" type="file" accept=".json" style="display:none" onchange="onFileLoad(this)">
 </header>
 
 <div id="pageArea">
 
-<!-- ═══ TAB 0: 基本情報 ═══ -->
-<section class="page active" id="p0">
+<!-- ═══ TAB 0: 入出力 ═══ -->
+<section class="page active" id="p4">
+
+  <div class="card">
+    <div class="card-title">💾 データ保存・読込</div>
+    <div style="display:flex;gap:10px">
+      <button class="icon-action-btn ok" onclick="saveJSON()" aria-label="JSONファイルを保存">💾</button>
+      <button class="icon-action-btn secondary" onclick="document.getElementById('fileInput').click()" aria-label="JSONファイルを読込">📂</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 現在のプロジェクト情報</div>
+    <div id="projectSummary" class="note-box">まだデータが入力されていません。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔄 データ初期化</div>
+    <button class="big-btn warn" onclick="resetData()"><span style="font-size:20px">🗑️</span>全データをリセット</button>
+    <div class="ng-box" style="font-size:11px">リセットするとすべての入力データが消去されます。事前にJSON保存を推奨します。</div>
+  </div>
+
+</section>
+
+<!-- ═══ TAB 1: 基本情報 ═══ -->
+<section class="page" id="p0">
 
   <div class="card">
     <div class="card-title">📋 現場情報</div>
@@ -325,7 +358,7 @@ tr.row-ng td{color:var(--ng)}
 
 </section>
 
-<!-- ═══ TAB 1: 立坑 ═══ -->
+<!-- ═══ TAB 2: 立坑 ═══ -->
 <section class="page" id="p1">
 
   <div class="card">
@@ -444,7 +477,7 @@ tr.row-ng td{color:var(--ng)}
 
 </section>
 
-<!-- ═══ TAB 2: 推進力計算 ═══ -->
+<!-- ═══ TAB 3: 推進力計算 ═══ -->
 <section class="page" id="p2">
 
   <button class="big-btn ok" onclick="calculate()">
@@ -484,7 +517,7 @@ tr.row-ng td{color:var(--ng)}
 
 </section>
 
-<!-- ═══ TAB 3: 支圧壁 ═══ -->
+<!-- ═══ TAB 4: 支圧壁 ═══ -->
 <section class="page" id="p3">
 
   <div class="card">
@@ -528,25 +561,65 @@ tr.row-ng td{color:var(--ng)}
 
 </section>
 
-<!-- ═══ TAB 4: 出力 ═══ -->
-<section class="page" id="p4">
+
+<!-- ═══ TAB 5: 測量（実測値と設計値の誤差判定） ═══ -->
+<section class="page" id="p5">
 
   <div class="card">
-    <div class="card-title">💾 データ保存・読込</div>
-    <button class="big-btn ok" onclick="saveJSON()"><span style="font-size:20px">💾</span>JSONファイルを保存</button>
-    <button class="big-btn secondary" onclick="document.getElementById('fileInput').click()"><span style="font-size:20px">📂</span>JSONファイルを読込</button>
-    <div class="note-box" style="margin-top:8px">JSON形式でデータを保存・共有できます。メールやDropboxで現場⇔事務所間のデータ共有に利用できます。</div>
+    <div class="card-title">📐 測量基準設定</div>
+    <div class="note-box">「基本情報」タブで入力した曲線・線形（BP〜EP）を設計値として、器械点からの実測（距離・角度）が設計線からどれだけずれているかを判定します。</div>
+    <div id="surveyDesignInfo" class="ok-box" style="margin-top:8px">—</div>
+    <div class="field-row"><label>基準方位角（自動計算・下の器械点/後視点座標から算出）</label>
+      <span id="surveyBaseAzDisplay" class="mono" style="padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);display:inline-block;user-select:all">—</span>
+      <input type="hidden" id="surveyBaseAz" value="0">
+    </div>
+    <div class="two-col">
+      <div class="field-row"><label>NG判定しきい値 [mm]（規格値）</label><input id="tolWarn" class="mono" type="number" value="100" readonly><span class="unit">mm</span></div>
+      <div class="field-row"><label>注意判定しきい値 [mm]（社内管理値）</label><input id="tolOk" class="mono" type="number" value="80" readonly><span class="unit">mm</span></div>
+    </div>
+    <div class="field-row"><label>社内管理値の割合（規格値に対する%）</label><input id="internalPct" class="mono" type="number" step="5" value="80" oninput="onSurveyRowChange()"><span class="unit">%</span></div>
   </div>
 
   <div class="card">
-    <div class="card-title">📋 現在のプロジェクト情報</div>
-    <div id="projectSummary" class="note-box">まだデータが入力されていません。</div>
+    <div class="card-title">📍 器械点・後視点</div>
+    <div class="note-box">既定では発進坑口（BP=0,0）に器械を据え、10m先（10,0）に後視点があるものとして計算します。実際の据付位置・後視方向が異なる場合はここで座標を上書きしてください。基準方位角はこの2点から自動計算されます。</div>
+    <div class="two-col">
+      <div class="field-row"><label>器械点 X [m]</label><input id="surveyInstX" class="mono" type="number" step="0.001" value="0" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+      <div class="field-row"><label>器械点 Y [m]</label><input id="surveyInstY" class="mono" type="number" step="0.001" value="0" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+    </div>
+    <div class="two-col">
+      <div class="field-row"><label>後視点 X [m]</label><input id="surveyBsX" class="mono" type="number" step="0.001" value="10" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+      <div class="field-row"><label>後視点 Y [m]</label><input id="surveyBsY" class="mono" type="number" step="0.001" value="0" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+    </div>
   </div>
 
   <div class="card">
-    <div class="card-title">🔄 データ初期化</div>
-    <button class="big-btn warn" onclick="resetData()"><span style="font-size:20px">🗑️</span>全データをリセット</button>
-    <div class="ng-box" style="font-size:11px">リセットするとすべての入力データが消去されます。事前にJSON保存を推奨します。</div>
+    <div class="card-title">🧭 TP（多角点）</div>
+    <div class="note-box">器械点を移動させた場合の中継点です。前の点からの距離・角度を入力してください（不要なら追加しなくて構いません）。</div>
+    <div id="tpList"></div>
+    <button class="big-btn secondary" onclick="addTpRow()">＋ TPを追加</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📌 KP（測定点）</div>
+    <div class="note-box">実際に測定した管内の点です。基準点（最後のTP、無ければ器械点）からの距離・角度を入力してください。</div>
+    <div id="kpList"></div>
+    <button class="big-btn secondary" onclick="addKpRow()">＋ KPを追加</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔍 ひと目で分かる判定</div>
+    <div id="surveySummaryCards"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📊 計算結果一覧</div>
+    <div id="surveyResultTable"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧮 計算式・途中経過（曲線区間のみ）</div>
+    <div id="surveyCalcProcess"></div>
   </div>
 
 </section>
@@ -555,11 +628,12 @@ tr.row-ng td{color:var(--ng)}
 
 <!-- タブバー -->
 <nav id="tabBar">
-  <button class="tab-item active" onclick="showPage(0)"><span class="tab-icon">📋</span><span class="tab-label">基本情報</span></button>
-  <button class="tab-item" onclick="showPage(1)"><span class="tab-icon">🏗️</span><span class="tab-label">立坑</span></button>
-  <button class="tab-item" onclick="showPage(2)"><span class="tab-icon">⚡</span><span class="tab-label">推進力</span></button>
-  <button class="tab-item" onclick="showPage(3)"><span class="tab-icon">🧱</span><span class="tab-label">支圧壁</span></button>
-  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">💾</span><span class="tab-label">出力</span></button>
+  <button class="tab-item active" onclick="showPage(0)"><span class="tab-icon">💾</span><span class="tab-label">入出力</span></button>
+  <button class="tab-item" onclick="showPage(1)"><span class="tab-icon">📋</span><span class="tab-label">基本情報</span></button>
+  <button class="tab-item" onclick="showPage(2)"><span class="tab-icon">🏗️</span><span class="tab-label">立坑</span></button>
+  <button class="tab-item" onclick="showPage(3)"><span class="tab-icon">⚡</span><span class="tab-label">推進力</span></button>
+  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">🧱</span><span class="tab-label">支圧壁</span></button>
+  <button class="tab-item" onclick="showPage(5)"><span class="tab-icon">📐</span><span class="tab-label">測量</span></button>
 </nav>
 
 <div id="toast"></div>
@@ -584,10 +658,49 @@ function showToast(msg, dur=2200) {
 
 function showPage(idx) {
   document.querySelectorAll('.page').forEach((p,i) => p.classList.toggle('active', i===idx));
-  document.querySelectorAll('.tab-item').forEach((t,i) => t.classList.toggle('active', i===idx));
-  if (idx === 1) updateGroundLen();
-  if (idx === 4) updateProjectSummary();
+  document.querySelectorAll('.tab-item').forEach((t,i) => {
+    t.classList.toggle('active', i===idx);
+    if (i === idx) t.scrollIntoView({behavior:'auto', inline:'center', block:'nearest'});
+  });
+  if (idx === 0) updateProjectSummary();
+  if (idx === 2) updateGroundLen();
+  if (idx === 5) { calcSurveyBaseAz(); calcSurvey(); }
 }
+
+// タブバー：マウス操作での横スクロール対応（スマホのスワイプに相当）
+// ホイール縦回転を横スクロールに変換 + ドラッグでのパン操作
+(function setupTabBarMouseScroll() {
+  const bar = document.getElementById('tabBar');
+  if (!bar) return;
+  bar.addEventListener('wheel', (e) => {
+    if (bar.scrollWidth <= bar.clientWidth) return;
+    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    if (!delta) return;
+    bar.scrollLeft += delta;
+    e.preventDefault();
+  }, { passive: false });
+
+  let dragging = false, dragged = false, startX = 0, startScroll = 0;
+  bar.addEventListener('mousedown', (e) => {
+    dragging = true; dragged = false;
+    startX = e.clientX; startScroll = bar.scrollLeft;
+    bar.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX;
+    if (Math.abs(dx) > 4) dragged = true;
+    bar.scrollLeft = startScroll - dx;
+  });
+  window.addEventListener('mouseup', () => {
+    dragging = false;
+    bar.classList.remove('dragging');
+  });
+  // ドラッグ操作の直後はタブ切替のクリックとして扱わない
+  bar.addEventListener('click', (e) => {
+    if (dragged) { e.stopPropagation(); e.preventDefault(); dragged = false; }
+  }, true);
+})();
 
 // ══════════════════════════════════════
 //  推進工法選択
@@ -939,6 +1052,7 @@ function calcAlignment() {
   curves.forEach(c => updateCurveJoint(c.id));
   updatePipeLenOpt();
   updateGroundLen();
+  if (typeof calcSurvey === 'function') calcSurvey();
   autoSave();
 }
 
@@ -947,6 +1061,323 @@ function getCurves() {
     R: c.R, dir: c.dir, CL: c.CL, cushion: c.cushion,
     deg: c.deg, min: c.min, sec: c.sec, L: c.L
   }));
+}
+
+// ══════════════════════════════════════
+//  測量：実測値と設計値の誤差判定
+// ══════════════════════════════════════
+let tpRows = [];
+let kpRows = [];
+let surveyRowCounter = 0;
+let surveyGeom = null;
+let surveyResults = [];
+
+function fmt(x, d=3) { return (Number.isFinite(+x) ? +x : 0).toFixed(d); }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function dmsToDeg(d, m, s) { return (+d||0) + (+m||0)/60 + (+s||0)/3600; }
+function degToRad(d) { return d * Math.PI / 180; }
+function radToDeg(r) { let d = r*180/Math.PI; while(d<0) d+=360; while(d>=360) d-=360; return d; }
+function azBetween(a, b) { return Math.atan2(b.y-a.y, b.x-a.x); }
+function ptFrom(a, az, d) { return {x:a.x+d*Math.cos(az), y:a.y+d*Math.sin(az)}; }
+
+function addTpRow() {
+  const id = ++surveyRowCounter;
+  tpRows.push({id, dist:0, deg:0, min:0, sec:0, memo:''});
+  renderSurveyRows();
+  calcSurvey();
+  autoSave();
+}
+function removeTpRow(id) {
+  tpRows = tpRows.filter(r => r.id !== id);
+  renderSurveyRows();
+  calcSurvey();
+  autoSave();
+}
+function addKpRow() {
+  const id = ++surveyRowCounter;
+  kpRows.push({id, role:'', dist:0, deg:0, min:0, sec:0, memo:''});
+  renderSurveyRows();
+  calcSurvey();
+  autoSave();
+}
+function removeKpRow(id) {
+  kpRows = kpRows.filter(r => r.id !== id);
+  renderSurveyRows();
+  calcSurvey();
+  autoSave();
+}
+
+function renderSurveyRows() {
+  const tpEl = document.getElementById('tpList');
+  tpEl.innerHTML = tpRows.length ? tpRows.map((r,i) => `
+    <div class="curve-block">
+      <div class="curve-block-title">
+        <span>TP${i+1}</span>
+        <button class="del-btn" onclick="removeTpRow(${r.id})">削除</button>
+      </div>
+      <div class="field-row"><label>距離 [m]</label><input id="tpDist_${r.id}" class="mono" type="number" step="0.001" value="${r.dist}" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+      <div class="three-col">
+        <div class="field-row"><label>度</label><input id="tpDeg_${r.id}" class="mono" type="number" step="1" value="${r.deg}" oninput="onSurveyRowChange()"><span class="unit">°</span></div>
+        <div class="field-row"><label>分</label><input id="tpMin_${r.id}" class="mono" type="number" step="1" value="${r.min}" oninput="onSurveyRowChange()"><span class="unit">′</span></div>
+        <div class="field-row"><label>秒</label><input id="tpSec_${r.id}" class="mono" type="number" step="1" value="${r.sec}" oninput="onSurveyRowChange()"><span class="unit">″</span></div>
+      </div>
+      <div class="field-row"><label>メモ（任意）</label><input id="tpMemo_${r.id}" type="text" value="${esc(r.memo||'')}" oninput="onSurveyRowChange()"></div>
+    </div>
+  `).join('') : '<div class="note-box" style="margin:6px 0">TP（多角点）はありません</div>';
+
+  const kpEl = document.getElementById('kpList');
+  kpEl.innerHTML = kpRows.length ? kpRows.map((r,i) => `
+    <div class="curve-block">
+      <div class="curve-block-title">
+        <span>KP${i+1}</span>
+        <button class="del-btn" onclick="removeKpRow(${r.id})">削除</button>
+      </div>
+      <div class="field-row"><label>役割（任意）</label><input id="kpRole_${r.id}" type="text" placeholder="例: 管底" value="${esc(r.role||'')}" oninput="onSurveyRowChange()"></div>
+      <div class="field-row"><label>距離 [m]</label><input id="kpDist_${r.id}" class="mono" type="number" step="0.001" value="${r.dist}" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
+      <div class="three-col">
+        <div class="field-row"><label>度</label><input id="kpDeg_${r.id}" class="mono" type="number" step="1" value="${r.deg}" oninput="onSurveyRowChange()"><span class="unit">°</span></div>
+        <div class="field-row"><label>分</label><input id="kpMin_${r.id}" class="mono" type="number" step="1" value="${r.min}" oninput="onSurveyRowChange()"><span class="unit">′</span></div>
+        <div class="field-row"><label>秒</label><input id="kpSec_${r.id}" class="mono" type="number" step="1" value="${r.sec}" oninput="onSurveyRowChange()"><span class="unit">″</span></div>
+      </div>
+      <div class="field-row"><label>メモ（任意）</label><input id="kpMemo_${r.id}" type="text" value="${esc(r.memo||'')}" oninput="onSurveyRowChange()"></div>
+    </div>
+  `).join('') : '<div class="note-box" style="margin:6px 0">KP（測定点）はありません</div>';
+}
+
+// 器械点・後視点の座標から基準方位角を自動計算（00系 calcBaseAz() を移植）
+function calcSurveyBaseAz() {
+  const ox = n('surveyInstX'), oy = n('surveyInstY');
+  const bx = n('surveyBsX'), by = n('surveyBsY');
+  const el = document.getElementById('surveyBaseAzDisplay');
+  const hidden = document.getElementById('surveyBaseAz');
+  if (Math.hypot(bx - ox, by - oy) < 1e-9) {
+    if (el) el.innerHTML = '<span style="color:var(--danger,#b91c1c);font-weight:bold">⚠ 器械点と後視点が同一座標です</span>';
+    if (hidden) hidden.value = '0';
+    return;
+  }
+  let deg = Math.atan2(by - oy, bx - ox) * 180 / Math.PI;
+  while (deg < 0) deg += 360;
+  while (deg >= 360) deg -= 360;
+  if (hidden) hidden.value = fmt(deg, 3);
+  if (el) el.textContent = `${fmt(deg, 3)}°`;
+}
+
+function onSurveyRowChange() {
+  calcSurveyBaseAz();
+  tpRows.forEach(r => {
+    r.dist = parseFloat(document.getElementById('tpDist_'+r.id).value) || 0;
+    r.deg  = parseFloat(document.getElementById('tpDeg_'+r.id).value)  || 0;
+    r.min  = parseFloat(document.getElementById('tpMin_'+r.id).value)  || 0;
+    r.sec  = parseFloat(document.getElementById('tpSec_'+r.id).value)  || 0;
+    r.memo = document.getElementById('tpMemo_'+r.id).value || '';
+  });
+  kpRows.forEach(r => {
+    r.role = document.getElementById('kpRole_'+r.id).value || '';
+    r.dist = parseFloat(document.getElementById('kpDist_'+r.id).value) || 0;
+    r.deg  = parseFloat(document.getElementById('kpDeg_'+r.id).value)  || 0;
+    r.min  = parseFloat(document.getElementById('kpMin_'+r.id).value)  || 0;
+    r.sec  = parseFloat(document.getElementById('kpSec_'+r.id).value)  || 0;
+    r.memo = document.getElementById('kpMemo_'+r.id).value || '';
+  });
+  calcSurvey();
+  autoSave();
+}
+
+// 設計側（基本情報タブの曲線・線形データ）から座標geometryを構築
+function buildSurveyGeometry() {
+  const cvSrc = getCurves();
+  const L0 = n('seg_L0'), Lf = n('seg_Lf');
+  const baseAz = degToRad(n('surveyBaseAz') || 0);
+
+  if (!cvSrc.length) {
+    // 曲線なし＝BP→EPの直線一本（総延長=BP〜IP1距離+最終IP〜EP距離）
+    const bp = {name:'BP', x:0, y:0};
+    const totalLen = L0 + Lf;
+    const ep = ptFrom(bp, baseAz, totalLen);
+    return {
+      points: [bp, ep], curves: [],
+      sections: [{type:'直線', from:'BP', to:'EP', a:bp, b:ep, accStart:0, accEnd:totalLen, length:totalLen}],
+      totalDistance: totalLen
+    };
+  }
+
+  // curves[0].Lは常に0固定（未入力欄）のため、実際のBP〜IP1距離(seg_L0)で上書きする
+  const curvesForGeom = cvSrc.map((c,i) => i===0 ? {...c, L:L0} : c);
+  const pts = [], curveList = [], sections = [];
+  let x=0, y=0, az=baseAz, accum=0;
+  const bp = {name:'BP', x, y}; pts.push(bp);
+  let lineStart = bp;
+
+  curvesForGeom.forEach((cd, i) => {
+    const id = i+1, R = +cd.R||0, IA = degToRad(dmsToDeg(cd.deg, cd.min, cd.sec)), dir = cd.dir || 'R';
+    const L = +cd.L || 0;
+    if (!R) return;
+    const TL = R*Math.tan(IA/2), CL = R*IA, SL = R*(1/Math.cos(IA/2)-1);
+    const ip = {name:`IP${id}`, x:x+L*Math.cos(az), y:y+L*Math.sin(az)};
+    const bc = {name:`BC${id}`, x:ip.x-TL*Math.cos(az), y:ip.y-TL*Math.sin(az)};
+    const outAz = az + (dir==='R' ? IA : -IA);
+    const ec = {name:`EC${id}`, x:ip.x+TL*Math.cos(outAz), y:ip.y+TL*Math.sin(outAz)};
+    const roAz = az + (dir==='R' ? Math.PI/2 : -Math.PI/2);
+    const ro = {name:`RO${id}`, x:bc.x+R*Math.cos(roAz), y:bc.y+R*Math.sin(roAz)};
+    const straight = Math.hypot(bc.x-lineStart.x, bc.y-lineStart.y);
+    const startDist = accum+straight, endDist = startDist+CL;
+    sections.push({type:'直線', from:lineStart.name, to:`BC${id}`, a:{x:lineStart.x,y:lineStart.y}, b:{x:bc.x,y:bc.y}, accStart:accum, accEnd:startDist, length:straight});
+    sections.push({type:'曲線', curveId:id, from:`BC${id}`, to:`EC${id}`, accStart:startDist, accEnd:endDist, length:CL});
+    const c = {id, dir, R, IA, ia_deg:IA*180/Math.PI, TL, CL, SL, ip, bc, ec, ro, inAz:az, outAz, startDist, endDist};
+    curveList.push(c); pts.push(ip, bc, ec, ro);
+    x=ip.x; y=ip.y; az=outAz; accum=endDist; lineStart=ec;
+  });
+
+  const lastCurve = curveList[curveList.length-1];
+  const lastPoint = lastCurve ? lastCurve.ec : bp;
+  const ep = {name:'EP', x:(lastCurve?lastCurve.ip.x:x)+Lf*Math.cos(az), y:(lastCurve?lastCurve.ip.y:y)+Lf*Math.sin(az)};
+  const finalLen = Math.hypot(ep.x-lastPoint.x, ep.y-lastPoint.y);
+  sections.push({type:'直線', from:lastPoint.name, to:'EP', a:{x:lastPoint.x,y:lastPoint.y}, b:{x:ep.x,y:ep.y}, accStart:accum, accEnd:accum+finalLen, length:finalLen});
+  pts.push(ep);
+  return {points:pts, curves:curveList, sections, totalDistance:accum+finalLen};
+}
+
+function calculateSurveyTraverse() {
+  const inst = {name:'O', x:n('surveyInstX'), y:n('surveyInstY')};
+  const bs = {name:'BS', x:v('surveyBsX')===''?10:n('surveyBsX'), y:n('surveyBsY')};
+  let cur = {...inst}, prev = {...bs};
+  const tps = [];
+  tpRows.forEach((r,i) => {
+    const dist = r.dist, ang = dmsToDeg(r.deg, r.min, r.sec);
+    if (!dist) return;
+    const bsAz = azBetween(cur, prev), fwAz = bsAz + degToRad(ang);
+    const p = ptFrom(cur, fwAz, dist);
+    Object.assign(p, {name:`TP${i+1}`, kind:'TP', dist, angle:ang, fwAz:radToDeg(fwAz), memo:r.memo||''});
+    tps.push(p); prev = cur; cur = p;
+  });
+  const station = tps.length ? tps[tps.length-1] : inst;
+  const backsight = tps.length>=2 ? tps[tps.length-2] : (tps.length===1 ? inst : bs);
+  const bsAz = azBetween(station, backsight);
+  const kps = [];
+  kpRows.forEach((r,i) => {
+    const dist = r.dist, ang = dmsToDeg(r.deg, r.min, r.sec);
+    if (!dist) return;
+    const fwAz = bsAz + degToRad(ang);
+    const p = ptFrom(station, fwAz, dist);
+    Object.assign(p, {name:`KP${i+1}`, role:r.role||'', kind:'KP', dist, angle:ang, fwAz:radToDeg(fwAz), memo:r.memo||''});
+    kps.push(p);
+  });
+  return {tpPoints:tps, kpPoints:kps};
+}
+
+function specLimitByPipeDia(diaMm) { const d=+diaMm||0; if (d<=500) return 50; if (d>=1000) return 100; return d*0.10; }
+function updateSurveyTolerance() {
+  const dia = n('pipeDia') || 1350, pct = n('internalPct') || 80;
+  const spec = specLimitByPipeDia(dia), internal = spec*(pct/100);
+  setV('tolWarn', fmt(spec,1)); setV('tolOk', fmt(internal,1));
+}
+function rankText(mm) {
+  updateSurveyTolerance();
+  const ok = n('tolOk')||80, warn = n('tolWarn')||100;
+  return mm<=ok ? 'OK' : (mm<=warn ? '注意' : 'NG');
+}
+function rankClass(rank) { return rank==='OK' ? 'ok' : (rank==='注意' ? 'warn' : 'ng'); }
+
+function curveDelta(c, ang) {
+  const s = Math.atan2(c.bc.y-c.ro.y, c.bc.x-c.ro.x);
+  let d = ang - s;
+  if (c.dir==='R') { while(d<0) d+=Math.PI*2; while(d>Math.PI*2) d-=Math.PI*2; }
+  else { while(d>0) d-=Math.PI*2; while(d<-Math.PI*2) d+=Math.PI*2; }
+  return d;
+}
+function judgeStraight(p, sec) {
+  const ax=sec.a.x, ay=sec.a.y, bx=sec.b.x, by=sec.b.y;
+  const vx=bx-ax, vy=by-ay, len=Math.hypot(vx,vy)||1, ux=vx/len, uy=vy/len;
+  const wx=p.x-ax, wy=p.y-ay, proj=wx*ux+wy*uy, inside=proj>=0&&proj<=len;
+  const clamped=Math.max(0,Math.min(len,proj)), foot={x:ax+ux*clamped,y:ay+uy*clamped};
+  const ex=p.x-foot.x, ey=p.y-foot.y, signed=ux*ey-uy*ex, mm=Math.abs(signed)*1000;
+  return {type:'直線', sectionName:`${sec.from}〜${sec.to}`, foot, errorMm:mm, side:signed>0?'右':'左', priority:inside?1:9, remaining:Math.max(0,sec.accEnd-(sec.accStart+clamped))};
+}
+function judgeCurve(p, c) {
+  const dx=p.x-c.ro.x, dy=p.y-c.ro.y;
+  const dist=Math.hypot(dx,dy);
+  if (dist<=1e-9) {
+    return {type:'曲線', sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`, curve:c, foot:{x:p.x,y:p.y}, roDist:dist, radialMm:NaN, errorMm:Infinity, side:'判定不可', short:'判定不可', priority:99, dx, dy, azDeg:0, remaining:0};
+  }
+  const radial = dist-c.R;
+  const mm = Math.abs(radial*1000);
+  const ang = Math.atan2(dy,dx);
+  const azDeg = radToDeg(ang);
+  const delta = curveDelta(c, ang);
+  const inArc = Math.abs(delta) <= Math.abs(c.IA)+1e-7;
+  const ux=dx/dist, uy=dy/dist;
+  const foot = {x:p.x-radial*ux, y:p.y-radial*uy};
+  const checkDist = Math.hypot(foot.x-c.ro.x, foot.y-c.ro.y);
+  const checkErrorMm = (checkDist-c.R)*1000;
+  let dirText = '中心';
+  if (radial<0) dirText = c.dir==='L' ? '左' : '右';
+  if (radial>0) dirText = c.dir==='L' ? '右' : '左';
+  const insideOutside = radial<0 ? '内側' : radial>0 ? '外側' : '中心';
+  return {
+    type:'曲線', sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`, curve:c, foot,
+    roDist:dist, radialMm:radial*1000, errorMm:mm, side:`${dirText}${radial<0?'（内側）':radial>0?'（外側）':''}`,
+    short:`${dirText} ${fmt(mm,0)}`, priority: inArc?0:8,
+    dx, dy, azDeg, ux, uy, insideOutside, checkDist, checkErrorMm,
+    correctionX: foot.x-p.x, correctionY: foot.y-p.y,
+    remaining: Math.max(0, c.endDist-(c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA))))
+  };
+}
+function judgePoint(p) {
+  const cands = [];
+  (surveyGeom.sections||[]).filter(s=>s.type==='直線').forEach(s=>cands.push(judgeStraight(p,s)));
+  (surveyGeom.curves||[]).forEach(c=>cands.push(judgeCurve(p,c)));
+  cands.sort((a,b)=>a.priority-b.priority || a.errorMm-b.errorMm);
+  const r = cands[0] || {sectionName:'判定不可', errorMm:0, side:'-', foot:{x:p.x,y:p.y}};
+  const rank = rankText(r.errorMm);
+  return {...r, rank, name:p.name, role:p.role, x:p.x, y:p.y};
+}
+
+function renderSurveySummary(results) {
+  const box = document.getElementById('surveySummaryCards');
+  if (!box) return;
+  if (!results.length) { box.innerHTML = '<div class="note-box">KPがありません。「KPを追加」して距離・角度を入力してください。</div>'; return; }
+  box.innerHTML = results.map(r => `
+    <div class="kpcard ${rankClass(r.rank)}">
+      <div class="line"><div class="name">${esc(r.name)} ${esc(r.role||'')}</div><div class="big">${esc(r.short||((r.side||'')+' '+fmt(r.errorMm,0)))}</div></div>
+      <div class="line sub"><span>位置：${esc(r.sectionName)}</span><span>判定：<span class="pill ${rankClass(r.rank)}">${r.rank}</span></span></div>
+      <div class="sub" style="margin-top:4px">測定 X=${fmt(r.x,3)} / Y=${fmt(r.y,3)}　計画 X=${fmt(r.foot?.x,3)} / Y=${fmt(r.foot?.y,3)}</div>
+    </div>
+  `).join('');
+}
+function renderSurveyTable(results) {
+  const el = document.getElementById('surveyResultTable');
+  if (!el) return;
+  if (!results.length) { el.innerHTML = ''; return; }
+  let h = '<div class="tbl-wrap"><table><tr><th>KP</th><th>役割</th><th>X</th><th>Y</th><th>位置</th><th>RO-測点距離</th><th>Rとの差</th><th>計画X</th><th>計画Y</th><th>左右誤差</th><th>判定</th></tr>';
+  results.forEach(r => {
+    h += `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.role||'')}</td><td class="mono">${fmt(r.x,3)}</td><td class="mono">${fmt(r.y,3)}</td><td>${esc(r.sectionName)}</td><td class="mono">${r.roDist?fmt(r.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(r.radialMm)?fmt(r.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(r.foot.x,3)}</td><td class="mono">${fmt(r.foot.y,3)}</td><td><b>${esc(r.short||fmt(r.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(r.rank)}">${r.rank}</span></td></tr>`;
+  });
+  h += '</table></div>';
+  el.innerHTML = h;
+}
+function renderSurveyProcess(results) {
+  const el = document.getElementById('surveyCalcProcess');
+  if (!el) return;
+  const rows = results.filter(r => r.type==='曲線' && r.curve);
+  if (!rows.length) { el.innerHTML = '<div class="note-box">曲線部のKPがありません。</div>'; return; }
+  let h = '<div class="tbl-wrap"><table><tr><th>KP</th><th>使用RO</th><th>測点</th><th>ΔX</th><th>ΔY</th><th>方向角</th><th>距離式</th><th>Rとの差</th><th>計画座標</th><th>表示</th></tr>';
+  rows.forEach(r => {
+    const c = r.curve;
+    h += `<tr><td><b>${esc(r.name)}</b></td><td class="mono"><b>RO${c.id}</b><br>X=${fmt(c.ro.x,3)}<br>Y=${fmt(c.ro.y,3)}</td><td class="mono">X=${fmt(r.x,3)}<br>Y=${fmt(r.y,3)}</td><td class="mono">${fmt(r.dx,3)}</td><td class="mono">${fmt(r.dy,3)}</td><td class="mono">${fmt(r.azDeg,6)}°</td><td class="mono">√(${fmt(r.dx,3)}² + ${fmt(r.dy,3)}²)<br>= ${fmt(r.roDist,3)} m</td><td class="mono">${fmt(r.roDist,3)} - ${fmt(c.R,3)}<br>= ${fmt(r.radialMm,1)} mm<br>${esc(r.insideOutside)}</td><td class="mono">X=${fmt(r.foot.x,3)}<br>Y=${fmt(r.foot.y,3)}<br>検算 ${fmt(r.checkErrorMm,6)} mm</td><td><b>${esc(r.short)}</b><br>${esc(r.side)}</td></tr>`;
+  });
+  h += '</table></div>';
+  el.innerHTML = h;
+}
+
+function calcSurvey() {
+  surveyGeom = buildSurveyGeometry();
+  const {kpPoints} = calculateSurveyTraverse();
+  surveyResults = kpPoints.map(judgePoint);
+  renderSurveySummary(surveyResults);
+  renderSurveyTable(surveyResults);
+  renderSurveyProcess(surveyResults);
+  const dsEl = document.getElementById('surveyDesignInfo');
+  if (dsEl) dsEl.textContent = `曲線${getCurves().length}箇所　総延長 ${fmt(surveyGeom.totalDistance,2)}m（設計値）`;
 }
 
 // ══════════════════════════════════════
@@ -1030,31 +1461,37 @@ function buildPipeSchedule(segments) {
   const rows = [];
   for (let i = 0; i < N; i++) {
     const start = i * lp, end = Math.min(totalLen, (i + 1) * lp);
-    // またがる曲線のうち最も目地が広く開く曲線に準ずる（例外ルール）
-    let bestS1 = 0, bestSeg = null;
+    // 推進管は発進立坑(BP側)で継ぎ足されながら管列全体が押し込まれるため、
+    // 完成形でBPから見て曲線より奥（到達側）にある管は、施工中に必ずその曲線を通過してくる。
+    // そのためBP側から見てこの管の位置(end)より手前にある曲線は、直接またがっていなくても対象に含める。
+    // またがる曲線・通過してきた曲線のうち最も目地が広く開く曲線の継手仕様に準ずる（例外ルール）
+    let bestS1 = 0, bestSeg = null, inCurve = false;
     curveSegs.forEach(seg => {
       const overlap = Math.min(end, seg.endDist) - Math.max(start, seg.startDist);
-      if (overlap > 1e-9) {
+      if (overlap > 1e-9) inCurve = true;
+      if (seg.startDist < end) {
         const S1 = calcS1(D, lp, seg.R, seg.cushion);
         if (S1 > bestS1) { bestS1 = S1; bestSeg = seg; }
       }
     });
     const spec = bestSeg ? (JOINT_SPEC.find(j => bestS1 <= j.allowOpen) || null) : JOINT_SPEC[0];
-    rows.push({ no: i + 1, curveNo: bestSeg ? bestSeg.curveNo : null, S1: bestS1, spec, cushion: bestSeg ? bestSeg.cushion : null });
+    // 本数は現場の慣習に合わせ到達側(EP側)を1本目として数える（先頭に押し込まれる管＝到達側が1本目）
+    rows.push({ no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1: bestS1, spec, cushion: bestSeg ? bestSeg.cushion : null });
   }
-  // 連続する同一判定（曲線番号＋継手）をまとめて範囲表示
+  rows.reverse(); // 1本目(到達側)から順に並べる
+  // 連続する同一判定（曲線番号＋現在地が曲線内か通過済みか＋継手）をまとめて範囲表示
   const groups = [];
   rows.forEach(r => {
-    const key = (r.curveNo || 'straight') + '|' + (r.spec ? r.spec.key : 'NG');
+    const key = (r.curveNo || 'straight') + '|' + (r.inCurve ? 'in' : 'through') + '|' + (r.spec ? r.spec.key : 'NG');
     const last = groups[groups.length - 1];
     if (last && last.key === key) { last.to = r.no; last.maxS1 = Math.max(last.maxS1, r.S1); }
-    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, spec: r.spec, maxS1: r.S1, cushion: r.cushion });
+    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, inCurve: r.inCurve, spec: r.spec, maxS1: r.S1, cushion: r.cushion });
   });
   let html = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">本数</th><th>区間</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr>';
   groups.forEach(g => {
     const rangeLabel = g.from === g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
-    const segLabel = g.curveNo ? `曲線${g.curveNo}` : '直線';
+    const segLabel = g.curveNo ? (g.inCurve ? `曲線${g.curveNo}` : `直線(曲線${g.curveNo}通過済)`) : '直線';
     const specLabel = g.spec ? g.spec.label : '<span style="color:var(--ng)">JCでも超過</span>';
     html += `<tr><td style="padding:4px;border-bottom:1px solid var(--line);text-align:center">${rangeLabel}</td>`
       + `<td style="text-align:center">${segLabel}</td>`
@@ -1081,6 +1518,7 @@ function setShaftMode(side, mode) {
   document.getElementById(side[0]+'mBtn0').classList.toggle('active', mode === 'direct');
   document.getElementById(side[0]+'mBtn1').classList.toggle('active', mode === 'shape');
   updateGroundLen();
+  autoSave();
 }
 
 function setShaftType(side, type, el) {
@@ -1097,6 +1535,7 @@ function setShaftType(side, type, el) {
     showFor('arrivalCircleIn', type === 'circle');
   }
   updateGroundLen();
+  autoSave();
 }
 
 // 組立マンホール壁厚[mm]（JSWASA-11 I種・II種登録品）
@@ -1443,8 +1882,10 @@ function calculate() {
   lastCalcResult = { F_total, Fo, fo, fo_min, Fa, segments, extCheck, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax };
 
   // ── 表示 ──
-  renderResults(lastCalcResult);
+  // resEl(結果コンテナ)を先に表示してからrenderResults()を呼ぶ。
+  // renderResults()内でグラフ用canvasのoffsetWidthを読むため、非表示のまま描画すると幅0になり何も描かれない。
   resEl.style.display = '';
+  renderResults(lastCalcResult);
   // Tab2の推進力をTab3支圧壁へ反映
   setV('wallForce', Math.ceil(F_total));
   showToast('計算完了 F=' + F_total.toFixed(0) + ' kN');
@@ -1469,9 +1910,19 @@ function renderResults(res) {
 
   // 総合判定
   const verdicts = [];
-  verdicts.push(`<span class="pill ${okForce?'ok':'ng'}">管耐荷力 F${okForce?'≤':'>'} Fa ${okForce?'OK':'NG'}</span>`);
+  verdicts.push(`<span class="pill ${okForce?'ok':'ng'}">最大推進力 ${F_total.toFixed(0)}kN ${okForce?'＜':'>'} 許容耐力 ${Fa.toFixed(0)}kN ${okForce?'OK':'NG'}</span>`);
   verdicts.push(`<span class="pill ${extCheck.ok?'ok':'ng'}">外圧耐荷力 Mr/M=${extCheck.ratio.toFixed(2)} ${extCheck.ok?'OK':'NG'}</span>`);
-  document.getElementById('summaryVerdict').innerHTML = verdicts.join(' ');
+
+  // 必要ジャッキ本数（1500kN・1000kN機種の目安、左右対称配置のため常に偶数本に切上げ）
+  const jackCaps = [1500, 1000];
+  const jackRows = jackCaps.map(cap => {
+    const raw = Math.ceil(F_total / cap);
+    const num = Math.max(2, raw % 2 === 0 ? raw : raw + 1);
+    return `<div>${cap}kNジャッキ：<b>${num}本</b>必要　（${F_total.toFixed(0)}kN ÷ ${cap}kN = ${(F_total/cap).toFixed(2)} → 切上げ${raw}本 → 偶数化${num}本）</div>`;
+  }).join('');
+
+  document.getElementById('summaryVerdict').innerHTML = verdicts.join(' ')
+    + `<div class="ok-box" style="margin-top:8px">🔧 必要ジャッキ本数（最大推進力 ${F_total.toFixed(0)}kN 基準、偶数本）${jackRows}</div>`;
 
   // 計算根拠表
   const { Be, k0, Ce, q, p_live } = tz;
@@ -1605,6 +2056,7 @@ function setWallShaft(type, el) {
   };
   document.getElementById('wallTypeNote').textContent = notes[type] || '';
   calcBacklock();
+  autoSave();
 }
 
 function syncForceFromCalc() {
@@ -1760,6 +2212,13 @@ function getProjectData() {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
       circleD: n('wallCircleD'), Bw: n('wallBw'), Hw: n('wallHw'),
       hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce')
+    },
+    survey: {
+      baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
+      instX: n('surveyInstX'), instY: n('surveyInstY'),
+      bsX: n('surveyBsX'), bsY: n('surveyBsY'),
+      tpRows: tpRows.map(r => ({dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo})),
+      kpRows: kpRows.map(r => ({role:r.role, dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo}))
     }
   };
 }
@@ -1846,6 +2305,19 @@ function setProjectData(d) {
     if (d.alignment.totalLength) setV('totalLength', d.alignment.totalLength);
     calcAlignment();
   }
+  if (d.survey) {
+    const sv = d.survey;
+    setV('surveyBaseAz', sv.baseAz || 0);
+    setV('internalPct', sv.internalPct || 80);
+    setV('surveyInstX', sv.instX || 0); setV('surveyInstY', sv.instY || 0);
+    setV('surveyBsX', sv.bsX ?? 10); setV('surveyBsY', sv.bsY || 0);
+    calcSurveyBaseAz(); // 保存されたbaseAz値ではなく、復元した座標から再計算する
+    tpRows = []; kpRows = []; surveyRowCounter = 0;
+    (sv.tpRows||[]).forEach(r => { const id = ++surveyRowCounter; tpRows.push({id, dist:r.dist||0, deg:r.deg||0, min:r.min||0, sec:r.sec||0, memo:r.memo||''}); });
+    (sv.kpRows||[]).forEach(r => { const id = ++surveyRowCounter; kpRows.push({id, role:r.role||'', dist:r.dist||0, deg:r.deg||0, min:r.min||0, sec:r.sec||0, memo:r.memo||''}); });
+    renderSurveyRows();
+    calcSurvey();
+  }
   if (d.shaft) {
     const sh = d.shaft;
     setV('launchDirect', sh.launchDirect||1.5);
@@ -1881,6 +2353,7 @@ function setProjectData(d) {
   }
   updateGroundLen();
   updatePipeLenOpt();
+  updateProjectSummary();
 }
 
 function saveJSON() {
@@ -1951,7 +2424,11 @@ function updateProjectSummary() {
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
     renderCurves();
     updateGroundLen();
+    renderSurveyRows();
+    calcSurveyBaseAz();
+    calcSurvey();
   }
+  updateProjectSummary();
 })();
 </script>
 </body>

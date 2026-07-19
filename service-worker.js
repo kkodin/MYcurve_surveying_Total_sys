@@ -1,16 +1,11 @@
-const CACHE_NAME = "m-app-002-v1";
+const CACHE_NAME = "m-app-005-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./icon.svg",
   "./README.txt",
-  "./00_basic_input.html",
-  "./01_alignment_calculation.html",
-  "./02_alignment_visual.html",
-  "./03_joint_opening_check.html",
-  "./04_jacking_force.html",
-  "./05_measurement_horizontal_error.html"
+  "./M_APP_005.html"
 ];
 
 self.addEventListener("install", (event) => {
