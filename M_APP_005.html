@@ -46,6 +46,7 @@ body{font-family:Meiryo,"Yu Gothic UI","Hiragino Sans",sans-serif;background:var
 .field-row label{font-size:12px;font-weight:bold;color:var(--sub);grid-column:1/-1}
 .field-row input,.field-row select{min-height:42px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:16px;font-family:inherit;background:var(--card);color:var(--text);width:100%}
 .field-row input:focus,.field-row select:focus{outline:2px solid #93c5fd;border-color:var(--blue2)}
+.field-row input[readonly]{background:var(--bg);color:var(--sub)}
 .field-row .unit{font-size:12px;color:var(--sub);white-space:nowrap;align-self:center}
 .field-row.full input,.field-row.full select{grid-column:1/-1}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -224,12 +225,12 @@ tr.row-ng td{color:var(--ng)}
       </div>
     </div>
     <div class="two-col">
-      <div class="field-row"><label>外径 D [m]</label><input id="pipeOuter" class="mono" type="number" step="0.001" value="0.960" oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>内径 [m]</label><input id="pipeInner" class="mono" type="number" step="0.001" value="0.800" oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>管厚 t [m]</label><input id="pipeThick" class="mono" type="number" step="0.001" value="0.080" oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
+      <div class="field-row"><label>外径 D [m]（自動）</label><input id="pipeOuter" class="mono" type="number" step="0.001" value="0.960" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
+      <div class="field-row"><label>内径 [m]（自動）</label><input id="pipeInner" class="mono" type="number" step="0.001" value="0.800" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
+      <div class="field-row"><label>管厚 t [m]（自動）</label><input id="pipeThick" class="mono" type="number" step="0.001" value="0.080" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
       <div class="field-row"><label>有効長 l′ [m]</label><input id="pipeLen" class="mono" type="number" step="0.01" value="2.43" oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>管重量 W [kN/m]</label><input id="pipeWeight" class="mono" type="number" step="0.01" value="7.36" oninput="autoSave();calcAlignment()"><span class="unit">kN/m</span></div>
-      <div class="field-row"><label>許容耐荷力 Fa [kN]</label><input id="pipeAllow" class="mono" type="number" step="1" value="3921" oninput="autoSave();calcAlignment()"><span class="unit">kN</span></div>
+      <div class="field-row"><label>管重量 W [kN/m]（自動）</label><input id="pipeWeight" class="mono" type="number" step="0.01" value="7.36" readonly oninput="autoSave();calcAlignment()"><span class="unit">kN/m</span></div>
+      <div class="field-row"><label>許容耐荷力 Fa [kN]（自動）</label><input id="pipeAllow" class="mono" type="number" step="1" value="3921" readonly oninput="autoSave();calcAlignment()"><span class="unit">kN</span></div>
     </div>
     <div class="two-col">
       <div class="field-row full">
@@ -246,10 +247,10 @@ tr.row-ng td{color:var(--ng)}
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
       <div class="two-col">
-        <div class="field-row"><label>外圧強さ P_ext [kN/m²]</label><input id="pipePext" class="mono" type="number" step="0.1" value="1273.7" oninput="autoSave()"><span class="unit">kN/m²</span></div>
-        <div class="field-row"><label>シールド機外径 Bs [m]</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave()"><span class="unit">m</span></div>
+        <div class="field-row"><label>外圧強さ P_ext [kN/m²]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="1273.7" readonly oninput="autoSave()"><span class="unit">kN/m²</span></div>
+        <div class="field-row"><label>シールド機外径 Bs [m]（刃口推進は刃口外径）</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
-      <div class="note-box" style="font-size:11px">P_ext: JSWAS A-1表より (φ800 1種管=1273.7 kN/m²)</div>
+      <div class="note-box" style="font-size:11px">P_ext: JSWAS A-1表より (φ800 1種管=1273.7 kN/m²)。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
     </div>
   </div>
 
@@ -299,7 +300,7 @@ tr.row-ng td{color:var(--ng)}
   <div class="card">
     <div class="card-title">📐 線形・推進区間</div>
     <div class="ok-box" style="font-size:11px;margin-bottom:8px">
-      BP→IP1間距離・曲線諸元（R/方向/交角）・最終直線を入力すると、CL・TL・総推進延長を自動計算します。
+      BP→IP1間距離・曲線諸元（R/方向/交角）・最終直線を入力すると、CL・TL・路線長を自動計算します。
     </div>
 
     <!-- 第1直線 BP-IP1 -->
@@ -326,14 +327,14 @@ tr.row-ng td{color:var(--ng)}
       </div>
     </div>
 
-    <!-- 自動計算された総推進延長 -->
+    <!-- 自動計算された路線長 -->
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin:8px 0">
       <div style="font-size:13px;font-weight:bold;color:var(--blue2);margin-bottom:8px">線形計算結果（自動）</div>
       <div id="alignmentCalcResult">
         <div class="note-box">曲線情報を入力すると自動計算されます。</div>
       </div>
       <div class="field-row" style="margin-top:8px">
-        <label style="color:var(--blue2);font-size:13px">総推進延長（自動計算）[m]</label>
+        <label style="color:var(--blue2);font-size:13px">路線長（自動計算）[m]</label>
         <input id="totalLength" class="mono" type="number" step="0.1" value="100" readonly style="background:#dbeafe;color:var(--blue2);font-weight:bold">
         <span class="unit">m</span>
       </div>
@@ -351,7 +352,7 @@ tr.row-ng td{color:var(--ng)}
   <div class="card" id="pipeScheduleCard">
     <div class="card-title">🔧 管本数・目地仕様 集計</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
-      管長・総延長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。
+      管長・路線長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。
     </div>
     <div id="pipeScheduleResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
   </div>
@@ -464,13 +465,13 @@ tr.row-ng td{color:var(--ng)}
   </div>
 
   <div class="card">
-    <div class="card-title ok">📏 実地山推進距離の算定</div>
-    <div class="ok-box">実地山区間 = 総推進延長 − 発進側除外距離 − 到達側除外距離<br>立坑・マンホール内では地山摩擦が発生しないため除外します。</div>
+    <div class="card-title ok">📏 推進距離の算定</div>
+    <div class="ok-box">推進距離 = 路線長 − 発進側除外距離 − 到達側除外距離<br>立坑・マンホール内では地山摩擦が発生しないため除外します。</div>
     <div class="metrics-grid">
-      <div class="metric-card"><div class="metric-label">総推進延長</div><div class="metric-value" id="rs_total">—</div><div class="metric-sub">m</div></div>
+      <div class="metric-card"><div class="metric-label">路線長</div><div class="metric-value" id="rs_total">—</div><div class="metric-sub">m</div></div>
       <div class="metric-card"><div class="metric-label">発進側 除外距離</div><div class="metric-value" id="rs_launch">—</div><div class="metric-sub">m</div></div>
       <div class="metric-card"><div class="metric-label">到達側 除外距離</div><div class="metric-value" id="rs_arrival">—</div><div class="metric-sub">m</div></div>
-      <div class="metric-card"><div class="metric-label" style="color:var(--blue2)">実地山推進距離</div><div class="metric-value ok" id="rs_ground">—</div><div class="metric-sub">m ← 計算使用</div></div>
+      <div class="metric-card"><div class="metric-label" style="color:var(--blue2)">推進距離</div><div class="metric-value ok" id="rs_ground">—</div><div class="metric-sub">m ← 計算使用</div></div>
     </div>
     <canvas id="distDiagram" style="width:100%;height:90px;margin-top:8px;border-radius:8px;display:block;border:1px solid var(--line)"></canvas>
   </div>
@@ -809,6 +810,22 @@ const CATEGORY_GRADES = {
   steel: [],
 };
 
+// 呼び径/管種/種別から自動決定される項目（外径・内径・管厚・重量・許容耐荷力・外圧強さ）は
+// 標準管の表がある限り編集不可にする。鋼管のみ表が無いため手入力を許可する。
+const PIPE_AUTO_FIELD_IDS = ['pipeOuter','pipeInner','pipeThick','pipeWeight','pipeAllow','pipePext'];
+function setPipeAutoFieldsReadonly(readonly) {
+  PIPE_AUTO_FIELD_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.readOnly = readonly;
+  });
+}
+
+// シールド機外径（刃口推進は刃口外径）Bsの初期値目安 = 管外径 + 30mm（片側15mmクリアランス）
+function updateShieldBsDefault() {
+  const D = n('pipeOuter');
+  if (D > 0) setV('pipeBs', (D + 0.030).toFixed(2));
+}
+
 function onPipeCategoryChange() {
   const cat = v('pipeCategory') || 'hume';
   const grades = CATEGORY_GRADES[cat] || [];
@@ -818,11 +835,13 @@ function onPipeCategoryChange() {
   if (grades.length === 0) {
     gradeRow.style.display = 'none';
     steelNote.style.display = '';
+    setPipeAutoFieldsReadonly(false); // 鋼管: 標準表が無いため手入力
   } else {
     gradeRow.style.display = '';
     steelNote.style.display = 'none';
     const cur = sel.value;
     sel.innerHTML = grades.map(g=>`<option value="${g.value}"${g.value===cur?' selected':''}>${g.label}</option>`).join('');
+    setPipeAutoFieldsReadonly(true); // ヒューム管・レジン管: 標準表から自動設定
   }
   onPipeDiaChange();
 }
@@ -832,11 +851,11 @@ function onPipeDiaChange() {
   const cat = v('pipeCategory') || 'hume';
   const grade = v('pipeGrade') || '1shu';
   const db = PIPE_DB[cat];
-  if (!db) { autoSave(); return; }           // 鋼管: 手動入力
+  if (!db) { updateShieldBsDefault(); autoSave(); return; }           // 鋼管: 手動入力
   const tbl = db[grade];
-  if (!tbl) { autoSave(); return; }
+  if (!tbl) { updateShieldBsDefault(); autoSave(); return; }
   const s = tbl[dia];
-  if (!s) { autoSave(); return; }
+  if (!s) { updateShieldBsDefault(); autoSave(); return; }
   setV('pipeOuter', s.outer.toFixed(3));
   setV('pipeInner', s.inner.toFixed(3));
   setV('pipeThick', s.t.toFixed(3));
@@ -845,6 +864,7 @@ function onPipeDiaChange() {
   setV('pipePext', s.Pext);
   const lMap = {250:1.0,300:1.0,350:1.2,400:1.2,450:1.5,500:1.5,600:2.0,700:2.43,800:2.43,900:2.43,1000:2.43,1100:2.43,1200:2.43,1350:2.43,1500:2.43,1650:2.43,1800:2.43,2000:2.43,2200:2.43,2400:2.43};
   if (lMap[dia]) setV('pipeLen', lMap[dia]);
+  updateShieldBsDefault();
   autoSave();
 }
 
@@ -1015,7 +1035,7 @@ function calcAlignment() {
   let accDist = 0;
   segments.forEach(seg => { seg.startDist = accDist; accDist += seg.L; seg.endDist = accDist; });
 
-  // 総推進延長をセット（readonlyフィールド）
+  // 路線長をセット（readonlyフィールド）
   setV('totalLength', totalLen.toFixed(2));
 
   // 結果表示
@@ -1032,7 +1052,7 @@ function calcAlignment() {
       </div>`;
     });
     html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:bold;color:var(--blue2)">
-      <span>合計 総推進延長</span><span class="mono">${totalLen.toFixed(3)} m</span>
+      <span>合計 路線長</span><span class="mono">${totalLen.toFixed(3)} m</span>
     </div>`;
     // 曲線ごとのTL/CL/SL詳細
     curves.forEach((c, i) => {
@@ -1190,7 +1210,7 @@ function buildSurveyGeometry() {
   const baseAz = degToRad(n('surveyBaseAz') || 0);
 
   if (!cvSrc.length) {
-    // 曲線なし＝BP→EPの直線一本（総延長=BP〜IP1距離+最終IP〜EP距離）
+    // 曲線なし＝BP→EPの直線一本（路線長=BP〜IP1距離+最終IP〜EP距離）
     const bp = {name:'BP', x:0, y:0};
     const totalLen = L0 + Lf;
     const ep = ptFrom(bp, baseAz, totalLen);
@@ -1377,7 +1397,7 @@ function calcSurvey() {
   renderSurveyTable(surveyResults);
   renderSurveyProcess(surveyResults);
   const dsEl = document.getElementById('surveyDesignInfo');
-  if (dsEl) dsEl.textContent = `曲線${getCurves().length}箇所　総延長 ${fmt(surveyGeom.totalDistance,2)}m（設計値）`;
+  if (dsEl) dsEl.textContent = `曲線${getCurves().length}箇所　路線長 ${fmt(surveyGeom.totalDistance,2)}m（設計値）`;
 }
 
 // ══════════════════════════════════════
@@ -1503,7 +1523,7 @@ function buildPipeSchedule(segments) {
       + `<td style="text-align:center" class="mono">${g.cushion != null ? g.cushion + 'mm' : '—'}</td></tr>`;
   });
   html += '</table>';
-  html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（管長 l′=${lp}m、総延長${totalLen.toFixed(2)}m）</div>`;
+  html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（管長 l′=${lp}m、路線長${totalLen.toFixed(2)}m）</div>`;
   resultEl.innerHTML = html;
 }
 
@@ -2407,7 +2427,7 @@ function updateProjectSummary() {
     <b>工法:</b> ${{blade:'刃口推進',slurry:'泥水推進',epb:'泥土圧推進',deinoh:'泥濃推進'}[d.method]||'—'}<br>
     <b>管仕様:</b> φ${d.pipe.dia}mm, D=${d.pipe.outer}m, l′=${d.pipe.len}m, W=${d.pipe.weight}kN/m, Fa=${d.pipe.allow}kN<br>
     <b>土質:</b> γ=${d.soil.gamma}, φ=${d.soil.phi}°, N=${d.soil.N}, H=${d.soil.Hmin}〜${d.soil.Hmax}m<br>
-    <b>総推進延長:</b> ${d.alignment.totalLength}m / 曲線区間: ${d.alignment.curves.length}箇所<br>
+    <b>路線長:</b> ${d.alignment.totalLength}m / 曲線区間: ${d.alignment.curves.length}箇所<br>
     <b>最終保存:</b> ${d.savedAt ? new Date(d.savedAt).toLocaleString('ja-JP') : '—'}
   `;
 }
@@ -2424,6 +2444,7 @@ function updateProjectSummary() {
     // デフォルト値で初期化
     setMethod('blade');
     onSoilTypeChange();
+    onPipeCategoryChange(); // 自動項目の読取専用化・シールド機外径の初期値設定
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
     renderCurves();
     updateGroundLen();
