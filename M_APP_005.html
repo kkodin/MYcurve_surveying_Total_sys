@@ -506,7 +506,7 @@ tr.row-ng td{color:var(--ng)}
 
     <div class="card">
       <div class="card-title">🔩 1本毎の推進力計算表</div>
-      <div class="note-box" style="font-size:11px">本数は既存の「管本数・目地仕様集計」と同じ数え方（到達側=1本目）。距離は発進坑口を起点とします。</div>
+      <div class="note-box" style="font-size:11px">推進の進行に合わせて発進側を1本目とします（「管本数・目地仕様集計」の到達側基準とは逆向き）。距離は発進坑口を起点とし、押し込むほど推力が増えていきます。</div>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
 
@@ -1858,15 +1858,12 @@ function calculate() {
   segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 0 });
 
   // 曲線・中間の直線（EP→SP順に計算するが、ラベルはBP側からの通し番号=第N直線・第N曲線で統一）
+  // 重要: 曲線を先に処理してから、その曲線の（BP側で隣接する）直前の直線を後で足すこと。
+  // 直線の増幅は「その直線とジャッキの間にある曲線」だけで決まるため、まだ通過していない
+  // （EP側で隣接する）次の曲線のKで巻き込んで増幅してはならない。
   const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
-    // 曲線前の直線（この曲線の直前＝第curveNo直線）
-    if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
-      const dF = fo * intermediateStraight;
-      F_cum += dF;
-      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum, ord: 2*curveNo - 1 });
-    }
     const { alpha, K } = calcCurveK(c.R, D, lp);
     const n_pipes = Math.max(1, Math.round(c.CL / lp));
     const lambda = n_pipes > 1 ? (Math.pow(K, n_pipes+1) - K) / (n_pipes * (K - 1)) : K;
@@ -1877,6 +1874,12 @@ function calculate() {
       label: `第${curveNo}曲線`, type:'curve', curveNo,
       L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum, ord: 2*curveNo
     });
+    // 曲線通過後、次（BP側）の曲線に至るまでの直線（＝第curveNo直線）
+    if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
+      const dF = fo * intermediateStraight;
+      F_cum += dF;
+      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum, ord: 2*curveNo - 1 });
+    }
   });
 
   // 第1直線（発進側）
@@ -1985,11 +1988,11 @@ function renderResults(res) {
     basisRows.map(r => `<tr><td class="left">${r[0]}</td><td class="mono">${r[1]}</td><td>${r[2]}</td><td class="left">${r[3]}</td></tr>`).join('') +
     '</tbody>';
 
-  // 区間推進力表（表示は発進側→到達側→先端抵抗の順。計算方向・数値は変更しない）
-  const displaySegments = [...segments].sort((a, b) => a.ord - b.ord);
+  // 区間推進力表（発進坑口→到達坑口の順に、実際に推進が進むにつれて推力が積み上がっていく形で表示）
+  const progressive = computeProgressiveSegments(segments, Fo);
   document.getElementById('segTable').innerHTML =
     '<thead><tr><th>区間</th><th>種別</th><th>L(m)</th><th>K</th><th>n</th><th>λ</th><th>F区間(kN)</th><th>F累計(kN)</th></tr></thead><tbody>' +
-    displaySegments.map(s => `<tr class="${s.type==='curve'?'row-curve':''}">
+    progressive.map(s => `<tr class="${s.type==='curve'?'row-curve':''}">
       <td class="left">${s.label}</td>
       <td>${s.type==='curve'?'曲線':s.type==='tip'?'先端':'直線'}</td>
       <td class="mono">${s.L?s.L.toFixed(2):'—'}</td>
@@ -2001,7 +2004,7 @@ function renderResults(res) {
     </tr>`).join('') +
     '</tbody>';
 
-  buildPipeForceTable(segments);
+  buildPipeForceTable(segments, Fo);
 
   // BC点管種検討
   const bcCard = document.getElementById('bcCard');
@@ -2023,52 +2026,88 @@ function renderResults(res) {
   }
 
   // グラフ
-  drawForceGraph(segments, Fa);
+  drawForceGraph(segments, Fa, Fo);
 }
 
 // ══════════════════════════════════════
-//  1本毎の推進力（区間別推進力計算表を管1本ずつに細分化）
-//  直線: F = F前 + fo×l
-//  曲線: F = K × (F前 + fo×l')  ※l'=曲線長/本数。継手を1本通過するごとにK倍される考え方をそのまま管単位に適用。
-//        （区間合計は既存の F_before×K^n + fo×CL×λ と完全に一致する）
+//  発進坑口→到達坑口へ実際に推進が進むにつれて推力がどう積み上がるか（進行度ベース）
+//  区間別推進力計算表・BC点検討表は「完成後にその断面が負担する構造上の力」（到達側→発進側に積算、
+//  発進側が最大＝ジャッキ選定・継手強度照査用）で、これは変更しない。
+//  一方こちらは「推進が進むほどジャッキ推力がどう増えていくか」という施工感覚に合わせた進行度ベースの値：
+//  常にかかる先端抵抗Foに、通過済みの曲線のK・既に押し込んだ管の周面摩擦を積み上げていく。
+//    直線: S += CumK × fo × l
+//    曲線（管1本ごと）: CumK ×= K　→　S += CumK × fo × l'
+//    F(x) = S + Fo × CumK
+//  x=到達坑口（全区間通過後）で S+Fo×CumK は区間別推進力計算表の最大推進力と完全に一致する。
 // ══════════════════════════════════════
-function buildPipeForceTable(segments) {
-  const lp = n('pipeLen') || 2.43;
-  const maxL = segments.reduce((s,seg) => s + (seg.L || 0), 0);
-  const rows = [];
-  let posFromEP = 0; // 到達側からの積算距離（segments自体がEP→BP順のため）
+function computeProgressiveSegments(segments, Fo) {
+  const ordered = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
+  const rows = [{ label:'Fo（先端）', type:'tip', L:0, K:null, n:null, lambda:null, dF:Fo, F_cum:Fo }];
+  let CumK = 1, S = 0;
+  ordered.forEach(seg => {
+    const F_before = S + Fo * CumK;
+    if (seg.type === 'straight') {
+      S += CumK * seg.fo * seg.L;
+    } else if (seg.type === 'curve') {
+      S += CumK * seg.fo * seg.L * seg.lambda;
+      CumK *= Math.pow(seg.K, seg.n);
+    }
+    const F_after = S + Fo * CumK;
+    rows.push({ label: seg.label, type: seg.type, L: seg.L, K: seg.K, n: seg.n, lambda: seg.lambda,
+      dF: F_after - F_before, F_cum: F_after });
+  });
+  return rows;
+}
 
-  segments.forEach(seg => {
-    if (seg.type === 'tip' || !(seg.L > 0)) return; // 先端抵抗は1本の管ではないので対象外
-    const F_start = seg.F_cum - seg.dF;
+function computeProgressiveTrace(segments, Fo, lp) {
+  const ordered = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
+  const points = [{ x:0, F:Fo, type:'tip', label:'発進坑口' }];
+  const pipeRows = [];
+  const markers = [{ label:'発進坑口', x:0 }];
+  let CumK = 1, S = 0, x = 0;
+  ordered.forEach(seg => {
+    if (!(seg.L > 0)) return;
+    if (seg.type === 'curve') markers.push({ label:`BC${seg.curveNo}`, x });
     if (seg.type === 'straight') {
       const numPipes = Math.max(1, Math.ceil(seg.L / lp));
-      let prevF = F_start;
       for (let j = 1; j <= numPipes; j++) {
         const pipeLen = (j < numPipes) ? lp : (seg.L - lp * (numPipes - 1));
-        const dF = seg.fo * pipeLen;
-        const F = prevF + dF;
-        posFromEP += pipeLen;
-        rows.push({ seg: seg.label, distFromBP: maxL - posFromEP, dF, F_cum: F,
+        S += CumK * seg.fo * pipeLen;
+        x += pipeLen;
+        const F = S + Fo * CumK;
+        points.push({ x, F, type:'straight', label: seg.label });
+        pipeRows.push({ seg: seg.label, type:'straight', x, F,
           formula: `F=F前+fo×l（${seg.fo.toFixed(2)}×${pipeLen.toFixed(2)}）` });
-        prevF = F;
       }
     } else if (seg.type === 'curve') {
       const numPipes = seg.n;
       const pipeLen = seg.L / numPipes;
-      let prevF = F_start;
       for (let j = 1; j <= numPipes; j++) {
-        const F = seg.K * (prevF + seg.fo * pipeLen);
-        const dF = F - prevF;
-        posFromEP += pipeLen;
-        rows.push({ seg: seg.label, distFromBP: maxL - posFromEP, dF, F_cum: F,
-          formula: `F=K×(F前+fo×l')＝${seg.K.toFixed(4)}×(F前+${(seg.fo*pipeLen).toFixed(1)})` });
-        prevF = F;
+        CumK *= seg.K;
+        S += CumK * seg.fo * pipeLen;
+        x += pipeLen;
+        const F = S + Fo * CumK;
+        points.push({ x, F, type:'curve', label: seg.label });
+        pipeRows.push({ seg: seg.label, type:'curve', x, F,
+          formula: `F=F前+ΔF（曲線内${j}/${numPipes}本目・K累積=${CumK.toFixed(4)}）` });
       }
     }
+    if (seg.type === 'curve') markers.push({ label:`EC${seg.curveNo}`, x });
   });
+  markers.push({ label:'到達坑口(EP)', x });
+  return { points, pipeRows, markers, maxL: x, F_total: S + Fo * CumK };
+}
 
-  rows.forEach((r, i) => { r.no = i + 1; }); // 既存の管本数表と同じ数え方（到達側=1本目）
+// ══════════════════════════════════════
+//  1本毎の推進力（発進坑口→到達坑口の進行度ベース。既存の「管本数・目地仕様集計」とは
+//  逆向き＝発進側を1本目として数える。推力が本数とともに増えていく向きに揃えるため）
+// ══════════════════════════════════════
+function buildPipeForceTable(segments, Fo) {
+  const lp = n('pipeLen') || 2.43;
+  const trace = computeProgressiveTrace(segments, Fo, lp);
+  const rows = trace.pipeRows;
+  let prevF = Fo;
+  rows.forEach((r, i) => { r.no = i + 1; r.dF = r.F - prevF; prevF = r.F; });
 
   const tableEl = document.getElementById('pipeForceTable');
   if (!tableEl) return;
@@ -2078,9 +2117,9 @@ function buildPipeForceTable(segments) {
     rows.map(r => `<tr>
       <td class="mono">${r.no}</td>
       <td class="left">${r.seg}</td>
-      <td class="mono">${r.distFromBP.toFixed(2)}</td>
+      <td class="mono">${r.x.toFixed(2)}</td>
       <td class="mono">${r.dF.toFixed(1)}</td>
-      <td class="mono"><b>${r.F_cum.toFixed(1)}</b></td>
+      <td class="mono"><b>${r.F.toFixed(1)}</b></td>
       <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
     </tr>`).join('') +
     '</tbody>';
@@ -2089,7 +2128,7 @@ function buildPipeForceTable(segments) {
 // スパンごとに色を変えるためのパレット（直線・曲線とも同じ並びで巡回）
 const FORCE_GRAPH_PALETTE = ['#1d6fd8','#f59e0b','#16a34a','#db2777','#7c3aed','#0891b2','#ca8a04','#dc2626'];
 
-function drawForceGraph(segments, Fa) {
+function drawForceGraph(segments, Fa, Fo) {
   const canvas = document.getElementById('forceGraph');
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.offsetWidth, h = canvas.offsetHeight;
@@ -2099,12 +2138,12 @@ function drawForceGraph(segments, Fa) {
   ctx.clearRect(0,0,w,h);
   const pad = { top:20, right:20, bottom:56, left:60 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
-  const maxF = Math.max(Fa * 1.1, ...segments.map(s => s.F_cum));
-  const maxL = segments.reduce((s,seg) => s + (seg.L || 0), 0);
+  const lp = n('pipeLen') || 2.43;
+  const trace = computeProgressiveTrace(segments, Fo, lp);
+  const { points, markers, maxL } = trace;
   if (!maxL) return;
+  const maxF = Math.max(Fa * 1.1, ...points.map(p => p.F));
 
-  // 表示は発進坑口(x=0)→到達坑口(x=maxL)。実際の計算は到達側→発進側に積算するため、
-  // 元のsegments（EP→BP順）を使い、x座標だけ (maxL - 元のcumL) で左右反転して描画する。
   const sx = x => pad.left + x / maxL * cw;
   const sy = y => pad.top + ch - y / maxF * ch;
 
@@ -2134,35 +2173,18 @@ function drawForceGraph(segments, Fa) {
     ctx.fillText(x.toFixed(1)+'m', px, pad.top+ch+12);
   }
 
-  // 曲線・グラフ本体（スパンごとに色を変え、x座標は発進坑口起点に反転）
-  let cumL = 0;
+  // 折れ線本体（管1本ごとの点をそのままつなぐことで、曲線区間内の増幅もなめらかに表現。スパンごとに色分け）
   let colorIdx = 0;
-  segments.forEach(s => {
-    const x1 = sx(maxL - cumL), y1 = sy(s.F_cum - (s.dF||0));
-    const x2 = sx(maxL - (cumL + (s.L||0))), y2 = sy(s.F_cum);
-    if (s.type !== 'tip') {
-      ctx.strokeStyle = FORCE_GRAPH_PALETTE[colorIdx % FORCE_GRAPH_PALETTE.length];
-      ctx.lineWidth = s.type==='curve' ? 3 : 2;
-      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-      colorIdx++;
-    }
-    cumL += s.L || 0;
-  });
+  let lastLabel = null;
+  for (let i = 1; i < points.length; i++) {
+    const p0 = points[i-1], p1 = points[i];
+    if (p1.label !== lastLabel) { colorIdx++; lastLabel = p1.label; }
+    ctx.strokeStyle = FORCE_GRAPH_PALETTE[colorIdx % FORCE_GRAPH_PALETTE.length];
+    ctx.lineWidth = p1.type==='curve' ? 3 : 2;
+    ctx.beginPath(); ctx.moveTo(sx(p0.x), sy(p0.F)); ctx.lineTo(sx(p1.x), sy(p1.F)); ctx.stroke();
+  }
 
-  // BC/EC/坑口の位置マーカー（発進坑口を起点に順に積算）
-  const orderedForMarkers = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
-  const markers = [{ label:'発進坑口', x:0 }];
-  let mx = 0;
-  orderedForMarkers.forEach(s => {
-    if (s.type === 'curve') {
-      markers.push({ label:`BC${s.curveNo}`, x: mx });
-      mx += s.L;
-      markers.push({ label:`EC${s.curveNo}`, x: mx });
-    } else {
-      mx += s.L;
-    }
-  });
-  markers.push({ label:'到達坑口(EP)', x: maxL });
+  // BC/EC/坑口の位置マーカー
   ctx.setLineDash([3,3]);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
   markers.forEach(m => {
@@ -2178,7 +2200,7 @@ function drawForceGraph(segments, Fa) {
   });
 
   ctx.fillStyle='#374151'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('推進距離 (m)　発進坑口 → 到達坑口', pad.left + cw/2, h - 5);
+  ctx.fillText('推進距離 (m)　発進坑口 → 到達坑口（推進の進行とともに推力は増加）', pad.left + cw/2, h - 5);
 }
 
 // ══════════════════════════════════════
