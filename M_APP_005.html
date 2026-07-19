@@ -897,7 +897,7 @@ function renderCurves() {
   el.innerHTML = curves.map((c, i) => `
     <div class="curve-block">
       <div class="curve-block-title">
-        <span>曲線${i+1}（IP${i+1}）</span>
+        <span>第${i+1}曲線（IP${i+1}）</span>
         <button class="del-btn" onclick="removeCurve(${c.id})">削除</button>
       </div>
       ${i > 0 ? `
@@ -1003,30 +1003,30 @@ function calcAlignment() {
   if (curves.length === 0) {
     // 直線のみ
     totalLen = L0 + Lf;
-    segments.push({ label:'直線（BP→EP）', L: totalLen });
+    segments.push({ label:'第1直線（BP→EP）', L: totalLen });
   } else {
     // 第1直線: L0 - TL[0]
     const s0 = L0 - TLs[0];
     if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
-    segments.push({ label:`BP→BC1 直線`, L: Math.max(0, s0) });
+    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0) });
 
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
-      segments.push({ label:`曲線${i+1} (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: effectiveCushion(c) });
+      segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: effectiveCushion(c) });
       // 次の直線
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
         const sMid = Lmid - TLs[i] - TLs[i+1];
-        if (sMid < 0) { valid = false; warnMsg += `\n⚠ 中間直線${i+1}(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
-        segments.push({ label:`EC${i+1}→BC${i+2} 直線`, L: Math.max(0, sMid) });
+        if (sMid < 0) { valid = false; warnMsg += `\n⚠ 第${i+2}直線(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
+        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid) });
       }
     });
 
     // 最終直線: Lf - TL[last]
     const sf = Lf - TLs[TLs.length-1];
     if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
-    segments.push({ label:`EC${curves.length}→EP 直線`, L: Math.max(0, sf) });
+    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf) });
 
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
@@ -1454,7 +1454,7 @@ function updatePipeLenOpt() {
     const ok = S1_cur <= allowMm;
     const best = bestPipeLenFor(D, R, S4mm, allowMm);
     html += `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
-      <b>曲線${i+1} R=${R}m</b>
+      <b>第${i+1}曲線 R=${R}m</b>
       <div style="font-size:12px;margin-top:4px">
         最大許容管長: <b>${L_max.toFixed(2)} m</b><br>
         現在管長 l′=${lp}m → S₁=${S1_cur.toFixed(1)}mm
@@ -1514,7 +1514,7 @@ function buildPipeSchedule(segments) {
     + '<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">本数</th><th>区間</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr>';
   groups.forEach(g => {
     const rangeLabel = g.from === g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
-    const segLabel = g.curveNo ? (g.inCurve ? `曲線${g.curveNo}` : `直線(曲線${g.curveNo}通過済)`) : '直線';
+    const segLabel = g.curveNo ? (g.inCurve ? `第${g.curveNo}曲線` : `直線(第${g.curveNo}曲線通過済)`) : '直線';
     const specLabel = g.spec ? g.spec.label : '<span style="color:var(--ng)">JCでも超過</span>';
     html += `<tr><td style="padding:4px;border-bottom:1px solid var(--line);text-align:center">${rangeLabel}</td>`
       + `<td style="text-align:center">${segLabel}</td>`
@@ -1828,7 +1828,7 @@ function calculate() {
   let usedLen = 0;
   const totalCurveLen = curList.reduce((s,c) => s+c.CL, 0);
   const straightTotal = Math.max(0, groundLen - totalCurveLen);
-  // EP直線 = 到達側の直線
+  // 最終直線 = 到達側の直線
   const epStraight = Math.min(arrivalDist > 0 ? arrivalDist : straightTotal * 0.3, straightTotal);
   const spStraight = straightTotal - epStraight;
 
@@ -1836,24 +1836,25 @@ function calculate() {
   let F_cum = 0;
   const FBC_arr = [];
 
-  // EP直線
+  // 最終直線（到達側）
   if (epStraight > 0) {
     const dF = fo * epStraight;
     F_cum += dF;
-    segments.push({ label:'EP直線', type:'straight', L:epStraight, fo, dF, F_cum: F_cum });
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo, dF, F_cum: F_cum });
   }
   // 先端抵抗
   F_cum += Fo;
   segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum });
 
-  // 曲線・中間直線（EP→SP順）
+  // 曲線・中間の直線（EP→SP順に計算するが、ラベルはBP側からの通し番号=第N直線・第N曲線で統一）
   const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
-    // 曲線前の中間直線
+    const curveNo = curList.length - i;
+    // 曲線前の直線（この曲線の直前＝第curveNo直線）
     if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
       const dF = fo * intermediateStraight;
       F_cum += dF;
-      segments.push({ label:`中間直線${i+1}`, type:'straight', L:intermediateStraight, fo, dF, F_cum });
+      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum });
     }
     const { alpha, K } = calcCurveK(c.R, D, lp);
     const n_pipes = Math.max(1, Math.round(c.CL / lp));
@@ -1862,17 +1863,17 @@ function calculate() {
     F_cum = F_cum * Math.pow(K, n_pipes) + fo * c.CL * lambda;
     FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum });
     segments.push({
-      label: `BC.${curList.length - i}→${curList.length - i}曲線`, type:'curve',
+      label: `第${curveNo}曲線`, type:'curve',
       L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum
     });
   });
 
-  // SP直線
+  // 第1直線（発進側）
   const spRemain = reversedCurves.length > 0 ? spStraight - intermediateStraight * (reversedCurves.length - 1) : spStraight;
   if (spRemain > 0) {
     const dF = fo * spRemain;
     F_cum += dF;
-    segments.push({ label:'SP直線', type:'straight', L:spRemain, fo, dF, F_cum });
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo, dF, F_cum });
   }
 
   const F_total = F_cum;
