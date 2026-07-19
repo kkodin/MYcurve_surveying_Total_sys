@@ -225,12 +225,12 @@ tr.row-ng td{color:var(--ng)}
       </div>
     </div>
     <div class="two-col">
-      <div class="field-row"><label>外径 D [m]（自動）</label><input id="pipeOuter" class="mono" type="number" step="0.001" value="0.960" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>内径 [m]（自動）</label><input id="pipeInner" class="mono" type="number" step="0.001" value="0.800" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>管厚 t [m]（自動）</label><input id="pipeThick" class="mono" type="number" step="0.001" value="0.080" readonly oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>有効長 l′ [m]</label><input id="pipeLen" class="mono" type="number" step="0.01" value="2.43" oninput="autoSave();calcAlignment()"><span class="unit">m</span></div>
-      <div class="field-row"><label>管重量 W [kN/m]（自動）</label><input id="pipeWeight" class="mono" type="number" step="0.01" value="7.36" readonly oninput="autoSave();calcAlignment()"><span class="unit">kN/m</span></div>
-      <div class="field-row"><label>許容耐荷力 Fa [kN]（自動）</label><input id="pipeAllow" class="mono" type="number" step="1" value="3921" readonly oninput="autoSave();calcAlignment()"><span class="unit">kN</span></div>
+      <div class="field-row"><label>外径 D [m]（自動）</label><input id="pipeOuter" class="mono" type="number" step="0.001" value="0.960" readonly oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">m</span></div>
+      <div class="field-row"><label>内径 [m]（自動）</label><input id="pipeInner" class="mono" type="number" step="0.001" value="0.800" readonly oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">m</span></div>
+      <div class="field-row"><label>管厚 t [m]（自動）</label><input id="pipeThick" class="mono" type="number" step="0.001" value="0.080" readonly oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">m</span></div>
+      <div class="field-row"><label>有効長 l′ [m]</label><input id="pipeLen" class="mono" type="number" step="0.01" value="2.43" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">m</span></div>
+      <div class="field-row"><label>管重量 W [kN/m]（自動）</label><input id="pipeWeight" class="mono" type="number" step="0.01" value="7.36" readonly oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">kN/m</span></div>
+      <div class="field-row"><label>許容耐荷力 Fa [kN]（自動）</label><input id="pipeAllow" class="mono" type="number" step="1" value="3921" readonly oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">kN</span></div>
     </div>
     <div class="two-col">
       <div class="field-row full">
@@ -247,8 +247,8 @@ tr.row-ng td{color:var(--ng)}
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
       <div class="two-col">
-        <div class="field-row"><label>外圧強さ P_ext [kN/m²]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="1273.7" readonly oninput="autoSave()"><span class="unit">kN/m²</span></div>
-        <div class="field-row"><label>シールド機外径 Bs [m]（刃口推進は刃口外径）</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave()"><span class="unit">m</span></div>
+        <div class="field-row"><label>外圧強さ P_ext [kN/m²]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="1273.7" readonly oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN/m²</span></div>
+        <div class="field-row"><label>シールド機外径 Bs [m]（刃口推進は刃口外径）</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">m</span></div>
       </div>
       <div class="note-box" style="font-size:11px">P_ext: JSWAS A-1表より (φ800 1種管=1273.7 kN/m²)。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
     </div>
@@ -1760,6 +1760,12 @@ function calcExtPressureCheck(D_in, t, W, P_ext, q_ext) {
 //  メイン推進力計算
 // ══════════════════════════════════════
 let lastCalcResult = null;
+
+// 推進力計算に使う項目（管長・外径・重量・Fa等）を編集したとき、既に計算結果を表示済みなら
+// 自動的に再計算する（未計算の状態でエラー表示が出ないよう、計算済みのときだけ動かす）。
+function refreshForceIfCalculated() {
+  if (lastCalcResult) calculate();
+}
 
 function calculate() {
   const errEl = document.getElementById('calcError');
