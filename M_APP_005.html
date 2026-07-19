@@ -1836,15 +1836,19 @@ function calculate() {
   let F_cum = 0;
   const FBC_arr = [];
 
+  // ここから先は計算方向（到達側→発進側に積算、物理的に正しい：発進側が最大推力）は変更しない。
+  // 表示用の並び順だけを ord に記録し、テーブル描画時に発進側(第1直線)→到達側(最終直線)→先端抵抗 の順にソートする。
+  const N_curves = curList.length;
+
   // 最終直線（到達側）
   if (epStraight > 0) {
     const dF = fo * epStraight;
     F_cum += dF;
-    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo, dF, F_cum: F_cum });
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo, dF, F_cum: F_cum, ord: 2*N_curves + 1 });
   }
   // 先端抵抗
   F_cum += Fo;
-  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum });
+  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 2*N_curves + 2 });
 
   // 曲線・中間の直線（EP→SP順に計算するが、ラベルはBP側からの通し番号=第N直線・第N曲線で統一）
   const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
@@ -1854,7 +1858,7 @@ function calculate() {
     if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
       const dF = fo * intermediateStraight;
       F_cum += dF;
-      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum });
+      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum, ord: 2*curveNo - 1 });
     }
     const { alpha, K } = calcCurveK(c.R, D, lp);
     const n_pipes = Math.max(1, Math.round(c.CL / lp));
@@ -1864,7 +1868,7 @@ function calculate() {
     FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum });
     segments.push({
       label: `第${curveNo}曲線`, type:'curve',
-      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum
+      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum, ord: 2*curveNo
     });
   });
 
@@ -1873,7 +1877,7 @@ function calculate() {
   if (spRemain > 0) {
     const dF = fo * spRemain;
     F_cum += dF;
-    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo, dF, F_cum });
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo, dF, F_cum, ord: 1 });
   }
 
   const F_total = F_cum;
@@ -1974,10 +1978,11 @@ function renderResults(res) {
     basisRows.map(r => `<tr><td class="left">${r[0]}</td><td class="mono">${r[1]}</td><td>${r[2]}</td><td class="left">${r[3]}</td></tr>`).join('') +
     '</tbody>';
 
-  // 区間推進力表
+  // 区間推進力表（表示は発進側→到達側→先端抵抗の順。計算方向・数値は変更しない）
+  const displaySegments = [...segments].sort((a, b) => a.ord - b.ord);
   document.getElementById('segTable').innerHTML =
     '<thead><tr><th>区間</th><th>種別</th><th>L(m)</th><th>K</th><th>n</th><th>λ</th><th>F区間(kN)</th><th>F累計(kN)</th></tr></thead><tbody>' +
-    segments.map(s => `<tr class="${s.type==='curve'?'row-curve':''}">
+    displaySegments.map(s => `<tr class="${s.type==='curve'?'row-curve':''}">
       <td class="left">${s.label}</td>
       <td>${s.type==='curve'?'曲線':s.type==='tip'?'先端':'直線'}</td>
       <td class="mono">${s.L?s.L.toFixed(2):'—'}</td>
