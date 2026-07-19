@@ -504,6 +504,12 @@ tr.row-ng td{color:var(--ng)}
       <div class="tbl-wrap"><table id="segTable"></table></div>
     </div>
 
+    <div class="card">
+      <div class="card-title">🔩 1本毎の推進力計算表</div>
+      <div class="note-box" style="font-size:11px">本数は既存の「管本数・目地仕様集計」と同じ数え方（到達側=1本目）。距離は発進坑口を起点とします。</div>
+      <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
+    </div>
+
     <div class="card" id="bcCard" style="display:none">
       <div class="card-title accent">⚠️ BC点外圧管種検討表</div>
       <div class="tbl-wrap"><table id="bcTable"></table></div>
@@ -1837,7 +1843,8 @@ function calculate() {
   const FBC_arr = [];
 
   // ここから先は計算方向（到達側→発進側に積算、物理的に正しい：発進側が最大推力）は変更しない。
-  // 表示用の並び順だけを ord に記録し、テーブル描画時に発進側(第1直線)→到達側(最終直線)→先端抵抗 の順にソートする。
+  // 表示用の並び順だけを ord に記録し、テーブル描画時に先端抵抗→発進側(第1直線)→到達側(最終直線)の順にソートする。
+  // 先端抵抗は地山に貫入した時点から常にかかる基礎値のため、表では一番先頭に表示する。
   const N_curves = curList.length;
 
   // 最終直線（到達側）
@@ -1848,7 +1855,7 @@ function calculate() {
   }
   // 先端抵抗
   F_cum += Fo;
-  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 2*N_curves + 2 });
+  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 0 });
 
   // 曲線・中間の直線（EP→SP順に計算するが、ラベルはBP側からの通し番号=第N直線・第N曲線で統一）
   const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
@@ -1867,7 +1874,7 @@ function calculate() {
     F_cum = F_cum * Math.pow(K, n_pipes) + fo * c.CL * lambda;
     FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum });
     segments.push({
-      label: `第${curveNo}曲線`, type:'curve',
+      label: `第${curveNo}曲線`, type:'curve', curveNo,
       L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum, ord: 2*curveNo
     });
   });
@@ -1994,6 +2001,8 @@ function renderResults(res) {
     </tr>`).join('') +
     '</tbody>';
 
+  buildPipeForceTable(segments);
+
   // BC点管種検討
   const bcCard = document.getElementById('bcCard');
   if (bcResults.length > 0 && bcResults[0].checks.length > 0) {
@@ -2017,6 +2026,69 @@ function renderResults(res) {
   drawForceGraph(segments, Fa);
 }
 
+// ══════════════════════════════════════
+//  1本毎の推進力（区間別推進力計算表を管1本ずつに細分化）
+//  直線: F = F前 + fo×l
+//  曲線: F = K × (F前 + fo×l')  ※l'=曲線長/本数。継手を1本通過するごとにK倍される考え方をそのまま管単位に適用。
+//        （区間合計は既存の F_before×K^n + fo×CL×λ と完全に一致する）
+// ══════════════════════════════════════
+function buildPipeForceTable(segments) {
+  const lp = n('pipeLen') || 2.43;
+  const maxL = segments.reduce((s,seg) => s + (seg.L || 0), 0);
+  const rows = [];
+  let posFromEP = 0; // 到達側からの積算距離（segments自体がEP→BP順のため）
+
+  segments.forEach(seg => {
+    if (seg.type === 'tip' || !(seg.L > 0)) return; // 先端抵抗は1本の管ではないので対象外
+    const F_start = seg.F_cum - seg.dF;
+    if (seg.type === 'straight') {
+      const numPipes = Math.max(1, Math.ceil(seg.L / lp));
+      let prevF = F_start;
+      for (let j = 1; j <= numPipes; j++) {
+        const pipeLen = (j < numPipes) ? lp : (seg.L - lp * (numPipes - 1));
+        const dF = seg.fo * pipeLen;
+        const F = prevF + dF;
+        posFromEP += pipeLen;
+        rows.push({ seg: seg.label, distFromBP: maxL - posFromEP, dF, F_cum: F,
+          formula: `F=F前+fo×l（${seg.fo.toFixed(2)}×${pipeLen.toFixed(2)}）` });
+        prevF = F;
+      }
+    } else if (seg.type === 'curve') {
+      const numPipes = seg.n;
+      const pipeLen = seg.L / numPipes;
+      let prevF = F_start;
+      for (let j = 1; j <= numPipes; j++) {
+        const F = seg.K * (prevF + seg.fo * pipeLen);
+        const dF = F - prevF;
+        posFromEP += pipeLen;
+        rows.push({ seg: seg.label, distFromBP: maxL - posFromEP, dF, F_cum: F,
+          formula: `F=K×(F前+fo×l')＝${seg.K.toFixed(4)}×(F前+${(seg.fo*pipeLen).toFixed(1)})` });
+        prevF = F;
+      }
+    }
+  });
+
+  rows.forEach((r, i) => { r.no = i + 1; }); // 既存の管本数表と同じ数え方（到達側=1本目）
+
+  const tableEl = document.getElementById('pipeForceTable');
+  if (!tableEl) return;
+  if (!rows.length) { tableEl.innerHTML = ''; return; }
+  tableEl.innerHTML =
+    '<thead><tr><th>本数</th><th>区間</th><th>距離(m)</th><th>F区間(kN)</th><th>F累計(kN)</th><th>計算式</th></tr></thead><tbody>' +
+    rows.map(r => `<tr>
+      <td class="mono">${r.no}</td>
+      <td class="left">${r.seg}</td>
+      <td class="mono">${r.distFromBP.toFixed(2)}</td>
+      <td class="mono">${r.dF.toFixed(1)}</td>
+      <td class="mono"><b>${r.F_cum.toFixed(1)}</b></td>
+      <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
+    </tr>`).join('') +
+    '</tbody>';
+}
+
+// スパンごとに色を変えるためのパレット（直線・曲線とも同じ並びで巡回）
+const FORCE_GRAPH_PALETTE = ['#1d6fd8','#f59e0b','#16a34a','#db2777','#7c3aed','#0891b2','#ca8a04','#dc2626'];
+
 function drawForceGraph(segments, Fa) {
   const canvas = document.getElementById('forceGraph');
   const dpr = window.devicePixelRatio || 1;
@@ -2025,13 +2097,18 @@ function drawForceGraph(segments, Fa) {
   const ctx = canvas.getContext('2d');
   ctx.scale(dpr, dpr);
   ctx.clearRect(0,0,w,h);
-  const pad = { top:20, right:20, bottom:40, left:60 };
+  const pad = { top:20, right:20, bottom:56, left:60 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
   const maxF = Math.max(Fa * 1.1, ...segments.map(s => s.F_cum));
   const maxL = segments.reduce((s,seg) => s + (seg.L || 0), 0);
   if (!maxL) return;
+
+  // 表示は発進坑口(x=0)→到達坑口(x=maxL)。実際の計算は到達側→発進側に積算するため、
+  // 元のsegments（EP→BP順）を使い、x座標だけ (maxL - 元のcumL) で左右反転して描画する。
   const sx = x => pad.left + x / maxL * cw;
   const sy = y => pad.top + ch - y / maxF * ch;
+
+  // Y軸グリッド
   ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 0.5;
   for (let i=0;i<=5;i++) {
     const y = maxF * i / 5;
@@ -2039,31 +2116,69 @@ function drawForceGraph(segments, Fa) {
     ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='right';
     ctx.fillText((y/1000).toFixed(1)+'MN', pad.left-4, sy(y)+3);
   }
+  // 許容耐力ライン
   ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 1.5; ctx.setLineDash([6,4]);
   ctx.beginPath(); ctx.moveTo(pad.left, sy(Fa)); ctx.lineTo(pad.left+cw, sy(Fa)); ctx.stroke();
   ctx.setLineDash([]);
+  ctx.fillStyle='#ef4444'; ctx.font='9px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('許容耐力 Fa', pad.left+4, sy(Fa)-4);
+
+  // X軸 距離目盛（発進坑口=0 〜 到達坑口=maxL）
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 0.5;
+  const xTicks = 5;
+  for (let i=0;i<=xTicks;i++) {
+    const x = maxL * i / xTicks;
+    const px = sx(x);
+    ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, pad.top+ch); ctx.stroke();
+    ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+    ctx.fillText(x.toFixed(1)+'m', px, pad.top+ch+12);
+  }
+
+  // 曲線・グラフ本体（スパンごとに色を変え、x座標は発進坑口起点に反転）
   let cumL = 0;
-  ctx.strokeStyle = '#1d6fd8'; ctx.lineWidth = 2;
-  ctx.beginPath();
+  let colorIdx = 0;
   segments.forEach(s => {
-    const x1 = sx(cumL), y1 = sy(s.F_cum - (s.dF||0));
-    const x2 = sx(cumL + (s.L||0)), y2 = sy(s.F_cum);
-    if (cumL === 0) ctx.moveTo(x1, y1);
-    ctx.lineTo(x1, y1);
-    if (s.type==='curve') {
-      ctx.strokeStyle='#f59e0b'; ctx.lineWidth=2;
-      ctx.stroke(); ctx.beginPath(); ctx.moveTo(x1,y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke(); ctx.beginPath(); ctx.moveTo(x2,y2);
-      ctx.strokeStyle='#1d6fd8'; ctx.lineWidth=2;
-    } else {
-      ctx.lineTo(x2, y2);
+    const x1 = sx(maxL - cumL), y1 = sy(s.F_cum - (s.dF||0));
+    const x2 = sx(maxL - (cumL + (s.L||0))), y2 = sy(s.F_cum);
+    if (s.type !== 'tip') {
+      ctx.strokeStyle = FORCE_GRAPH_PALETTE[colorIdx % FORCE_GRAPH_PALETTE.length];
+      ctx.lineWidth = s.type==='curve' ? 3 : 2;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      colorIdx++;
     }
     cumL += s.L || 0;
   });
-  ctx.stroke();
+
+  // BC/EC/坑口の位置マーカー（発進坑口を起点に順に積算）
+  const orderedForMarkers = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
+  const markers = [{ label:'発進坑口', x:0 }];
+  let mx = 0;
+  orderedForMarkers.forEach(s => {
+    if (s.type === 'curve') {
+      markers.push({ label:`BC${s.curveNo}`, x: mx });
+      mx += s.L;
+      markers.push({ label:`EC${s.curveNo}`, x: mx });
+    } else {
+      mx += s.L;
+    }
+  });
+  markers.push({ label:'到達坑口(EP)', x: maxL });
+  ctx.setLineDash([3,3]);
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+  markers.forEach(m => {
+    const px = sx(m.x);
+    ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, pad.top+ch); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#1f2937'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  markers.forEach((m, i) => {
+    const px = sx(m.x);
+    const rowOffset = (i % 2) * 10; // 近接するラベルが重ならないよう上下互い違いに
+    ctx.fillText(m.label, px, pad.top + 10 + rowOffset);
+  });
+
   ctx.fillStyle='#374151'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('推進距離 (m)', pad.left + cw/2, h - 5);
+  ctx.fillText('推進距離 (m)　発進坑口 → 到達坑口', pad.left + cw/2, h - 5);
 }
 
 // ══════════════════════════════════════
