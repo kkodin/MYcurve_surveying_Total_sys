@@ -2069,7 +2069,7 @@ function computeProgressiveTrace(segments, Fo, lp) {
   const ordered = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
   const points = [{ x:0, F:Fo, type:'tip', label:'発進坑口' }];
   const pipeRows = [];
-  const markers = [{ label:'発進坑口', x:0 }];
+  const markers = [{ label:'E1', title:'発進坑口', x:0 }];
   let CumK = 1, S = 0, x = 0;
   ordered.forEach(seg => {
     if (!(seg.L > 0)) return;
@@ -2100,7 +2100,7 @@ function computeProgressiveTrace(segments, Fo, lp) {
     }
     if (seg.type === 'curve') markers.push({ label:`EC${seg.curveNo}`, x });
   });
-  markers.push({ label:'到達坑口(EP)', x });
+  markers.push({ label:'E2', title:'到達坑口(EP)', x });
   return { points, pipeRows, markers, maxL: x, F_total: S + Fo * CumK };
 }
 
@@ -2131,8 +2131,8 @@ function buildPipeForceTable(segments, Fo) {
     '</tbody>';
 }
 
-// スパンごとに色を変えるためのパレット（直線・曲線とも同じ並びで巡回）
-const FORCE_GRAPH_PALETTE = ['#1d6fd8','#f59e0b','#16a34a','#db2777','#7c3aed','#0891b2','#ca8a04','#dc2626'];
+// 種別ごとの色（曲線=青、直線=緑）
+const FORCE_GRAPH_COLOR = { curve:'#1d6fd8', straight:'#16a34a' };
 
 function drawForceGraph(segments, Fa, Fo) {
   const canvas = document.getElementById('forceGraph');
@@ -2179,18 +2179,29 @@ function drawForceGraph(segments, Fa, Fo) {
     ctx.fillText(x.toFixed(1)+'m', px, pad.top+ch+12);
   }
 
-  // 折れ線本体（管1本ごとの点をそのままつなぐことで、曲線区間内の増幅もなめらかに表現。スパンごとに色分け）
-  let colorIdx = 0;
-  let lastLabel = null;
+  // 折れ線本体（管1本ごとの点をそのままつなぐことで、曲線区間内の増幅もなめらかに表現。曲線=青／直線=緑）
   for (let i = 1; i < points.length; i++) {
     const p0 = points[i-1], p1 = points[i];
-    if (p1.label !== lastLabel) { colorIdx++; lastLabel = p1.label; }
-    ctx.strokeStyle = FORCE_GRAPH_PALETTE[colorIdx % FORCE_GRAPH_PALETTE.length];
+    ctx.strokeStyle = FORCE_GRAPH_COLOR[p1.type] || '#1d6fd8';
     ctx.lineWidth = p1.type==='curve' ? 3 : 2;
     ctx.beginPath(); ctx.moveTo(sx(p0.x), sy(p0.F)); ctx.lineTo(sx(p1.x), sy(p1.F)); ctx.stroke();
   }
 
-  // BC/EC/坑口の位置マーカー
+  // 管1本ごとに小さな○、5本ごとに●（本数を数えやすくする）
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    const px = sx(p.x), py = sy(p.F);
+    const filled = (i % 5 === 0);
+    ctx.beginPath();
+    ctx.arc(px, py, filled ? 3 : 1.8, 0, Math.PI * 2);
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = FORCE_GRAPH_COLOR[p.type] || '#1d6fd8';
+    ctx.lineWidth = 1.2;
+    if (filled) { ctx.fillStyle = ctx.strokeStyle; ctx.fill(); }
+    else { ctx.fill(); ctx.stroke(); }
+  }
+
+  // E1(発進坑口)/BC/EC/E2(到達坑口)の位置マーカー
   ctx.setLineDash([3,3]);
   ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
   markers.forEach(m => {
@@ -2198,7 +2209,7 @@ function drawForceGraph(segments, Fa, Fo) {
     ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, pad.top+ch); ctx.stroke();
   });
   ctx.setLineDash([]);
-  ctx.fillStyle = '#1f2937'; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  ctx.fillStyle = '#1f2937'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
   markers.forEach((m, i) => {
     const px = sx(m.x);
     const rowOffset = (i % 2) * 10; // 近接するラベルが重ならないよう上下互い違いに
@@ -2206,7 +2217,7 @@ function drawForceGraph(segments, Fa, Fo) {
   });
 
   ctx.fillStyle='#374151'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('推進距離 (m)　発進坑口 → 到達坑口（推進の進行とともに推力は増加）', pad.left + cw/2, h - 5);
+  ctx.fillText('推進距離 (m)　E1(発進坑口) → E2(到達坑口)　●=5本ごと／推進の進行とともに推力は増加', pad.left + cw/2, h - 5);
 }
 
 // ══════════════════════════════════════
