@@ -507,6 +507,7 @@ tr.row-ng td{color:var(--ng)}
     <div class="card">
       <div class="card-title">🔩 1本毎の推進力計算表</div>
       <div class="note-box" style="font-size:11px">推進の進行に合わせて発進側を1本目とします（「管本数・目地仕様集計」の到達側基準とは逆向き）。距離は発進坑口を起点とし、押し込むほど推力が増えていきます。</div>
+      <button class="big-btn secondary" onclick="exportPipeForceCSV()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 CSV出力</button>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
 
@@ -2108,12 +2109,15 @@ function computeProgressiveTrace(segments, Fo, lp) {
 //  1本毎の推進力（発進坑口→到達坑口の進行度ベース。既存の「管本数・目地仕様集計」とは
 //  逆向き＝発進側を1本目として数える。推力が本数とともに増えていく向きに揃えるため）
 // ══════════════════════════════════════
+let lastPipeForceRows = [];
+
 function buildPipeForceTable(segments, Fo) {
   const lp = n('pipeLen') || 2.43;
   const trace = computeProgressiveTrace(segments, Fo, lp);
   const rows = trace.pipeRows;
   let prevF = Fo;
   rows.forEach((r, i) => { r.no = i + 1; r.dF = r.F - prevF; prevF = r.F; });
+  lastPipeForceRows = rows;
 
   const tableEl = document.getElementById('pipeForceTable');
   if (!tableEl) return;
@@ -2129,6 +2133,31 @@ function buildPipeForceTable(segments, Fo) {
       <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
     </tr>`).join('') +
     '</tbody>';
+}
+
+function csvEscape(v) {
+  const s = String(v ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function exportPipeForceCSV() {
+  if (!lastPipeForceRows.length) { showToast('先に推進力計算を実行してください'); return; }
+  const header = ['本数', '区間', '距離(m)', 'F区間(kN)', 'F累計(kN)', '計算式'];
+  const lines = [header.map(csvEscape).join(',')];
+  lastPipeForceRows.forEach(r => {
+    lines.push([r.no, r.seg, r.x.toFixed(2), r.dF.toFixed(1), r.F.toFixed(1), r.formula].map(csvEscape).join(','));
+  });
+  const csv = '﻿' + lines.join('\r\n'); // BOM付きでExcelの文字化けを防ぐ
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = v('siteName') || 'project';
+  const span = v('siteSpan') || '';
+  a.href = url;
+  a.download = `MYcurve_${name}${span?'_'+span:''}_1本毎推進力_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSVファイルを保存しました');
 }
 
 // 種別ごとの色（曲線=青、直線=緑）
