@@ -343,12 +343,6 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🔧 直線区間の個別仕様</div>
-    <div class="note-box" style="font-size:11px">各直線区間は既定で「推進管仕様」カードの標準仕様を使います。区間ごとに管種・管長・クッション材厚・つぶれ代・継手種別を個別に変えたい場合はチェックを入れてください（各曲線の個別仕様は曲線ブロック内にあります）。</div>
-    <div id="straightSpecList"></div>
-  </div>
-
   <div class="card" id="pipeLenOptCard">
     <div class="card-title">📏 管長さ最適化アドバイス</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
@@ -1002,7 +996,7 @@ function ensureSpec(ref) {
   return ref.spec;
 }
 function afterSegSpecChange(kind) {
-  if (kind === 'curve') renderCurves(); else renderStraightSpecs();
+  // 個別仕様パネルは線形計算結果（calcAlignment内）に描画されるため、ここで再描画すれば十分。
   calcAlignment();
   refreshForceIfCalculated();
   autoSave();
@@ -1056,24 +1050,6 @@ function syncStraightSpecsLength() {
   straightSpecs.length = need;
 }
 
-function straightLabel(idx, total) {
-  if (idx === 0 && total === 1) return '第1直線（全区間）';
-  if (idx === total - 1) return '最終直線';
-  return `第${idx + 1}直線`;
-}
-
-function renderStraightSpecs() {
-  const el = document.getElementById('straightSpecList');
-  if (!el) return;
-  syncStraightSpecsLength();
-  el.innerHTML = straightSpecs.map((s, idx) => `
-    <div class="curve-block">
-      <div class="curve-block-title"><span>${straightLabel(idx, straightSpecs.length)}</span></div>
-      ${segSpecFieldsHTML('straight', idx, s.spec)}
-    </div>
-  `).join('');
-}
-
 // ══════════════════════════════════════
 //  曲線区間管理（線形計算方式）
 // ══════════════════════════════════════
@@ -1086,7 +1062,6 @@ function addCurve() {
   curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, spec:null});
   renderCurves();
   syncStraightSpecsLength();
-  renderStraightSpecs();
   calcAlignment();
 }
 
@@ -1094,7 +1069,6 @@ function removeCurve(id) {
   curves = curves.filter(c => c.id !== id);
   renderCurves();
   syncStraightSpecsLength();
-  renderStraightSpecs();
   calcAlignment();
 }
 
@@ -1131,7 +1105,6 @@ function renderCurves() {
         <div class="field-row"><label>秒</label><input id="cSec_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.sec}" oninput="onCurveChange(${c.id})"><span class="unit">″</span></div>
       </div>
       <div id="cCalc_${c.id}" style="background:#f0fdf4;border-radius:8px;padding:8px;font-size:12px;margin-top:4px;color:var(--ok)"></div>
-      ${segSpecFieldsHTML('curve', c.id, c.spec)}
     </div>
   `).join('');
 }
@@ -1205,31 +1178,31 @@ function calcAlignment() {
   if (curves.length === 0) {
     // 直線のみ
     totalLen = L0 + Lf;
-    segments.push({ label:'第1直線（BP→EP）', L: totalLen, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
+    segments.push({ label:'第1直線（BP→EP）', L: totalLen, kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
   } else {
     // 第1直線: L0 - TL[0]
     const s0 = L0 - TLs[0];
     if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
-    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
+    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
 
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
       const cSpec = resolveSpec(c.spec);
-      segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: cSpec.S4, spec: cSpec });
+      segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: cSpec.S4, kind:'curve', key:c.id, spec: cSpec });
       // 次の直線
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
         const sMid = Lmid - TLs[i] - TLs[i+1];
         if (sMid < 0) { valid = false; warnMsg += `\n⚠ 第${i+2}直線(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
-        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec) });
+        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), kind:'straight', key:i+1, spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec) });
       }
     });
 
     // 最終直線: Lf - TL[last]
     const sf = Lf - TLs[TLs.length-1];
     if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
-    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec) });
+    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), kind:'straight', key:curves.length, spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec) });
 
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
@@ -1249,9 +1222,13 @@ function calcAlignment() {
   } else {
     let html = '<div style="font-size:12px">';
     segments.forEach(seg => {
-      html += `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--line)">
-        <span ${seg.isCurve?'style="color:var(--warn);font-weight:bold"':''}>${seg.label}</span>
-        <span class="mono">${seg.L.toFixed(3)} m</span>
+      const rawSpec = seg.kind === 'curve'
+        ? (curves.find(c => c.id === seg.key) || {}).spec
+        : (straightSpecs[seg.key] || {}).spec;
+      html += `<div style="border:1px solid var(--line);border-radius:8px;padding:8px;margin:6px 0">
+        <div ${seg.isCurve?'style="color:var(--warn);font-weight:bold"':'style="font-weight:bold"'}>${seg.label}</div>
+        <div class="mono" style="text-align:center;font-size:16px;margin:4px 0">${seg.L.toFixed(3)} m</div>
+        ${segSpecFieldsHTML(seg.kind, seg.key, rawSpec)}
       </div>`;
     });
     html += `<div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:bold;color:var(--blue2)">
@@ -2726,7 +2703,6 @@ function setProjectData(d) {
     renderCurves();
     straightSpecs = (d.alignment.straightSpecs || []).map(s => ({ spec: s && s.spec ? s.spec : null }));
     syncStraightSpecsLength();
-    renderStraightSpecs();
     // seg_L0: 新形式は alignment.seg_L0、旧フォーマットは curves[0].L に相当
     if (d.alignment.seg_L0 != null) {
       setV('seg_L0', d.alignment.seg_L0);
@@ -2867,7 +2843,7 @@ function updateProjectSummary() {
     onPipeCategoryChange(); // 自動項目の読取専用化・シールド機外径の初期値設定
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
     renderCurves();
-    renderStraightSpecs();
+    calcAlignment(); // 線形計算結果（区間ごとの個別仕様パネルを含む）を初期表示する
     updateGroundLen();
     renderSurveyRows();
     calcSurveyBaseAz();
