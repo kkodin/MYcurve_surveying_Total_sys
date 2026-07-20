@@ -992,24 +992,24 @@ function segSpecFieldsHTML(kind, key, spec) {
         </div>
         <div id="${prefix}_steelFields" style="display:${isSteel?'':'none'}">
           <div class="two-col">
-            <div class="field-row"><label>外径D [m]</label><input id="${prefix}_steelD" class="mono" type="number" step="0.001" value="${spec.steelD ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
-            <div class="field-row"><label>内径 [m]</label><input id="${prefix}_steelInner" class="mono" type="number" step="0.001" value="${spec.steelInner ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>外径D [m]</label><input id="${prefix}_steelD" class="mono" type="text" inputmode="decimal" value="${spec.steelD ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>内径 [m]</label><input id="${prefix}_steelInner" class="mono" type="text" inputmode="decimal" value="${spec.steelInner ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
           </div>
           <div class="two-col">
-            <div class="field-row"><label>管厚 [m]</label><input id="${prefix}_steelThick" class="mono" type="number" step="0.001" value="${spec.steelThick ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
-            <div class="field-row"><label>重量W [kN/m]</label><input id="${prefix}_steelW" class="mono" type="number" step="0.01" value="${spec.steelW ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>管厚 [m]</label><input id="${prefix}_steelThick" class="mono" type="text" inputmode="decimal" value="${spec.steelThick ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>重量W [kN/m]</label><input id="${prefix}_steelW" class="mono" type="text" inputmode="decimal" value="${spec.steelW ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
           </div>
           <div class="two-col">
-            <div class="field-row"><label>許容耐荷力Fa [kN]</label><input id="${prefix}_steelFa" class="mono" type="number" step="1" value="${spec.steelFa ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
-            <div class="field-row"><label>外圧強さP_ext [kN/m²]</label><input id="${prefix}_steelPext" class="mono" type="number" step="0.1" value="${spec.steelPext ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>許容耐荷力Fa [kN]</label><input id="${prefix}_steelFa" class="mono" type="text" inputmode="decimal" value="${spec.steelFa ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>外圧強さP_ext [kN/m²]</label><input id="${prefix}_steelPext" class="mono" type="text" inputmode="decimal" value="${spec.steelPext ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
           </div>
         </div>
         <div class="two-col">
-          <div class="field-row"><label>管長l′ [m]</label><input id="${prefix}_len" class="mono" type="number" step="0.01" placeholder="標準を使用" value="${spec.len ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">m</span></div>
-          <div class="field-row"><label>クッション材厚 [mm]</label><input id="${prefix}_cushion" class="mono" type="number" step="1" placeholder="標準を使用" value="${spec.cushion ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
+          <div class="field-row"><label>管長l′ [m]</label><input id="${prefix}_len" class="mono" type="text" inputmode="decimal" placeholder="標準を使用" value="${spec.len ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">m</span></div>
+          <div class="field-row"><label>クッション材厚 [mm]</label><input id="${prefix}_cushion" class="mono" type="text" inputmode="decimal" placeholder="標準を使用" value="${spec.cushion ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
         </div>
         <div class="two-col">
-          <div class="field-row"><label>つぶれ代 [mm]</label><input id="${prefix}_crush" class="mono" type="number" step="1" placeholder="標準を使用" value="${spec.crush ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
+          <div class="field-row"><label>つぶれ代 [mm]</label><input id="${prefix}_crush" class="mono" type="text" inputmode="decimal" placeholder="標準を使用" value="${spec.crush ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
           <div class="field-row full"><label>継手種別</label>
             <select id="${prefix}_jointType" onchange="onSegSpecChange('${kind}','${key}')">
               <option value="60" ${jt==='60'?'selected':''}>JC型 — 許容60mm</option>
