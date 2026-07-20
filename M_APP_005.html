@@ -1005,7 +1005,22 @@ function onSegSpecToggle(kind, key) {
   const ref = getSegRef(kind, key);
   if (!ref) return;
   const spec = ensureSpec(ref);
-  spec.on = document.getElementById(`seg_${kind}_${key}_on`).checked;
+  const turningOn = document.getElementById(`seg_${kind}_${key}_on`).checked;
+  spec.on = turningOn;
+  if (turningOn) {
+    // 個別仕様をONにした時点の標準仕様の値をコピーしておく（空欄からではなく、そこから編集を始められるように）
+    const std = resolveSpec(null);
+    spec.category = std.category;
+    spec.grade = std.grade;
+    spec.len = std.lp;
+    spec.cushion = std.S4;
+    spec.crush = std.crush;
+    spec.jointType = String(std.jointAllowMm);
+    if (std.category === 'steel') {
+      spec.steelD = std.D; spec.steelInner = std.Di; spec.steelThick = std.t;
+      spec.steelW = std.W; spec.steelFa = std.Fa; spec.steelPext = std.Pext;
+    }
+  }
   afterSegSpecChange(kind);
 }
 function onSegSpecCategoryChange(kind, key) {
