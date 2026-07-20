@@ -42,6 +42,12 @@ body{font-family:Meiryo,"Yu Gothic UI","Hiragino Sans",sans-serif;background:var
 .card-title.accent{border-color:var(--accent);color:var(--accent)}
 .card-title.ok{border-color:var(--ok);color:var(--ok)}
 .card-title.warn{border-color:var(--warn);color:var(--warn)}
+.card.accordion{padding-bottom:0}
+.card.accordion.open{padding-bottom:14px}
+.card.accordion > .card-title{cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;margin-bottom:0;padding:2px 0 2px 9px;min-height:28px}
+.card.accordion > .card-title::after{content:'▸';font-size:13px;color:var(--sub);margin-left:8px;flex-shrink:0;transition:transform .15s}
+.card.accordion.open > .card-title::after{transform:rotate(90deg)}
+.card.accordion:not(.open) > .card-title ~ *{display:none !important}
 .field-row{display:grid;grid-template-columns:1fr auto;gap:6px 8px;align-items:center;margin:8px 0}
 .field-row label{font-size:12px;font-weight:bold;color:var(--sub);grid-column:1/-1}
 .field-row input,.field-row select{min-height:42px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:16px;font-family:inherit;background:var(--card);color:var(--text);width:100%}
@@ -155,8 +161,8 @@ tr.row-ng td{color:var(--ng)}
 <!-- ═══ TAB 1: 基本情報 ═══ -->
 <section class="page" id="p0">
 
-  <div class="card">
-    <div class="card-title">📋 現場情報</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📋 現場情報</div>
     <div class="field-row full"><label>現場名</label><input id="siteName" placeholder="例: 館町雨水工区" oninput="autoSave()"></div>
     <div class="two-col">
       <div class="field-row full"><label>スパン</label><input id="siteSpan" placeholder="A-1" oninput="autoSave()"></div>
@@ -164,8 +170,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">⚙️ 推進工法</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">⚙️ 推進工法</div>
     <div class="method-chips">
       <div class="method-chip active" data-method="blade" onclick="setMethod('blade')">
         <div class="mc-icon">🔪</div>
@@ -191,8 +197,8 @@ tr.row-ng td{color:var(--ng)}
     <div id="methodNote" class="note-box" style="margin-top:4px"></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🏗️ 推進管仕様</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🏗️ 推進管仕様</div>
     <div class="two-col">
       <div class="field-row full">
         <label>呼び径 [mm]</label>
@@ -256,8 +262,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🌱 土質条件</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🌱 土質条件</div>
     <div class="field-row full">
       <label>土質種別</label>
       <select id="soilType" onchange="onSoilTypeChange()">
@@ -299,8 +305,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">📐 線形・推進区間</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📐 線形・推進区間</div>
     <div class="ok-box" style="font-size:11px;margin-bottom:8px">
       BP→IP1間距離・曲線諸元（R/方向/交角）・最終直線を入力すると、CL・TL・路線長を自動計算します。
     </div>
@@ -343,16 +349,16 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card" id="pipeLenOptCard">
-    <div class="card-title">📏 管長さ最適化アドバイス</div>
+  <div class="card accordion" id="pipeLenOptCard">
+    <div class="card-title" onclick="toggleAccordion(this)">📏 管長さ最適化アドバイス</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
       S₁ = D×l′/(R−D/2) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
     </div>
     <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
   </div>
 
-  <div class="card" id="pipeScheduleCard">
-    <div class="card-title">🔧 管本数・目地仕様 集計</div>
+  <div class="card accordion" id="pipeScheduleCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🔧 管本数・目地仕様 集計</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
       管長・路線長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。
     </div>
@@ -689,6 +695,16 @@ function showToast(msg, dur=2200) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), dur);
+}
+
+// アコーディオン式カード：タイトルをタップすると開閉。同じタブ内の他のカードが開いていれば閉じる。
+function toggleAccordion(titleEl) {
+  const card = titleEl.closest('.card.accordion');
+  if (!card) return;
+  const willOpen = !card.classList.contains('open');
+  const page = card.closest('.page') || document;
+  page.querySelectorAll('.card.accordion.open').forEach(c => { if (c !== card) c.classList.remove('open'); });
+  card.classList.toggle('open', willOpen);
 }
 
 function showPage(idx) {
