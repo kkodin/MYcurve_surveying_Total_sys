@@ -1656,16 +1656,18 @@ function buildPipeSchedule(segments) {
     resultEl.innerHTML = '<div class="note-box">曲線区間を追加すると表示されます。</div>';
     return;
   }
-  // 区間（直線・曲線）ごとに、その区間の管長l′で管を生成（BP側から順に）
+  // 区間（直線・曲線）ごとに、その区間の管長l′で管を生成（BP側から順に）。
+  // 端数を最後の1本に寄せず区間内で均等割りする（区間境界の直前だけ極端に短い管ができるのを防ぐ）。
   const pipes = [];
   (segments || []).forEach(seg => {
     if (!(seg.L > 0) || !seg.spec) return;
     const lp = seg.spec.lp || 2.43;
-    const num = Math.max(1, Math.ceil(seg.L / lp));
+    const num = Math.max(1, Math.round(seg.L / lp));
+    const pipeLen = seg.L / num;
     for (let j = 0; j < num; j++) {
-      const start = seg.startDist + j * lp;
-      const end = Math.min(seg.endDist, seg.startDist + (j + 1) * lp);
-      pipes.push({ start, end, D: seg.spec.D, lp });
+      const start = seg.startDist + j * pipeLen;
+      const end = seg.startDist + (j + 1) * pipeLen;
+      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen });
     }
   });
   const N = pipes.length;
@@ -2280,9 +2282,11 @@ function computeProgressiveTrace(segments, Fo) {
     const netCushionM = Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0)) / 1000;
     if (seg.type === 'curve') markers.push({ label:`BC${seg.curveNo}`, x });
     if (seg.type === 'straight') {
-      const numPipes = Math.max(1, Math.ceil(seg.L / lp));
+      // 端数を最後の1本に寄せず、区間内で均等割りする（曲線側と同じ考え方）。
+      // そうしないと区間境界(BC等)の直前だけ極端に短い管ができ、グラフ上のピッチが乱れる。
+      const numPipes = Math.max(1, Math.round(seg.L / lp));
+      const pipeLen = seg.L / numPipes;
       for (let j = 1; j <= numPipes; j++) {
-        const pipeLen = (j < numPipes) ? lp : (seg.L - lp * (numPipes - 1));
         S += CumK * seg.fo * pipeLen;
         x += pipeLen + netCushionM;
         const F = S + Fo * CumK;
