@@ -241,8 +241,10 @@ tr.row-ng td{color:var(--ng)}
           <option value="30">JA型 — 許容30mm</option>
         </select>
       </div>
-      <div class="field-row"><label>クッション材厚 S4 [mm]</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" oninput="autoSave();calcAlignment()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>クッション材厚 S4 [mm]</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>クッション材つぶれ代 [mm]</label><input id="pipeCrush" class="mono" value="0" type="number" step="1" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
     </div>
+    <div class="note-box" style="font-size:11px">つぶれ代: 推進荷重でクッション材が圧縮された後の厚さ減少分。1本毎の推進力計算表の距離には (クッション材厚－つぶれ代) を管長に加えて反映します。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
@@ -339,6 +341,12 @@ tr.row-ng td{color:var(--ng)}
         <span class="unit">m</span>
       </div>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 直線区間の個別仕様</div>
+    <div class="note-box" style="font-size:11px">各直線区間は既定で「推進管仕様」カードの標準仕様を使います。区間ごとに管種・管長・クッション材厚・つぶれ代・継手種別を個別に変えたい場合はチェックを入れてください（各曲線の個別仕様は曲線ブロック内にあります）。</div>
+    <div id="straightSpecList"></div>
   </div>
 
   <div class="card" id="pipeLenOptCard">
@@ -513,6 +521,11 @@ tr.row-ng td{color:var(--ng)}
     <div class="card" id="bcCard" style="display:none">
       <div class="card-title accent">⚠️ BC点外圧管種検討表</div>
       <div class="tbl-wrap"><table id="bcTable"></table></div>
+    </div>
+
+    <div class="card" id="extCard">
+      <div class="card-title">🧱 外圧耐荷力照査（区間別、Mr/M≥1.2）</div>
+      <div class="tbl-wrap"><table id="extTable"></table></div>
     </div>
 
     <div class="card">
@@ -875,6 +888,193 @@ function onPipeDiaChange() {
 }
 
 // ══════════════════════════════════════
+//  区間（直線・曲線）ごとの個別仕様
+//  標準仕様（推進管仕様カードの値）か、区間ごとの個別設定（管種・種別・管長・
+//  クッション材厚・つぶれ代・継手種別）のどちらかを解決して返す。
+//  呼び径（外径）は標準仕様に固定（掘削径が途中で変わることはないため）。
+//  鋼管を選んだ区間のみ、外径等も手入力できる。
+// ══════════════════════════════════════
+function resolveSpec(override) {
+  const std = {
+    category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
+    D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
+    lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
+    S4: n('pipeCushion') || 0, crush: n('pipeCrush') || 0, jointAllowMm: n('pipeJointType') || 40
+  };
+  if (!override || !override.on) return std;
+  const category = override.category || std.category;
+  let vals;
+  if (category === 'steel') {
+    vals = {
+      D: override.steelD > 0 ? override.steelD : std.D,
+      Di: override.steelInner > 0 ? override.steelInner : std.Di,
+      t: override.steelThick > 0 ? override.steelThick : std.t,
+      W: override.steelW > 0 ? override.steelW : std.W,
+      Fa: override.steelFa > 0 ? override.steelFa : std.Fa,
+      Pext: override.steelPext > 0 ? override.steelPext : std.Pext,
+    };
+  } else {
+    const grade = override.grade || (CATEGORY_GRADES[category]||[])[0]?.value || '1shu';
+    const dia = parseInt(v('pipeDia'));
+    const s = ((PIPE_DB[category]||{})[grade]||{})[dia];
+    vals = s ? { D:s.outer, Di:s.inner, t:s.t, W:s.W, Fa:s.Fa, Pext:s.Pext } : std;
+  }
+  return {
+    category,
+    grade: category === 'steel' ? null : (override.grade || (CATEGORY_GRADES[category]||[])[0]?.value),
+    D: vals.D, Di: vals.Di, t: vals.t, W: vals.W, Fa: vals.Fa, Pext: vals.Pext,
+    lp: override.len > 0 ? override.len : std.lp,
+    S4: Number.isFinite(override.cushion) ? override.cushion : std.S4,
+    crush: Number.isFinite(override.crush) ? override.crush : std.crush,
+    jointAllowMm: override.jointType || std.jointAllowMm
+  };
+}
+
+// 区間の個別仕様パネル（曲線ブロック・直線カードの両方で共用）
+function segSpecFieldsHTML(kind, key, spec) {
+  spec = spec || {};
+  const prefix = `seg_${kind}_${key}`;
+  const cat = spec.category || 'hume';
+  const catLabel = {hume:'ヒューム管', resin:'レジン管', steel:'鋼管'};
+  const catOptions = ['hume','resin','steel'].map(c =>
+    `<option value="${c}" ${cat===c?'selected':''}>${catLabel[c]}</option>`).join('');
+  const grades = CATEGORY_GRADES[cat] || [];
+  const gradeOptions = grades.map(g =>
+    `<option value="${g.value}" ${spec.grade===g.value?'selected':''}>${g.label}</option>`).join('');
+  const isSteel = cat === 'steel';
+  const jt = spec.jointType || '40';
+  return `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:bold;cursor:pointer">
+        <input type="checkbox" id="${prefix}_on" ${spec.on?'checked':''} onchange="onSegSpecToggle('${kind}','${key}')"> 個別仕様を使う（未使用時は標準仕様）
+      </label>
+      <div id="${prefix}_fields" style="display:${spec.on?'':'none'};margin-top:6px">
+        <div class="two-col">
+          <div class="field-row full"><label>管種</label>
+            <select id="${prefix}_category" onchange="onSegSpecCategoryChange('${kind}','${key}')">${catOptions}</select>
+          </div>
+        </div>
+        <div class="two-col" id="${prefix}_gradeRow" style="display:${isSteel?'none':''}">
+          <div class="field-row full"><label>種別</label>
+            <select id="${prefix}_grade" onchange="onSegSpecChange('${kind}','${key}')">${gradeOptions}</select>
+          </div>
+        </div>
+        <div id="${prefix}_steelFields" style="display:${isSteel?'':'none'}">
+          <div class="two-col">
+            <div class="field-row"><label>外径D [m]</label><input id="${prefix}_steelD" class="mono" type="number" step="0.001" value="${spec.steelD ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>内径 [m]</label><input id="${prefix}_steelInner" class="mono" type="number" step="0.001" value="${spec.steelInner ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+          </div>
+          <div class="two-col">
+            <div class="field-row"><label>管厚 [m]</label><input id="${prefix}_steelThick" class="mono" type="number" step="0.001" value="${spec.steelThick ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>重量W [kN/m]</label><input id="${prefix}_steelW" class="mono" type="number" step="0.01" value="${spec.steelW ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+          </div>
+          <div class="two-col">
+            <div class="field-row"><label>許容耐荷力Fa [kN]</label><input id="${prefix}_steelFa" class="mono" type="number" step="1" value="${spec.steelFa ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>外圧強さP_ext [kN/m²]</label><input id="${prefix}_steelPext" class="mono" type="number" step="0.1" value="${spec.steelPext ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"></div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="field-row"><label>管長l′ [m]</label><input id="${prefix}_len" class="mono" type="number" step="0.01" placeholder="標準を使用" value="${spec.len ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">m</span></div>
+          <div class="field-row"><label>クッション材厚 [mm]</label><input id="${prefix}_cushion" class="mono" type="number" step="1" placeholder="標準を使用" value="${spec.cushion ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
+        </div>
+        <div class="two-col">
+          <div class="field-row"><label>つぶれ代 [mm]</label><input id="${prefix}_crush" class="mono" type="number" step="1" placeholder="標準を使用" value="${spec.crush ?? ''}" oninput="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
+          <div class="field-row full"><label>継手種別</label>
+            <select id="${prefix}_jointType" onchange="onSegSpecChange('${kind}','${key}')">
+              <option value="60" ${jt==='60'?'selected':''}>JC型 — 許容60mm</option>
+              <option value="40" ${jt==='40'?'selected':''}>JB型 — 許容40mm</option>
+              <option value="30" ${jt==='30'?'selected':''}>JA型 — 許容30mm</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function getSegRef(kind, key) {
+  if (kind === 'curve') return curves.find(c => String(c.id) === String(key));
+  const idx = parseInt(key);
+  syncStraightSpecsLength();
+  return straightSpecs[idx];
+}
+function ensureSpec(ref) {
+  if (!ref.spec) ref.spec = { on:false, category:'hume', grade:'1shu' };
+  return ref.spec;
+}
+function afterSegSpecChange(kind) {
+  if (kind === 'curve') renderCurves(); else renderStraightSpecs();
+  calcAlignment();
+  refreshForceIfCalculated();
+  autoSave();
+}
+function onSegSpecToggle(kind, key) {
+  const ref = getSegRef(kind, key);
+  if (!ref) return;
+  const spec = ensureSpec(ref);
+  spec.on = document.getElementById(`seg_${kind}_${key}_on`).checked;
+  afterSegSpecChange(kind);
+}
+function onSegSpecCategoryChange(kind, key) {
+  const ref = getSegRef(kind, key);
+  if (!ref) return;
+  const spec = ensureSpec(ref);
+  spec.category = document.getElementById(`seg_${kind}_${key}_category`).value;
+  if (spec.category !== 'steel') spec.grade = (CATEGORY_GRADES[spec.category]||[])[0]?.value || '1shu';
+  afterSegSpecChange(kind);
+}
+function onSegSpecChange(kind, key) {
+  const ref = getSegRef(kind, key);
+  if (!ref) return;
+  const spec = ensureSpec(ref);
+  const prefix = `seg_${kind}_${key}`;
+  const g = suffix => document.getElementById(prefix+suffix);
+  if (g('_grade')) spec.grade = g('_grade').value;
+  ['_steelD','_steelInner','_steelThick','_steelW','_steelFa','_steelPext'].forEach(suf => {
+    const el = g(suf);
+    if (el) { const val = parseFloat(el.value); spec[suf.slice(1)] = Number.isFinite(val) && val > 0 ? val : null; }
+  });
+  const lenEl = g('_len'); const lenVal = lenEl ? parseFloat(lenEl.value) : NaN;
+  spec.len = Number.isFinite(lenVal) && lenVal > 0 ? lenVal : null;
+  const cushionEl = g('_cushion'); const cushionVal = cushionEl ? parseFloat(cushionEl.value) : NaN;
+  spec.cushion = Number.isFinite(cushionVal) ? cushionVal : null;
+  const crushEl = g('_crush'); const crushVal = crushEl ? parseFloat(crushEl.value) : NaN;
+  spec.crush = Number.isFinite(crushVal) ? crushVal : null;
+  if (g('_jointType')) spec.jointType = g('_jointType').value;
+  calcAlignment();
+  refreshForceIfCalculated();
+  autoSave();
+}
+
+// ══════════════════════════════════════
+//  直線区間の個別仕様（第1直線〜最終直線。曲線数+1本、常に自動でサイズを合わせる）
+// ══════════════════════════════════════
+let straightSpecs = [];
+
+function syncStraightSpecsLength() {
+  const need = curves.length + 1;
+  while (straightSpecs.length < need) straightSpecs.push({ spec: null });
+  straightSpecs.length = need;
+}
+
+function straightLabel(idx, total) {
+  if (idx === 0 && total === 1) return '第1直線（全区間）';
+  if (idx === total - 1) return '最終直線';
+  return `第${idx + 1}直線`;
+}
+
+function renderStraightSpecs() {
+  const el = document.getElementById('straightSpecList');
+  if (!el) return;
+  syncStraightSpecsLength();
+  el.innerHTML = straightSpecs.map((s, idx) => `
+    <div class="curve-block">
+      <div class="curve-block-title"><span>${straightLabel(idx, straightSpecs.length)}</span></div>
+      ${segSpecFieldsHTML('straight', idx, s.spec)}
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════
 //  曲線区間管理（線形計算方式）
 // ══════════════════════════════════════
 let curves = [];
@@ -883,14 +1083,18 @@ let curveCounter = 0;
 function addCurve() {
   const id = ++curveCounter;
   const Li = curves.length === 0 ? 0 : 50; // IP間距離（2本目以降のデフォルト）
-  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, cushion:null});
+  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, spec:null});
   renderCurves();
+  syncStraightSpecsLength();
+  renderStraightSpecs();
   calcAlignment();
 }
 
 function removeCurve(id) {
   curves = curves.filter(c => c.id !== id);
   renderCurves();
+  syncStraightSpecsLength();
+  renderStraightSpecs();
   calcAlignment();
 }
 
@@ -914,14 +1118,11 @@ function renderCurves() {
       </div>` : ''}
       <div class="field-row"><label>曲線半径 R [m]</label><input id="cR_${c.id}" class="mono" type="number" step="1" value="${c.R}" oninput="onCurveChange(${c.id})"><span class="unit">m</span></div>
       <div id="cJoint_${c.id}" style="border-radius:8px;padding:8px;font-size:12px;margin:2px 0 6px"></div>
-      <div class="two-col">
-        <div class="field-row full"><label>曲線方向</label>
-          <select id="cDir_${c.id}" onchange="onCurveChange(${c.id})">
-            <option value="R" ${c.dir==='R'?'selected':''}>右カーブ (R)</option>
-            <option value="L" ${c.dir==='L'?'selected':''}>左カーブ (L)</option>
-          </select>
-        </div>
-        <div class="field-row"><label>クッション厚 S4 [mm]</label><input id="cCushion_${c.id}" class="mono" type="number" step="1" placeholder="共通設定を使用" value="${c.cushion ?? ''}" oninput="onCurveChange(${c.id})"><span class="unit">mm</span></div>
+      <div class="field-row full"><label>曲線方向</label>
+        <select id="cDir_${c.id}" onchange="onCurveChange(${c.id})">
+          <option value="R" ${c.dir==='R'?'selected':''}>右カーブ (R)</option>
+          <option value="L" ${c.dir==='L'?'selected':''}>左カーブ (L)</option>
+        </select>
       </div>
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin:4px 0 2px">交角 IA（度 分 秒）</div>
       <div class="three-col">
@@ -930,6 +1131,7 @@ function renderCurves() {
         <div class="field-row"><label>秒</label><input id="cSec_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.sec}" oninput="onCurveChange(${c.id})"><span class="unit">″</span></div>
       </div>
       <div id="cCalc_${c.id}" style="background:#f0fdf4;border-radius:8px;padding:8px;font-size:12px;margin-top:4px;color:var(--ok)"></div>
+      ${segSpecFieldsHTML('curve', c.id, c.spec)}
     </div>
   `).join('');
 }
@@ -943,25 +1145,18 @@ function onCurveChange(id) {
   c.deg = parseFloat(document.getElementById('cDeg_'+id).value)  || 0;
   c.min = parseFloat(document.getElementById('cMin_'+id).value)  || 0;
   c.sec = parseFloat(document.getElementById('cSec_'+id).value)  || 0;
-  const cushionEl = document.getElementById('cCushion_'+id);
-  const cushionVal = cushionEl ? parseFloat(cushionEl.value) : NaN;
-  c.cushion = Number.isFinite(cushionVal) ? cushionVal : null;
   calcAlignment();
-}
-
-// 曲線の実効クッション厚（個別指定が無ければ共通設定を使う）
-function effectiveCushion(c) {
-  return (c.cushion != null && Number.isFinite(c.cushion)) ? c.cushion : (n('pipeCushion') || 20);
 }
 
 function updateCurveJoint(id) {
   const c = curves.find(x => x.id === id);
   const el = document.getElementById('cJoint_'+id);
   if (!c || !el) return;
-  const D = n('pipeOuter') || 0.96;
-  const lp = n('pipeLen') || 2.43;
-  const allowMm = n('pipeJointType') || 40;
-  const S4mm = effectiveCushion(c);
+  const pipeSpec = resolveSpec(c.spec);
+  const D = pipeSpec.D || 0.96;
+  const lp = pipeSpec.lp || 2.43;
+  const allowMm = pipeSpec.jointAllowMm || 40;
+  const S4mm = pipeSpec.S4;
   if (!(c.R > D/2)) {
     el.innerHTML = `<span style="color:var(--ng)">半径Rが管外径に対して小さすぎます</span>`;
     return;
@@ -1006,33 +1201,35 @@ function calcAlignment() {
   let valid = true;
   let warnMsg = '';
 
+  syncStraightSpecsLength();
   if (curves.length === 0) {
     // 直線のみ
     totalLen = L0 + Lf;
-    segments.push({ label:'第1直線（BP→EP）', L: totalLen });
+    segments.push({ label:'第1直線（BP→EP）', L: totalLen, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
   } else {
     // 第1直線: L0 - TL[0]
     const s0 = L0 - TLs[0];
     if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
-    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0) });
+    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
 
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
-      segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: effectiveCushion(c) });
+      const cSpec = resolveSpec(c.spec);
+      segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: cSpec.S4, spec: cSpec });
       // 次の直線
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
         const sMid = Lmid - TLs[i] - TLs[i+1];
         if (sMid < 0) { valid = false; warnMsg += `\n⚠ 第${i+2}直線(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
-        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid) });
+        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec) });
       }
     });
 
     // 最終直線: Lf - TL[last]
     const sf = Lf - TLs[TLs.length-1];
     if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
-    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf) });
+    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec) });
 
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
@@ -1084,7 +1281,7 @@ function calcAlignment() {
 
 function getCurves() {
   return curves.map(c => ({
-    R: c.R, dir: c.dir, CL: c.CL, cushion: c.cushion,
+    R: c.R, dir: c.dir, CL: c.CL, spec: c.spec || null,
     deg: c.deg, min: c.min, sec: c.sec, L: c.L
   }));
 }
@@ -1439,28 +1636,26 @@ function bestPipeLenFor(D, R, S4mm, allowMm) {
 }
 
 function updatePipeLenOpt() {
-  const D = n('pipeOuter') || 0.96;
-  const lp = n('pipeLen') || 2.43;
-  const allowMm = n('pipeJointType') || 40;
-  const S4mm = n('pipeCushion') || 20;
   const curList = getCurves();
   const resultEl = document.getElementById('pipeLenOptResult');
   if (!curList.length) {
     resultEl.innerHTML = '<div class="note-box">曲線区間を追加すると最適管長を表示します。</div>';
     return;
   }
-  const availMm = Math.max(0, allowMm - S4mm);
   let html = '';
   curList.forEach((c, i) => {
+    const spec = resolveSpec(c.spec);
+    const D = spec.D, lp = spec.lp, allowMm = spec.jointAllowMm, S4mm = spec.S4;
     const R = c.R;
     if (R <= D/2) return;
     const denom = R - D/2;
+    const availMm = Math.max(0, allowMm - S4mm);
     const L_max = (availMm / 1000) * denom / D;
     const S1_cur = calcS1(D, lp, R, S4mm);
     const ok = S1_cur <= allowMm;
     const best = bestPipeLenFor(D, R, S4mm, allowMm);
     html += `<div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
-      <b>第${i+1}曲線 R=${R}m</b>
+      <b>第${i+1}曲線 R=${R}m</b>${c.spec && c.spec.on ? ' <span class="pill warn">個別仕様</span>' : ''}
       <div style="font-size:12px;margin-top:4px">
         最大許容管長: <b>${L_max.toFixed(2)} m</b><br>
         現在管長 l′=${lp}m → S₁=${S1_cur.toFixed(1)}mm
@@ -1479,34 +1674,42 @@ function buildPipeSchedule(segments) {
   const resultEl = document.getElementById('pipeScheduleResult');
   if (!resultEl) return;
   const curveSegs = (segments || []).filter(s => s.isCurve);
-  const D = n('pipeOuter') || 0.96;
-  const lp = n('pipeLen') || 2.43;
   const totalLen = segments && segments.length ? segments[segments.length - 1].endDist : 0;
-  if (!curveSegs.length || !(lp > 0) || !(totalLen > 0)) {
+  if (!curveSegs.length || !(totalLen > 0)) {
     resultEl.innerHTML = '<div class="note-box">曲線区間を追加すると表示されます。</div>';
     return;
   }
-  const N = Math.ceil(totalLen / lp);
-  const rows = [];
-  for (let i = 0; i < N; i++) {
-    const start = i * lp, end = Math.min(totalLen, (i + 1) * lp);
+  // 区間（直線・曲線）ごとに、その区間の管長l′で管を生成（BP側から順に）
+  const pipes = [];
+  (segments || []).forEach(seg => {
+    if (!(seg.L > 0) || !seg.spec) return;
+    const lp = seg.spec.lp || 2.43;
+    const num = Math.max(1, Math.ceil(seg.L / lp));
+    for (let j = 0; j < num; j++) {
+      const start = seg.startDist + j * lp;
+      const end = Math.min(seg.endDist, seg.startDist + (j + 1) * lp);
+      pipes.push({ start, end, D: seg.spec.D, lp });
+    }
+  });
+  const N = pipes.length;
+  const rows = pipes.map((pipe, i) => {
     // 推進管は発進立坑(BP側)で継ぎ足されながら管列全体が押し込まれるため、
     // 完成形でBPから見て曲線より奥（到達側）にある管は、施工中に必ずその曲線を通過してくる。
     // そのためBP側から見てこの管の位置(end)より手前にある曲線は、直接またがっていなくても対象に含める。
     // またがる曲線・通過してきた曲線のうち最も目地が広く開く曲線の継手仕様に準ずる（例外ルール）
     let bestS1 = 0, bestSeg = null, inCurve = false;
     curveSegs.forEach(seg => {
-      const overlap = Math.min(end, seg.endDist) - Math.max(start, seg.startDist);
+      const overlap = Math.min(pipe.end, seg.endDist) - Math.max(pipe.start, seg.startDist);
       if (overlap > 1e-9) inCurve = true;
-      if (seg.startDist < end) {
-        const S1 = calcS1(D, lp, seg.R, seg.cushion);
+      if (seg.startDist < pipe.end) {
+        const S1 = calcS1(pipe.D, pipe.lp, seg.R, seg.spec.S4);
         if (S1 > bestS1) { bestS1 = S1; bestSeg = seg; }
       }
     });
     const spec = bestSeg ? (JOINT_SPEC.find(j => bestS1 <= j.allowOpen) || null) : JOINT_SPEC[0];
     // 本数は現場の慣習に合わせ到達側(EP側)を1本目として数える（先頭に押し込まれる管＝到達側が1本目）
-    rows.push({ no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1: bestS1, spec, cushion: bestSeg ? bestSeg.cushion : null });
-  }
+    return { no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1: bestS1, spec, cushion: bestSeg ? bestSeg.spec.S4 : null };
+  });
   rows.reverse(); // 1本目(到達側)から順に並べる
   // 連続する同一判定（曲線番号＋現在地が曲線内か通過済みか＋継手）をまとめて範囲表示
   const groups = [];
@@ -1529,7 +1732,7 @@ function buildPipeSchedule(segments) {
       + `<td style="text-align:center" class="mono">${g.cushion != null ? g.cushion + 'mm' : '—'}</td></tr>`;
   });
   html += '</table>';
-  html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（管長 l′=${lp}m、路線長${totalLen.toFixed(2)}m）</div>`;
+  html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（区間ごとの管長を使用、路線長${totalLen.toFixed(2)}m）</div>`;
   resultEl.innerHTML = html;
 }
 
@@ -1773,13 +1976,14 @@ function calculate() {
   errEl.style.display = 'none';
   resEl.style.display = 'none';
 
-  const D = n('pipeOuter');
-  const Di = n('pipeInner');
-  const t = n('pipeThick');
-  const lp = n('pipeLen');
-  const W = n('pipeWeight');
-  const Fa = n('pipeAllow');
-  const P_ext = n('pipePext');
+  const stdSpec = resolveSpec(null); // 推進管仕様カードの標準仕様
+  const D = stdSpec.D;
+  const Di = stdSpec.Di;
+  const t = stdSpec.t;
+  const lp = stdSpec.lp;
+  const W = stdSpec.W;
+  const Fa = stdSpec.Fa;
+  const P_ext = stdSpec.Pext;
   const Bs = n('pipeBs');
   const gamma = n('soilGamma');
   const phi_soil = n('soilPhi');
@@ -1821,13 +2025,17 @@ function calculate() {
   // 最小土被りの土圧（参考値）
   const tz_min = calcTerzaghi(gamma, phi_soil, C, Hmin, D);
 
-  // fo・Fo（最大土被りで計算）
-  const params = { D, W, N, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
-  const { Fo, fo, foDetail } = calcFoFo(currentMethod, params);
+  // 区間の実効spec（区間ごとのD・Wを使ってfoを再計算するためのヘルパー）
+  function foForSpec(spec, hVal, qTotalVal) {
+    const p = { D: spec.D, W: spec.W, N, phi_soil, phi_pipe, C, adh, q_total: qTotalVal, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
+    return calcFoFo(currentMethod, p);
+  }
 
-  // fo（最小土被り）
-  const params_min = { ...params, q_total: tz_min.q_total, H: Hmin };
-  const { fo: fo_min } = calcFoFo(currentMethod, params_min);
+  // fo・Fo（最大土被りで計算、標準仕様の値。Foは先端一箇所の値のため全区間共通で使う）
+  const { Fo, fo, foDetail } = foForSpec(stdSpec, H, q_total);
+
+  // fo（最小土被り、参考値）
+  const { fo: fo_min } = foForSpec(stdSpec, Hmin, tz_min.q_total);
 
   // 区間分割: 曲線区間を EP→SP 方向で処理
   // curves配列順 = SP側（発進側）から到達側の順とする
@@ -1835,6 +2043,7 @@ function calculate() {
   const curList = getCurves(); // SP→EP 順
   // EP→SP 方向: curvesを逆順に処理
   const reversedCurves = [...curList].reverse();
+  syncStraightSpecsLength();
 
   // 区間分割
   let usedLen = 0;
@@ -1853,15 +2062,17 @@ function calculate() {
   // 先端抵抗は地山に貫入した時点から常にかかる基礎値のため、表では一番先頭に表示する。
   const N_curves = curList.length;
 
-  // 最終直線（到達側）
+  // 最終直線（到達側）＝直線区間の個別仕様カードの「最終直線」パネルに対応
   if (epStraight > 0) {
-    const dF = fo * epStraight;
+    const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec);
+    const { fo: segFo } = foForSpec(segSpec, H, q_total);
+    const dF = segFo * epStraight;
     F_cum += dF;
-    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo, dF, F_cum: F_cum, ord: 2*N_curves + 1 });
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec });
   }
-  // 先端抵抗
+  // 先端抵抗（先端一箇所の値。標準仕様のD・Wを使用）
   F_cum += Fo;
-  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 0 });
+  segments.push({ label:'Fo（先端）', type:'tip', L:0, fo:0, dF:Fo, F_cum, ord: 0, spec: stdSpec });
 
   // 曲線・中間の直線（EP→SP順に計算するが、ラベルはBP側からの通し番号=第N直線・第N曲線で統一）
   // 重要: 曲線を先に処理してから、その曲線の（BP側で隣接する）直前の直線を後で足すこと。
@@ -1870,60 +2081,63 @@ function calculate() {
   const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
-    const { alpha, K } = calcCurveK(c.R, D, lp);
-    const n_pipes = Math.max(1, Math.round(c.CL / lp));
+    const cSpec = resolveSpec(c.spec);
+    const { fo: curveFo } = foForSpec(cSpec, H, q_total);
+    const { alpha, K } = calcCurveK(c.R, cSpec.D, cSpec.lp);
+    const n_pipes = Math.max(1, Math.round(c.CL / cSpec.lp));
     const lambda = n_pipes > 1 ? (Math.pow(K, n_pipes+1) - K) / (n_pipes * (K - 1)) : K;
     const F_before = F_cum;
-    F_cum = F_cum * Math.pow(K, n_pipes) + fo * c.CL * lambda;
-    FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum });
+    F_cum = F_cum * Math.pow(K, n_pipes) + curveFo * c.CL * lambda;
+    FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum, spec: cSpec, R: c.R, alpha });
     segments.push({
       label: `第${curveNo}曲線`, type:'curve', curveNo,
-      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo, dF: F_cum - F_before, F_cum, ord: 2*curveNo
+      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo:curveFo, dF: F_cum - F_before, F_cum, ord: 2*curveNo, spec: cSpec
     });
     // 曲線通過後、次（BP側）の曲線に至るまでの直線（＝第curveNo直線）
     if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
-      const dF = fo * intermediateStraight;
+      const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec);
+      const { fo: midFo } = foForSpec(midSpec, H, q_total);
+      const dF = midFo * intermediateStraight;
       F_cum += dF;
-      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo, dF, F_cum, ord: 2*curveNo - 1 });
+      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec });
     }
   });
 
   // 第1直線（発進側）
   const spRemain = reversedCurves.length > 0 ? spStraight - intermediateStraight * (reversedCurves.length - 1) : spStraight;
   if (spRemain > 0) {
-    const dF = fo * spRemain;
+    const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec);
+    const { fo: firstFo } = foForSpec(firstSpec, H, q_total);
+    const dF = firstFo * spRemain;
     F_cum += dF;
-    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo, dF, F_cum, ord: 1 });
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec });
   }
 
   const F_total = F_cum;
 
-  // 外圧耐荷力照査
+  // 外圧耐荷力照査（標準仕様、サマリー表示用）
   const extCheck = calcExtPressureCheck(Di, t, W, P_ext, q_total);
-
-  // BC点管種検討
-  const dia = parseInt(v('pipeDia'));
-  const category = v('pipeCategory') || 'hume';
-  const r_inner = Di / 2;
-  // カテゴリ別照査グレード
-  const bcGradeMap = {
-    hume:  [{key:'1shu',label:'1種'},{key:'2shu',label:'2種'}],
-    resin: [{key:'RS',label:'RS形'},{key:'RM',label:'RM形'},{key:'RT',label:'RT形'}],
-    steel: [],
-  };
-  const bcGrades = bcGradeMap[category] || [];
-  const bcResults = FBC_arr.map(bc => {
-    const c = curList[bc.idx] || curList[0];
-    const { alpha } = calcCurveK(c.R, D, lp);
-    const checks = bcGrades.map(g => {
-      const qa = (QA_TABLE[g.key]||{})[dia] || 3000;
-      const FaBC = calcFaBC(lp, r_inner, qa, alpha);
-      return { key:g.key, label:g.label, FaBC, ok: bc.F <= FaBC };
-    });
-    return { name:`BC.${bc.idx+1}`, FBC:bc.F, checks };
+  // 外圧耐荷力照査（区間ごと。区間ごとの管厚・重量・外圧強さを反映）
+  const extResults = segments.filter(s => s.type !== 'tip').map(s => {
+    const c = calcExtPressureCheck(s.spec.Di, s.spec.t, s.spec.W, s.spec.Pext, q_total);
+    return { label: s.label, isCurve: s.type === 'curve', individual: !!(s.spec && s.spec.on), ...c };
   });
 
-  lastCalcResult = { F_total, Fo, fo, fo_min, Fa, segments, extCheck, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax };
+  // BC点管種検討（各曲線で実際に使われている管種・種別で判定）
+  const dia = parseInt(v('pipeDia'));
+  const catLabelMap = {hume:'ヒューム管', resin:'レジン管', steel:'鋼管'};
+  const bcResults = FBC_arr.map(bc => {
+    const spec = bc.spec;
+    let FaBC = null;
+    if (spec.category !== 'steel' && spec.grade) {
+      const qa = (QA_TABLE[spec.grade]||{})[dia] || 3000;
+      FaBC = calcFaBC(spec.lp, spec.Di/2, qa, bc.alpha);
+    }
+    const gradeLabel = (CATEGORY_GRADES[spec.category]||[]).find(g=>g.value===spec.grade)?.label || '';
+    return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, ok: FaBC!=null ? bc.F <= FaBC : null };
+  });
+
+  lastCalcResult = { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax };
 
   // ── 表示 ──
   // resEl(結果コンテナ)を先に表示してからrenderResults()を呼ぶ。
@@ -1936,7 +2150,7 @@ function calculate() {
 }
 
 function renderResults(res) {
-  const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
+  const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
   const okForce = F_total <= Fa;
 
   // サマリーメトリクス
@@ -1948,7 +2162,7 @@ function renderResults(res) {
     <div class="metric-card"><div class="metric-label">fo 周面摩擦（H最小=${Hmin}m）</div><div class="metric-value">${fo_min.toFixed(2)}</div><div class="metric-sub">kN/m（参考）</div></div>
     <div class="metric-card"><div class="metric-label">先端抵抗 Fo</div><div class="metric-value">${Fo.toFixed(0)}</div><div class="metric-sub">kN</div></div>
     <div class="metric-card"><div class="metric-label">周面摩擦 fo</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
-    <div class="metric-card"><div class="metric-label">Mr/M（外圧）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${extCheck.ratio.toFixed(2)}</div><div class="metric-sub">≥1.2 要求</div></div>
+    <div class="metric-card"><div class="metric-label">Mr/M（外圧・標準仕様）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${extCheck.ratio.toFixed(2)}</div><div class="metric-sub">≥1.2 要求（区間別は下表参照）</div></div>
     <div class="metric-card"><div class="metric-label">q_total 鉛直土圧</div><div class="metric-value">${q_total.toFixed(1)}</div><div class="metric-sub">kN/m²</div></div>
   `;
 
@@ -2012,23 +2226,34 @@ function renderResults(res) {
 
   buildPipeForceTable(segments, Fo);
 
-  // BC点管種検討
+  // BC点管種検討（各曲線で実際に選ばれている管種・種別を使用）
   const bcCard = document.getElementById('bcCard');
-  if (bcResults.length > 0 && bcResults[0].checks.length > 0) {
+  if (bcResults.length > 0) {
     bcCard.style.display = '';
-    const hdr = bcResults[0].checks.map(c=>`<th>${c.label} FaBC(kN)</th><th>${c.label} 判定</th>`).join('');
     const rows = bcResults.map(b => {
-      const rowNG = b.checks.length > 0 && !b.checks[0].ok;
-      const cells = b.checks.map(c =>
-        `<td class="mono">${c.FaBC===Infinity?'∞':c.FaBC.toFixed(0)}</td>
-         <td><span class="pill ${c.ok?'ok':'ng'}">${c.ok?'OK':'NG'}</span></td>`
-      ).join('');
-      return `<tr class="${rowNG?'row-ng':''}"><td>${b.name}</td><td class="mono">${b.FBC.toFixed(0)}</td>${cells}</tr>`;
+      const rowNG = b.ok === false;
+      const faCell = b.FaBC == null
+        ? `<td colspan="2" style="color:var(--sub)">—（鋼管は手入力Faで別途照査）</td>`
+        : `<td class="mono">${b.FaBC===Infinity?'∞':b.FaBC.toFixed(0)}</td><td><span class="pill ${b.ok?'ok':'ng'}">${b.ok?'OK':'NG'}</span></td>`;
+      return `<tr class="${rowNG?'row-ng':''}"><td>${b.name}</td><td>${b.pipeLabel}</td><td class="mono">${b.FBC.toFixed(0)}</td>${faCell}</tr>`;
     }).join('');
     document.getElementById('bcTable').innerHTML =
-      `<thead><tr><th>BC点</th><th>FBC(kN)</th>${hdr}</tr></thead><tbody>${rows}</tbody>`;
+      `<thead><tr><th>BC点</th><th>使用管種</th><th>FBC(kN)</th><th>FaBC(kN)</th><th>判定</th></tr></thead><tbody>${rows}</tbody>`;
   } else {
     bcCard.style.display = 'none';
+  }
+
+  // 外圧耐荷力照査（区間別。区間ごとの管厚・重量・外圧強さを反映）
+  const extCard = document.getElementById('extCard');
+  if (extCard) {
+    const extRows = extResults.map(e => {
+      const rowNG = !e.ok;
+      return `<tr class="${rowNG?'row-ng':''}"><td class="left">${e.label}${e.individual?' <span class="pill warn" style="font-size:10px">個別仕様</span>':''}</td>
+        <td class="mono">${e.M.toFixed(3)}</td><td class="mono">${e.Mr.toFixed(3)}</td>
+        <td class="mono"><b>${e.ratio.toFixed(2)}</b></td><td><span class="pill ${e.ok?'ok':'ng'}">${e.ok?'OK':'NG'}</span></td></tr>`;
+    }).join('');
+    document.getElementById('extTable').innerHTML =
+      `<thead><tr><th>区間</th><th>M(kN·m/m)</th><th>Mr(kN·m/m)</th><th>Mr/M</th><th>判定</th></tr></thead><tbody>${extRows}</tbody>`;
   }
 
   // グラフ
@@ -2065,21 +2290,24 @@ function computeProgressiveSegments(segments, Fo) {
   return rows;
 }
 
-function computeProgressiveTrace(segments, Fo, lp) {
+function computeProgressiveTrace(segments, Fo) {
   const ordered = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
   const points = [{ x:0, F:Fo, type:'tip', label:'発進坑口' }];
   const pipeRows = [];
   const markers = [{ label:'E1', title:'発進坑口', x:0 }];
   let CumK = 1, S = 0, x = 0;
   ordered.forEach(seg => {
-    if (!(seg.L > 0)) return;
+    if (!(seg.L > 0) || !seg.spec) return;
+    const lp = seg.spec.lp || 2.43;
+    // クッション材厚からつぶれ代を引いた実効厚みを、管1本ごとの距離に加える
+    const netCushionM = Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0)) / 1000;
     if (seg.type === 'curve') markers.push({ label:`BC${seg.curveNo}`, x });
     if (seg.type === 'straight') {
       const numPipes = Math.max(1, Math.ceil(seg.L / lp));
       for (let j = 1; j <= numPipes; j++) {
         const pipeLen = (j < numPipes) ? lp : (seg.L - lp * (numPipes - 1));
         S += CumK * seg.fo * pipeLen;
-        x += pipeLen;
+        x += pipeLen + netCushionM;
         const F = S + Fo * CumK;
         points.push({ x, F, type:'straight', label: seg.label });
         pipeRows.push({ seg: seg.label, type:'straight', x, F,
@@ -2091,7 +2319,7 @@ function computeProgressiveTrace(segments, Fo, lp) {
       for (let j = 1; j <= numPipes; j++) {
         CumK *= seg.K;
         S += CumK * seg.fo * pipeLen;
-        x += pipeLen;
+        x += pipeLen + netCushionM;
         const F = S + Fo * CumK;
         points.push({ x, F, type:'curve', label: seg.label });
         pipeRows.push({ seg: seg.label, type:'curve', x, F,
@@ -2111,8 +2339,7 @@ function computeProgressiveTrace(segments, Fo, lp) {
 let lastPipeForceRows = [];
 
 function buildPipeForceTable(segments, Fo) {
-  const lp = n('pipeLen') || 2.43;
-  const trace = computeProgressiveTrace(segments, Fo, lp);
+  const trace = computeProgressiveTrace(segments, Fo);
   const rows = trace.pipeRows;
   let prevF = Fo;
   rows.forEach((r, i) => { r.no = i + 1; r.dF = r.F - prevF; prevF = r.F; });
@@ -2172,8 +2399,7 @@ function drawForceGraph(segments, Fa, Fo) {
   ctx.clearRect(0,0,w,h);
   const pad = { top:20, right:20, bottom:56, left:60 };
   const cw = w - pad.left - pad.right, ch = h - pad.top - pad.bottom;
-  const lp = n('pipeLen') || 2.43;
-  const trace = computeProgressiveTrace(segments, Fo, lp);
+  const trace = computeProgressiveTrace(segments, Fo);
   const { points, markers, maxL } = trace;
   if (!maxL) return;
   const maxF = Math.max(Fa * 1.1, ...points.map(p => p.F));
@@ -2395,7 +2621,7 @@ function getProjectData() {
       category: v('pipeCategory'), dia: v('pipeDia'), grade: v('pipeGrade'),
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
-      jointType: n('pipeJointType'), cushion: n('pipeCushion'),
+      jointType: n('pipeJointType'), cushion: n('pipeCushion'), crush: n('pipeCrush'),
       Pext: n('pipePext'), Bs: n('pipeBs')
     },
     soil: {
@@ -2407,7 +2633,8 @@ function getProjectData() {
     },
     alignment: {
       totalLength: n('totalLength'), curves: getCurves(),
-      seg_L0: n('seg_L0'), finalL: n('seg_Lf')
+      seg_L0: n('seg_L0'), finalL: n('seg_Lf'),
+      straightSpecs: straightSpecs.map(s => ({ spec: s.spec || null }))
     },
     shaft: {
       launchMode: shaftModes.launch, launchDirect: n('launchDirect'),
@@ -2490,11 +2717,16 @@ function setProjectData(d) {
     cvArr.forEach((c, i) => {
       const id = ++curveCounter;
       // 旧フォーマット: curves[0].L = BP→IP1距離, curves[i≥1].L = IP間距離
+      // spec: 旧保存（cushionのみ）からの後方互換も兼ねる
+      let spec = c.spec || null;
+      if (!spec && Number.isFinite(c.cushion)) spec = { on:true, category:'hume', grade:'1shu', cushion:c.cushion };
       curves.push({ id, L: c.L||50, R: c.R||30, dir: c.dir||'R',
-                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0,
-                    cushion: Number.isFinite(c.cushion) ? c.cushion : null });
+                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0, spec });
     });
     renderCurves();
+    straightSpecs = (d.alignment.straightSpecs || []).map(s => ({ spec: s && s.spec ? s.spec : null }));
+    syncStraightSpecsLength();
+    renderStraightSpecs();
     // seg_L0: 新形式は alignment.seg_L0、旧フォーマットは curves[0].L に相当
     if (d.alignment.seg_L0 != null) {
       setV('seg_L0', d.alignment.seg_L0);
@@ -2635,6 +2867,7 @@ function updateProjectSummary() {
     onPipeCategoryChange(); // 自動項目の読取専用化・シールド機外径の初期値設定
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
     renderCurves();
+    renderStraightSpecs();
     updateGroundLen();
     renderSurveyRows();
     calcSurveyBaseAz();
