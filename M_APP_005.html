@@ -399,6 +399,7 @@ tr.row-ng td{color:var(--ng)}
       <div class="shaft-chips" id="launchShapeChips">
         <div class="shaft-chip active" data-val="rect" onclick="setShaftType('launch','rect',this)">矩形立坑</div>
         <div class="shaft-chip" data-val="circle" onclick="setShaftType('launch','circle',this)">円形立坑</div>
+        <div class="shaft-chip" data-val="oval" onclick="setShaftType('launch','oval',this)">小判型立坑</div>
         <div class="shaft-chip" data-val="open" onclick="setShaftType('launch','open',this)">オープン</div>
       </div>
       <div id="launchRectIn">
@@ -441,6 +442,7 @@ tr.row-ng td{color:var(--ng)}
         <div class="shaft-chip active" data-val="manhole" onclick="setShaftType('arrival','manhole',this)">マンホール</div>
         <div class="shaft-chip" data-val="rect" onclick="setShaftType('arrival','rect',this)">矩形立坑</div>
         <div class="shaft-chip" data-val="circle" onclick="setShaftType('arrival','circle',this)">円形立坑</div>
+        <div class="shaft-chip" data-val="oval" onclick="setShaftType('arrival','oval',this)">小判型立坑</div>
       </div>
       <div id="arrivalManholeIn">
         <div class="two-col">
@@ -558,6 +560,7 @@ tr.row-ng td{color:var(--ng)}
       <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)"><div style="font-size:18px">⭕</div><b>円形立坑</b></div>
       <div class="shaft-chip" data-val="casing" onclick="setWallShaft('casing',this)"><div style="font-size:18px">🔩</div><b>鋼製ケーシング</b></div>
       <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)"><div style="font-size:18px">🌿</div><b>オープンカット</b></div>
+      <div class="shaft-chip" data-val="oval" onclick="setWallShaft('oval',this)"><div style="font-size:18px">🥚</div><b>小判型立坑</b></div>
     </div>
     <div id="wallTypeNote" class="note-box" style="margin-top:8px"></div>
     <div id="wallRectInputs" style="margin-top:8px">
@@ -2308,11 +2311,11 @@ function setShaftType(side, type, el) {
   el.classList.add('active');
   const showFor = (id, vis) => { const e = document.getElementById(id); if(e) e.style.display = vis ? '' : 'none'; };
   if (side === 'launch') {
-    showFor('launchRectIn', type === 'rect');
+    showFor('launchRectIn', type === 'rect' || type === 'oval');
     showFor('launchCircleIn', type === 'circle');
   } else {
     showFor('arrivalManholeIn', type === 'manhole');
-    showFor('arrivalRectIn', type === 'rect');
+    showFor('arrivalRectIn', type === 'rect' || type === 'oval');
     showFor('arrivalCircleIn', type === 'circle');
   }
   updateGroundLen();
@@ -2334,7 +2337,9 @@ function calcShaftDist(side) {
   }
   const type = shaftTypes[side];
   if (side === 'launch') {
-    if (type === 'rect') {
+    if (type === 'rect' || type === 'oval') {
+      // 小判型立坑は矩形部＋半円部の組合せだが、推進方向に対しては矩形立坑と同じ
+      // 「全長L/2＋オフセット」で坑口〜BP間の除外距離を扱う（半円部の形状差は考慮しない）
       const Lpit = n('launchLdim');
       const off = n('launchOffset');
       return Lpit / 2 + off;
@@ -2350,7 +2355,7 @@ function calcShaftDist(side) {
       const grade = v('manholeGrade') || '1';
       const t = (MANHOLE_WALL_T[mhD] && MANHOLE_WALL_T[mhD][grade]) || 0;
       return mhD / 2 + t / 1000;
-    } else if (type === 'rect') {
+    } else if (type === 'rect' || type === 'oval') {
       return n('arrivalLdim') / 2;
     } else if (type === 'circle') {
       // 到達芯は常にIPn〜EPの基準線上にあるため、到達芯〜立坑外面間はそのまま除外距離として使う
@@ -3054,13 +3059,14 @@ function setWallShaft(type, el) {
   wallShaftType = type;
   document.querySelectorAll('#wallShaftChips .shaft-chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('wallRectInputs').style.display = (type === 'rect' || type === 'open') ? '' : 'none';
+  document.getElementById('wallRectInputs').style.display = (type === 'rect' || type === 'open' || type === 'oval') ? '' : 'none';
   document.getElementById('wallCircleInputs').style.display = (type === 'circle' || type === 'casing') ? '' : 'none';
   const notes = {
     rect: '矩形立坑: 底版一体型・独立型どちらも可。立坑内法幅が支圧壁最大幅の制約となります。',
     circle: '円形立坑: 弦長が支圧壁最大幅の制約となります。管中心と立坑中心を合わせてください。',
     casing: '鋼製ケーシング立坑: 底版一体型は不可。独立型（プレキャストコンクリートブロック）のみ。',
-    open: 'オープンカット: 幅制約なし。地盤状況に応じた支圧設計を行います。'
+    open: 'オープンカット: 幅制約なし。地盤状況に応じた支圧設計を行います。',
+    oval: '小判型立坑: 矩形部＋半円部の組合せ形状。直線部の内法幅が支圧壁最大幅の制約となります（半円部は考慮しません）。'
   };
   document.getElementById('wallTypeNote').textContent = notes[type] || '';
   calcBacklock();
@@ -3175,10 +3181,25 @@ function drawWallPlanView() {
     return;
   }
 
-  // 矩形・オープンカット立坑: 支圧壁は単純な矩形の帯
+  // 矩形・オープンカット・小判型立坑: 支圧壁は単純な矩形の帯（形が変わるのは立坑の輪郭だけ）
   ctx.strokeStyle = '#64748b';
   ctx.lineWidth = 1.5;
-  ctx.strokeRect(tx(-pitW / 2), ty(pitL), pitW * scale, pitL * scale);
+  if (wallShaftType === 'oval') {
+    // 小判型: 矩形部（幅pitW）＋上下端の半円（半径pitW/2）
+    const r = pitW / 2;
+    const cxTop = tx(0), cyTop = ty(pitL - r);
+    const cxBot = tx(0), cyBot = ty(r);
+    const rPx = r * scale;
+    ctx.beginPath();
+    ctx.arc(cxTop, cyTop, rPx, Math.PI, 2 * Math.PI);
+    ctx.lineTo(cxBot + rPx, cyBot);
+    ctx.arc(cxBot, cyBot, rPx, 0, Math.PI);
+    ctx.lineTo(cxTop - rPx, cyTop);
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.strokeRect(tx(-pitW / 2), ty(pitL), pitW * scale, pitL * scale);
+  }
   ctx.fillStyle = '#64748b';
   ctx.font = '11px sans-serif';
   ctx.textAlign = 'center';
@@ -3320,7 +3341,7 @@ function computeWallBeff() {
   const Bw = n('wallBw');
   let maxBw = Bw;
   let linerD = null, sagitta = 0;
-  if (wallShaftType === 'rect' || wallShaftType === 'open') {
+  if (wallShaftType === 'rect' || wallShaftType === 'open' || wallShaftType === 'oval') {
     maxBw = n('wallPitW') || Bw;
   } else if (wallShaftType === 'circle' || wallShaftType === 'casing') {
     const pitD = n('wallCircleD');
@@ -3677,8 +3698,6 @@ function setProjectData(d) {
     setV('launchOffset', sh.launchOffset||0.3); setV('launchCircleD', sh.launchCircleD||3.5);
     setV('launchCircleOff', sh.launchCircleOff||0);
     setV('launchCircleCasing', sh.launchCircleCasing||'steel');
-    shaftModes.launch = sh.launchMode||'direct';
-    shaftTypes.launch = sh.launchType||'rect';
     setV('arrivalDirect', sh.arrivalDirect||0.8);
     setV('manholeSize', sh.manholeSize||1.2);
     setV('manholeGrade', sh.manholeGrade||'1');
@@ -3686,10 +3705,17 @@ function setProjectData(d) {
     setV('arrivalCircleD', sh.arrivalCircleD||3);
     setV('arrivalCircleOff', sh.arrivalCircleOff||0);
     setV('arrivalCircleCasing', sh.arrivalCircleCasing||'steel');
-    shaftModes.arrival = sh.arrivalMode||'direct';
-    shaftTypes.arrival = sh.arrivalType||'manhole';
-    setShaftMode('launch', shaftModes.launch);
-    setShaftMode('arrival', shaftModes.arrival);
+    setShaftMode('launch', sh.launchMode||'direct');
+    setShaftMode('arrival', sh.arrivalMode||'direct');
+    // shaftTypes.launch/arrivalを直接書き換えるだけでは、選択中チップのハイライトや
+    // 表示中の入力欄（矩形/円形/小判型）が旧設定のまま残ってしまうため、
+    // 必ずsetShaftType()経由でUIごと復元する（保存後に見た目が矩形立坑へ戻る不具合の修正）。
+    const launchType = sh.launchType || 'rect';
+    const launchEl = document.querySelector(`#launchShapeChips [data-val="${launchType}"]`);
+    if (launchEl) setShaftType('launch', launchType, launchEl);
+    const arrivalType = sh.arrivalType || 'manhole';
+    const arrivalEl = document.querySelector(`#arrivalShapeChips [data-val="${arrivalType}"]`);
+    if (arrivalEl) setShaftType('arrival', arrivalType, arrivalEl);
   }
   if (d.wall) {
     const wl = d.wall;
