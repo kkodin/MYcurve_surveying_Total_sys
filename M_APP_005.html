@@ -137,21 +137,21 @@ tr.row-ng td{color:var(--ng)}
 <!-- ═══ TAB 0: 入出力 ═══ -->
 <section class="page active" id="p4">
 
-  <div class="card">
-    <div class="card-title">💾 データ保存・読込</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">💾 データ保存・読込</div>
     <div style="display:flex;gap:10px">
       <button class="icon-action-btn ok" onclick="saveJSON()" aria-label="JSONファイルを保存">💾</button>
       <button class="icon-action-btn secondary" onclick="document.getElementById('fileInput').click()" aria-label="JSONファイルを読込">📂</button>
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">📋 現在のプロジェクト情報</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📋 現在のプロジェクト情報</div>
     <div id="projectSummary" class="note-box">まだデータが入力されていません。</div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🔄 データ初期化</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🔄 データ初期化</div>
     <button class="big-btn warn" onclick="resetData()"><span style="font-size:20px">🗑️</span>全データをリセット</button>
     <div class="ng-box" style="font-size:11px">リセットするとすべての入力データが消去されます。事前にJSON保存を推奨します。</div>
   </div>
@@ -349,6 +349,17 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
+  <div class="card accordion" id="alignmentVisualCard">
+    <div class="card-title" onclick="toggleAccordion(this)">📈 線形ビジュアル表示</div>
+    <div class="ok-box" style="font-size:11px;margin-bottom:8px">
+      BP→EPの平面形状を模式的に表示します（直線=緑、曲線=青）。縦軸=X（上+）、横軸=Y（右+）。実際の方位とは対応しません。ピンチ／ホイールで拡大縮小、ドラッグで移動できます。
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+      <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView()">表示リセット</button>
+    </div>
+    <canvas id="alignmentVisual" style="width:100%;height:320px;margin-top:0;border-radius:8px;display:block;border:1px solid var(--line);background:#fff;touch-action:none"></canvas>
+  </div>
+
   <div class="card accordion" id="pipeLenOptCard">
     <div class="card-title" onclick="toggleAccordion(this)">📏 管長さ最適化アドバイス</div>
     <div class="note-box" style="font-size:11px;margin-bottom:6px">
@@ -370,8 +381,8 @@ tr.row-ng td{color:var(--ng)}
 <!-- ═══ TAB 2: 立坑 ═══ -->
 <section class="page" id="p1">
 
-  <div class="card">
-    <div class="card-title">🚀 発進立坑</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🚀 発進立坑</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
       <button id="lmBtn0" class="mode-btn active" onclick="setShaftMode('launch','direct')">📏 直接入力</button>
       <button id="lmBtn1" class="mode-btn" onclick="setShaftMode('launch','shape')">📐 形状から算出</button>
@@ -411,8 +422,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🏁 到達立坑</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🏁 到達立坑</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
       <button id="amBtn0" class="mode-btn active" onclick="setShaftMode('arrival','direct')">📏 直接入力</button>
       <button id="amBtn1" class="mode-btn" onclick="setShaftMode('arrival','shape')">📐 形状から算出</button>
@@ -472,8 +483,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title ok">📏 推進距離の算定</div>
+  <div class="card accordion">
+    <div class="card-title ok" onclick="toggleAccordion(this)">📏 推進距離の算定</div>
     <div class="ok-box">推進距離 = 路線長 − 発進側除外距離 − 到達側除外距離<br>立坑・マンホール内では地山摩擦が発生しないため除外します。</div>
     <div class="metrics-grid">
       <div class="metric-card"><div class="metric-label">路線長</div><div class="metric-value" id="rs_total">—</div><div class="metric-sub">m</div></div>
@@ -496,40 +507,40 @@ tr.row-ng td{color:var(--ng)}
   <div id="calcError" class="ng-box" style="display:none"></div>
   <div id="calcResult" style="display:none">
 
-    <div class="card">
-      <div class="card-title">📊 計算結果サマリー</div>
+    <div class="card accordion">
+      <div class="card-title" onclick="toggleAccordion(this)">📊 計算結果サマリー</div>
       <div class="metrics-grid" id="summaryMetrics"></div>
       <div id="summaryVerdict" style="margin-top:8px"></div>
     </div>
 
-    <div class="card">
-      <div class="card-title">🔢 計算根拠（基本値）</div>
+    <div class="card accordion">
+      <div class="card-title" onclick="toggleAccordion(this)">🔢 計算根拠（基本値）</div>
       <div class="tbl-wrap"><table id="basisTable"></table></div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📈 区間別推進力計算表</div>
+    <div class="card accordion">
+      <div class="card-title" onclick="toggleAccordion(this)">📈 区間別推進力計算表</div>
       <div class="tbl-wrap"><table id="segTable"></table></div>
     </div>
 
-    <div class="card">
-      <div class="card-title">🔩 1本毎の推進力計算表</div>
+    <div class="card accordion">
+      <div class="card-title" onclick="toggleAccordion(this)">🔩 1本毎の推進力計算表</div>
       <button class="big-btn secondary" onclick="exportPipeForceCSV()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 CSV出力</button>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
 
-    <div class="card" id="bcCard" style="display:none">
-      <div class="card-title accent">⚠️ BC点外圧管種検討表</div>
+    <div class="card accordion" id="bcCard" style="display:none">
+      <div class="card-title accent" onclick="toggleAccordion(this)">⚠️ BC点外圧管種検討表</div>
       <div class="tbl-wrap"><table id="bcTable"></table></div>
     </div>
 
-    <div class="card" id="extCard">
-      <div class="card-title">🧱 外圧耐荷力照査（区間別、Mr/M≥1.2）</div>
+    <div class="card accordion" id="extCard">
+      <div class="card-title" onclick="toggleAccordion(this)">🧱 外圧耐荷力照査（区間別、Mr/M≥1.2）</div>
       <div class="tbl-wrap"><table id="extTable"></table></div>
     </div>
 
-    <div class="card">
-      <div class="card-title">📉 推進力グラフ</div>
+    <div class="card accordion">
+      <div class="card-title" onclick="toggleAccordion(this)">📉 推進力グラフ</div>
       <canvas id="forceGraph" style="width:100%;height:260px;border:1px solid var(--line);border-radius:8px;display:block"></canvas>
     </div>
 
@@ -540,8 +551,8 @@ tr.row-ng td{color:var(--ng)}
 <!-- ═══ TAB 4: 支圧壁 ═══ -->
 <section class="page" id="p3">
 
-  <div class="card">
-    <div class="card-title">🏗️ 発進立坑 種別</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🏗️ 発進立坑 種別</div>
     <div class="shaft-chips" id="wallShaftChips" style="grid-template-columns:repeat(2,1fr);gap:8px">
       <div class="shaft-chip active" data-val="rect" onclick="setWallShaft('rect',this)"><div style="font-size:18px">⬛</div><b>矩形立坑</b></div>
       <div class="shaft-chip" data-val="circle" onclick="setWallShaft('circle',this)"><div style="font-size:18px">⭕</div><b>円形立坑</b></div>
@@ -560,8 +571,8 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🧱 支圧壁の諸元</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🧱 支圧壁の諸元</div>
     <div class="ok-box" style="font-size:11px">基礎コンクリート上面（y=0）を基準とします。支圧壁の下端は基礎コンクリート上面。</div>
     <div class="two-col">
       <div class="field-row"><label>支圧壁 幅 B_w [m]</label><input id="wallBw" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
@@ -577,6 +588,27 @@ tr.row-ng td{color:var(--ng)}
     <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">Tab2の計算結果を読込</button>
   </div>
 
+  <div class="card accordion" id="localBearingCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🔨 ジャッキ当たり部の局所支圧照査</div>
+    <div class="ok-box" style="font-size:11px">
+      元押ジャッキの推力は、支圧壁との間に鉄板を挟んで面的に伝えます（実際に力が集中するのは支圧壁全体ではなく、この鉄板が当たる面積だけ）。ここでは鉄板の当たり面積から必要な支圧応力度を求め、それを満たすために必要なコンクリート圧縮強度・支圧壁厚さを算出します。
+    </div>
+    <div class="two-col">
+      <div class="field-row"><label>ジャッキ受圧鉄板 幅 b_p [m]</label><input id="jackPlateW" class="mono" type="number" step="0.05" value="0.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+      <div class="field-row"><label>ジャッキ受圧鉄板 高さ h_p [m]</label><input id="jackPlateH" class="mono" type="number" step="0.05" value="0.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+    </div>
+    <div class="field-row"><label>採用コンクリート設計基準強度 F_c [N/mm²]</label><input id="wallFc" class="mono" type="number" step="1" value="24" oninput="calcBacklock()"><span class="unit">N/mm²</span></div>
+    <div id="localBearingResult" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card accordion" id="wallDiagramCard">
+    <div class="card-title" onclick="toggleAccordion(this)">📐 支圧壁 寸法図（平面・断面）</div>
+    <div style="font-size:13px;font-weight:bold;color:var(--navy);margin:4px 0">平面図（上から見た図）</div>
+    <canvas id="wallPlanView" style="width:100%;height:220px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <div style="font-size:13px;font-weight:bold;color:var(--navy);margin:10px 0 4px">縦断面図（推進方向から見た図）</div>
+    <canvas id="wallSectionView" style="width:100%;height:260px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+  </div>
+
   <div id="backlockResult"></div>
 
 </section>
@@ -585,8 +617,8 @@ tr.row-ng td{color:var(--ng)}
 <!-- ═══ TAB 5: 測量（実測値と設計値の誤差判定） ═══ -->
 <section class="page" id="p5">
 
-  <div class="card">
-    <div class="card-title">📐 測量基準設定</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📐 測量基準設定</div>
     <div class="note-box">「基本情報」タブで入力した曲線・線形（BP〜EP）を設計値として、器械点からの実測（距離・角度）が設計線からどれだけずれているかを判定します。</div>
     <div id="surveyDesignInfo" class="ok-box" style="margin-top:8px">—</div>
     <div class="field-row"><label>基準方位角（自動計算・下の器械点/後視点座標から算出）</label>
@@ -600,8 +632,8 @@ tr.row-ng td{color:var(--ng)}
     <div class="field-row"><label>社内管理値の割合（規格値に対する%）</label><input id="internalPct" class="mono" type="number" step="5" value="80" oninput="onSurveyRowChange()"><span class="unit">%</span></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">📍 器械点・後視点</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📍 器械点・後視点</div>
     <div class="note-box">既定では発進坑口（BP=0,0）に器械を据え、10m先（10,0）に後視点があるものとして計算します。実際の据付位置・後視方向が異なる場合はここで座標を上書きしてください。基準方位角はこの2点から自動計算されます。</div>
     <div class="two-col">
       <div class="field-row"><label>器械点 X [m]</label><input id="surveyInstX" class="mono" type="number" step="0.001" value="0" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
@@ -613,32 +645,32 @@ tr.row-ng td{color:var(--ng)}
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🧭 TP（多角点）</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🧭 TP（多角点）</div>
     <div class="note-box">器械点を移動させた場合の中継点です。前の点からの距離・角度を入力してください（不要なら追加しなくて構いません）。</div>
     <div id="tpList"></div>
     <button class="big-btn secondary" onclick="addTpRow()">＋ TPを追加</button>
   </div>
 
-  <div class="card">
-    <div class="card-title">📌 KP（測定点）</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📌 KP（測定点）</div>
     <div class="note-box">実際に測定した管内の点です。基準点（最後のTP、無ければ器械点）からの距離・角度を入力してください。</div>
     <div id="kpList"></div>
     <button class="big-btn secondary" onclick="addKpRow()">＋ KPを追加</button>
   </div>
 
-  <div class="card">
-    <div class="card-title">🔍 ひと目で分かる判定</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🔍 ひと目で分かる判定</div>
     <div id="surveySummaryCards"></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">📊 計算結果一覧</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">📊 計算結果一覧</div>
     <div id="surveyResultTable"></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">🧮 計算式・途中経過（曲線区間のみ）</div>
+  <div class="card accordion">
+    <div class="card-title" onclick="toggleAccordion(this)">🧮 計算式・途中経過（曲線区間のみ）</div>
     <div id="surveyCalcProcess"></div>
   </div>
 
@@ -698,6 +730,16 @@ function showToast(msg, dur=2200) {
 }
 
 // アコーディオン式カード：タイトルをタップすると開閉。同じタブ内の他のカードが開いていれば閉じる。
+// アコーディオンが閉じている間はcanvas.offsetWidth/Heightが0になり描画できないため、
+// カードを開いた直後に中のcanvas(id)へ対応する再描画関数を呼ぶ（新しいcanvasを追加したらここに登録する）
+const CANVAS_REFRESH_FNS = {
+  alignmentVisual: () => drawAlignmentVisual(),
+  distDiagram: () => updateGroundLen(),
+  forceGraph: () => { if (lastCalcResult) drawForceGraph(lastCalcResult.segments, lastCalcResult.Fa, lastCalcResult.Fo); },
+  wallPlanView: () => drawWallPlanView(),
+  wallSectionView: () => drawWallSectionView(),
+};
+
 function toggleAccordion(titleEl) {
   const card = titleEl.closest('.card.accordion');
   if (!card) return;
@@ -705,6 +747,14 @@ function toggleAccordion(titleEl) {
   const page = card.closest('.page') || document;
   page.querySelectorAll('.card.accordion.open').forEach(c => { if (c !== card) c.classList.remove('open'); });
   card.classList.toggle('open', willOpen);
+  // 開いた直後はdisplay:noneが外れてサイズが確定するため、非表示中は描画できなかったcanvasを再描画する。
+  // offsetWidthを読む時点でbrowserは同期的にレイアウトを確定させるため、rAFを挟まず直接呼んでよい。
+  if (willOpen) {
+    card.querySelectorAll('canvas').forEach(cv => {
+      const fn = CANVAS_REFRESH_FNS[cv.id];
+      if (typeof fn === 'function') { try { fn(); } catch (e) {} }
+    });
+  }
 }
 
 function showPage(idx) {
@@ -1095,6 +1145,10 @@ function onSegSpecChange(kind, key) {
 //  直線区間の個別仕様（第1直線〜最終直線。曲線数+1本、常に自動でサイズを合わせる）
 // ══════════════════════════════════════
 let straightSpecs = [];
+// calcAlignment()が計算した各直線の正確な実長（BP-EP基準、インデックスはstraightSpecsと同じ：
+// 0=第1直線…curves.length=最終直線）。推進力タブのcalculate()が均等按分の近似を使わず
+// この実長を再利用するために保持する（仕様書6章の近似解消）。
+let realStraightLengths = [];
 
 function syncStraightSpecsLength() {
   const need = curves.length + 1;
@@ -1187,13 +1241,13 @@ function updateCurveJoint(id) {
     return;
   }
   const { S1, spec } = calcCurveJointCheck(c.R, lp, D, S4mm);
-  const ok = spec && spec.allowOpen <= allowMm ? S1 <= allowMm : false;
+  const ok = spec && spec.pulloutOpen <= allowMm ? S1 <= allowMm : false;
   let html = `目地開口 S₁=<b>${S1.toFixed(1)}mm</b>（クッションS4=${S4mm}mm）　`;
   if (spec) {
     html += `必要継手: <b>${spec.label}</b> <span class="pill ${ok?'ok':'warn'}">${ok?'現設定でOK':'現設定は継手を要変更'}</span>`;
   } else {
-    html += `<span class="pill ng">JC(${JOINT_SPEC[JOINT_SPEC.length-1].allowOpen}mm)でも超過</span>`;
-    const best = bestPipeLenFor(D, c.R, S4mm, JOINT_SPEC[JOINT_SPEC.length-1].allowOpen);
+    html += `<span class="pill ng">JC(${JOINT_SPEC[JOINT_SPEC.length-1].pulloutOpen}mm)でも超過</span>`;
+    const best = bestPipeLenFor(D, c.R, S4mm, JOINT_SPEC[JOINT_SPEC.length-1].pulloutOpen);
     html += best ? `　→ 推奨管長: <b style="color:var(--ok)">${stdPipeLabel(best)}</b>以下` : `　→ 規格管長（標準管/半管/1/3管/1/4管）で適合なし、特注管を検討`;
   }
   el.style.background = spec ? (ok ? '#f0fdf4' : '#fffbeb') : '#fef2f2';
@@ -1259,6 +1313,10 @@ function calcAlignment() {
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
 
+  // 各直線の正確な実長（BP-EP基準）を推進力タブ側の再利用のために保持
+  // （インデックス: 0=第1直線…curves.length=最終直線。straightSpecsと同じ並び）
+  realStraightLengths = segments.filter(s => s.kind === 'straight').map(s => s.L);
+
   // 本数集計用の累積距離
   let accDist = 0;
   segments.forEach(seg => { seg.startDist = accDist; accDist += seg.L; seg.endDist = accDist; });
@@ -1304,8 +1362,430 @@ function calcAlignment() {
   curves.forEach(c => updateCurveJoint(c.id));
   updatePipeLenOpt();
   updateGroundLen();
+  drawAlignmentVisual();
   if (typeof calcSurvey === 'function') calcSurvey();
   autoSave();
+}
+
+// ══════════════════════════════════════
+//  線形ビジュアル表示（平面形状の模式図。方位とは対応しない内部座標系）
+//  内部座標: x=前方（進行方向）、y=右+/左-。表示上は縦軸=X（上+）・横軸=Y（右+）に
+//  回転して描画する（tx/ty参照）。直線=緑・曲線=青（推進力グラフと同配色）。
+//  ピンチ／ホイールでズーム（縮尺に応じた方眼を表示）、ドラッグでパンできる
+//  （alignmentView・alignmentViewBase参照）。曲線要素の注記円はドラッグで移動、
+//  右下ハンドルで拡大縮小できる（curveAnnotationState・lastCurveAnnotationScreens参照）。
+// ══════════════════════════════════════
+let alignmentView = { scale: 1, offsetX: 0, offsetY: 0 };
+let alignmentViewBase = { scale: 1, offX: 0, offY: 0 };
+const ALIGNMENT_MIN_SCALE = 0.1, ALIGNMENT_MAX_SCALE = 200;
+// 曲線ごとの注記円のカスタム位置・サイズ（ユーザーがドラッグ/リサイズした結果を保持）
+let curveAnnotationState = {}; // { [curveNo]: { worldPos: {x,y}|null, scale: number } }
+let lastCurveAnnotationScreens = []; // 直近の描画結果（当たり判定用）: [{no, cx, cy, rx, ry}]
+
+function resetAlignmentVisualView() {
+  alignmentView = { scale: 1, offsetX: 0, offsetY: 0 };
+  drawAlignmentVisual();
+}
+
+// 10進度 → 度分秒（表示用）
+function degToDMSParts(deg) {
+  const d = Math.floor(deg);
+  const minFull = (deg - d) * 60;
+  let m = Math.floor(minFull);
+  let s = Math.round((minFull - m) * 60);
+  if (s >= 60) { s -= 60; m += 1; }
+  if (m >= 60) { m -= 60; }
+  return `${d}°${String(m).padStart(2,'0')}′${String(s).padStart(2,'0')}″`;
+}
+
+// 現在のピクセル/m（scale）から、方眼の間隔として見やすい「1・2・5×10^n」の値を選ぶ
+function niceGridStep(pxPerUnit, targetPx) {
+  const rawStep = targetPx / pxPerUnit;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const norm = rawStep / mag;
+  const niceNorm = norm < 1.5 ? 1 : norm < 3.5 ? 2 : norm < 7.5 ? 5 : 10;
+  return niceNorm * mag;
+}
+
+function drawAlignmentGrid(ctx, w, h, scale, offX, offY) {
+  const step = niceGridStep(scale, 56);
+  const yAtEdges = [(0 - offX) / scale, (w - offX) / scale];
+  const yMin = Math.min(...yAtEdges), yMax = Math.max(...yAtEdges);
+  const xAtEdges = [(offY - 0) / scale, (offY - h) / scale];
+  const xMin = Math.min(...xAtEdges), xMax = Math.max(...xAtEdges);
+  ctx.save();
+  ctx.strokeStyle = '#e5e9f0';
+  ctx.lineWidth = 1;
+  for (let gy = Math.ceil(yMin / step) * step; gy <= yMax; gy += step) {
+    const sx = offX + gy * scale;
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, h); ctx.stroke();
+  }
+  for (let gx = Math.ceil(xMin / step) * step; gx <= xMax; gx += step) {
+    const sy = offY - gx * scale;
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(w, sy); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`方眼: ${step}m`, 6, h - 6);
+}
+
+function drawAlignmentVisual() {
+  const canvas = document.getElementById('alignmentVisual');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const straightLens = realStraightLengths;
+  if (!straightLens.length || straightLens.length !== curves.length + 1) {
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('曲線情報を入力すると表示されます', w / 2, h / 2);
+    return;
+  }
+
+  // BP起点・az=0（前方）からの模式的な平面座標を組み立てる（内部: x=前方、y=右+/左-）
+  let x = 0, y = 0, az = 0;
+  const segs = []; // {type:'straight'|'curve', pts:[{x,y}...], label}
+  const curveInfos = []; // {no, R, IA_deg, CL, SL, TL, BC, EC, SP, RO, IP}
+  const allPts = [{ x, y }];
+
+  const addStraight = (label, L) => {
+    const nx = x + L * Math.cos(az), ny = y + L * Math.sin(az);
+    segs.push({ type: 'straight', pts: [{ x, y }, { x: nx, y: ny }], label });
+    x = nx; y = ny;
+    allPts.push({ x, y });
+  };
+
+  if (curves.length === 0) {
+    addStraight('第1直線', straightLens[0] || 0);
+  } else {
+    addStraight('第1直線', straightLens[0] || 0);
+    curves.forEach((c, i) => {
+      const e = calcCurveElements(c);
+      const sign = c.dir === 'R' ? 1 : -1;
+      const R = c.R, IA = e.IA_rad;
+      const azIn = az; // 曲線に入る直前の方位（BC-IP方向）
+      const azCenter = az + sign * Math.PI / 2;
+      const cx = x + R * Math.cos(azCenter), cy = y + R * Math.sin(azCenter);
+      const angleBC = az - sign * Math.PI / 2;
+      const nSamples = 24;
+      const curvePts = [];
+      for (let s = 0; s <= nSamples; s++) {
+        const ang = angleBC + sign * IA * (s / nSamples);
+        curvePts.push({ x: cx + R * Math.cos(ang), y: cy + R * Math.sin(ang) });
+      }
+      const ip = { x: x + e.TL * Math.cos(azIn), y: y + e.TL * Math.sin(azIn) };
+      segs.push({ type: 'curve', pts: curvePts, label: `R${i + 1}` });
+      allPts.push(...curvePts, ip);
+      curveInfos.push({
+        no: i + 1, R, IA_deg: e.IA_deg, CL: e.CL, SL: e.SL, TL: e.TL,
+        BC: curvePts[0], EC: curvePts[curvePts.length - 1],
+        SP: curvePts[Math.floor(curvePts.length / 2)], RO: { x: cx, y: cy }, IP: ip
+      });
+      az += sign * IA;
+      x = curvePts[curvePts.length - 1].x;
+      y = curvePts[curvePts.length - 1].y;
+      if (i < curves.length - 1) addStraight(`第${i + 2}直線`, straightLens[i + 1] || 0);
+    });
+    addStraight('最終直線', straightLens[curves.length] || 0);
+  }
+  const epPoint = { x, y };
+  curveInfos.forEach(ci => allPts.push(ci.RO)); // ROも表示範囲に含める
+
+  // バウンディングボックスに合わせて拡大縮小（縦横比は保持）。縦軸=X（上+）、横軸=Y（右+）
+  const margin = 64;
+  const minX = Math.min(...allPts.map(p => p.x)), maxX = Math.max(...allPts.map(p => p.x));
+  const minY = Math.min(...allPts.map(p => p.y)), maxY = Math.max(...allPts.map(p => p.y));
+  const spanX = Math.max(maxX - minX, 1e-6), spanY = Math.max(maxY - minY, 1e-6);
+  const baseScale = Math.min((w - margin * 2) / spanY, (h - margin * 2) / spanX);
+  const baseOffX = margin + ((w - margin * 2) - spanY * baseScale) / 2 - minY * baseScale;
+  const baseOffY = margin + ((h - margin * 2) - spanX * baseScale) / 2 + maxX * baseScale;
+  alignmentViewBase = { scale: baseScale, offX: baseOffX, offY: baseOffY };
+
+  const scale = baseScale * alignmentView.scale;
+  const offX = baseOffX + alignmentView.offsetX;
+  const offY = baseOffY + alignmentView.offsetY;
+  // 表示: 縦軸=X（上+）・横軸=Y（右+）＝内部(x,y)を90°回転して描画
+  const tx = p => offX + p.y * scale;
+  const ty = p => offY - p.x * scale;
+
+  drawAlignmentGrid(ctx, w, h, scale, offX, offY);
+
+  segs.forEach(seg => {
+    ctx.strokeStyle = seg.type === 'curve' ? FORCE_GRAPH_COLOR.curve : FORCE_GRAPH_COLOR.straight;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    seg.pts.forEach((p, i) => { const px = tx(p), py = ty(p); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+    ctx.stroke();
+    // ラベル（区間の中点付近）
+    const mid = seg.pts[Math.floor(seg.pts.length / 2)];
+    ctx.fillStyle = seg.type === 'curve' ? FORCE_GRAPH_COLOR.curve : FORCE_GRAPH_COLOR.straight;
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(seg.label, tx(mid), ty(mid) - 8);
+  });
+
+  // 作図補助の破線（BC-RO・RO-EC・BC-IP・IP-EC）
+  curveInfos.forEach(ci => {
+    ctx.save();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.setLineDash([3, 3]);
+    ctx.lineWidth = 1;
+    [[ci.BC, ci.RO], [ci.RO, ci.EC], [ci.BC, ci.IP], [ci.IP, ci.EC]].forEach(([a, b]) => {
+      ctx.beginPath(); ctx.moveTo(tx(a), ty(a)); ctx.lineTo(tx(b), ty(b)); ctx.stroke();
+    });
+    ctx.restore();
+  });
+
+  // 点マーカー（BP・BC/IP/SP/RO/EC・EP）
+  const drawPoint = (p, label, color) => {
+    ctx.beginPath();
+    ctx.arc(tx(p), ty(p), 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, tx(p), ty(p) - 8);
+  };
+  const bp = allPts[0], ep = epPoint;
+  drawPoint(bp, 'BP', '#0f172a');
+  curveInfos.forEach(ci => {
+    const n = curveInfos.length > 1 ? String(ci.no) : '';
+    drawPoint(ci.BC, `BC${n}`, FORCE_GRAPH_COLOR.curve);
+    drawPoint(ci.IP, `IP${n}`, '#64748b');
+    drawPoint(ci.SP, `SP${n}`, FORCE_GRAPH_COLOR.curve);
+    drawPoint(ci.EC, `EC${n}`, FORCE_GRAPH_COLOR.curve);
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(tx(ci.RO) - 3, ty(ci.RO) - 3, 6, 6);
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`RO${n}`, tx(ci.RO), ty(ci.RO) - 8);
+  });
+  drawPoint(ep, 'EP', '#0f172a');
+
+  // 測量タブの測定点（KP）を実測位置に重ね描きする。ラベル先頭に推定本数（到達側=1本目、
+  // 標準管長で概算）を表示する。測量タブは基準方位角(baseAz)分だけ回転した座標系のため、
+  // このビジュアル表示のスキーマ座標（az=0起点）に合わせて逆回転してから重ねる。
+  if (surveyGeom && surveyResults && surveyResults.length) {
+    const baseAzRad = degToRad(n('surveyBaseAz') || 0);
+    const cosA = Math.cos(-baseAzRad), sinA = Math.sin(-baseAzRad);
+    const lp = n('pipeLen') || 2.43;
+    const totalDist = surveyGeom.totalDistance || 0;
+    const rankColor = { 'OK': '#16a34a', '注意': '#d97706', 'NG': '#dc2626' };
+    surveyResults.forEach(r => {
+      const rw = { x: r.x * cosA - r.y * sinA, y: r.x * sinA + r.y * cosA };
+      const px = tx(rw), py = ty(rw);
+      const pipeNo = Math.max(1, Math.round((totalDist - (r.distFromBP || 0)) / lp));
+      const color = rankColor[r.rank] || '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${pipeNo}本目 ${r.name}`, px, py - 10);
+    });
+  }
+
+  // 曲線要素の注記（円で囲んで表示）。ドラッグで移動・右下ハンドルで拡大縮小できる。
+  lastCurveAnnotationScreens = [];
+  curveInfos.forEach(ci => {
+    const state = curveAnnotationState[ci.no] || (curveAnnotationState[ci.no] = { worldPos: null, scale: 1 });
+    const lines = [
+      `R${ci.no}`,
+      `R＝${ci.R.toFixed(3)}m`,
+      `IA＝${degToDMSParts(ci.IA_deg)}`,
+      `CL＝${ci.CL.toFixed(3)}m`,
+      `SL＝${ci.SL.toFixed(3)}m`,
+      `TL＝${ci.TL.toFixed(3)}m`
+    ];
+    const annScale = state.scale || 1;
+    ctx.font = `${11 * annScale}px sans-serif`;
+    const lineH = 14 * annScale;
+    const textW = Math.max(...lines.map(l => ctx.measureText(l).width));
+    const rx = Math.max(textW / 2 + 10 * annScale, lineH * lines.length / 2 + 6 * annScale);
+    const ry = lineH * lines.length / 2 + 8 * annScale;
+    const spScreen = { x: tx(ci.SP), y: ty(ci.SP) };
+    let cx2, cy2;
+    if (state.worldPos) {
+      cx2 = tx(state.worldPos); cy2 = ty(state.worldPos);
+    } else {
+      // 既定位置: SPから外向き（ROと反対方向）にオフセット
+      const roScreen = { x: tx(ci.RO), y: ty(ci.RO) };
+      let dx = spScreen.x - roScreen.x, dy = spScreen.y - roScreen.y;
+      const dlen = Math.hypot(dx, dy) || 1;
+      dx /= dlen; dy /= dlen;
+      cx2 = spScreen.x + dx * (rx + 24); cy2 = spScreen.y + dy * (ry + 24);
+    }
+    ctx.beginPath();
+    ctx.ellipse(cx2, cy2, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.fill();
+    ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.textAlign = 'center';
+    lines.forEach((l, i) => {
+      ctx.font = i === 0 ? `bold ${12 * annScale}px sans-serif` : `${11 * annScale}px sans-serif`;
+      ctx.fillText(l, cx2, cy2 - lineH * (lines.length - 1) / 2 + i * lineH);
+    });
+    // リサイズハンドル（右下）
+    const hx = cx2 + rx - 6, hy = cy2 + ry - 6;
+    ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
+    ctx.fillRect(hx - 5, hy - 5, 10, 10);
+    lastCurveAnnotationScreens.push({ no: ci.no, cx: cx2, cy: cy2, rx, ry, hx, hy });
+  });
+}
+
+// ── ピンチ／ホイール／ドラッグでのズーム・パン・注記円の移動/リサイズ ──
+function setupAlignmentVisualInteraction() {
+  const canvas = document.getElementById('alignmentVisual');
+  if (!canvas || canvas._alignmentInteractionBound) return;
+  canvas._alignmentInteractionBound = true;
+
+  const screenToWorld = (sx, sy) => {
+    const finalScale = alignmentViewBase.scale * alignmentView.scale;
+    return {
+      x: -(sy - alignmentViewBase.offY - alignmentView.offsetY) / finalScale,
+      y: (sx - alignmentViewBase.offX - alignmentView.offsetX) / finalScale
+    };
+  };
+  const zoomAt = (sx, sy, factor) => {
+    const before = screenToWorld(sx, sy);
+    alignmentView.scale = Math.min(ALIGNMENT_MAX_SCALE, Math.max(ALIGNMENT_MIN_SCALE, alignmentView.scale * factor));
+    const finalScale = alignmentViewBase.scale * alignmentView.scale;
+    alignmentView.offsetX = sx - alignmentViewBase.offX - before.y * finalScale;
+    alignmentView.offsetY = sy - alignmentViewBase.offY + before.x * finalScale;
+  };
+  // 注記円・リサイズハンドルの当たり判定（ハンドルを優先）
+  const hitAnnotation = (sx, sy) => {
+    for (const a of lastCurveAnnotationScreens) {
+      if (Math.abs(sx - a.hx) <= 9 && Math.abs(sy - a.hy) <= 9) return { no: a.no, mode: 'resize', a };
+    }
+    for (const a of lastCurveAnnotationScreens) {
+      const nx = (sx - a.cx) / a.rx, ny = (sy - a.cy) / a.ry;
+      if (nx * nx + ny * ny <= 1) return { no: a.no, mode: 'move', a };
+    }
+    return null;
+  };
+
+  let lastPan = null, lastPinchDist = null, lastPinchMid = null;
+  let dragAnn = null; // { no, mode, grabDX, grabDY, startDist, startScale }
+
+  const beginPointer = (sx, sy, clientX, clientY) => {
+    const hit = hitAnnotation(sx, sy);
+    if (hit) {
+      const state = curveAnnotationState[hit.no] || (curveAnnotationState[hit.no] = { worldPos: null, scale: 1 });
+      if (hit.mode === 'resize') {
+        dragAnn = { no: hit.no, mode: 'resize', cx: hit.a.cx, cy: hit.a.cy, startDist: Math.hypot(sx - hit.a.cx, sy - hit.a.cy) || 1, startScale: state.scale || 1 };
+      } else {
+        dragAnn = { no: hit.no, mode: 'move', grabDX: sx - hit.a.cx, grabDY: sy - hit.a.cy };
+      }
+      return true;
+    }
+    dragAnn = null;
+    return false;
+  };
+  const movePointer = (sx, sy) => {
+    if (!dragAnn) return false;
+    const state = curveAnnotationState[dragAnn.no] || (curveAnnotationState[dragAnn.no] = { worldPos: null, scale: 1 });
+    if (dragAnn.mode === 'resize') {
+      const dist = Math.hypot(sx - dragAnn.cx, sy - dragAnn.cy) || 1;
+      state.scale = Math.min(4, Math.max(0.4, dragAnn.startScale * (dist / dragAnn.startDist)));
+    } else {
+      state.worldPos = screenToWorld(sx - dragAnn.grabDX, sy - dragAnn.grabDY);
+    }
+    return true;
+  };
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    zoomAt(sx, sy, e.deltaY < 0 ? 1.1 : 1 / 1.1);
+    drawAlignmentVisual();
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (!beginPointer(sx, sy)) lastPan = { x: e.clientX, y: e.clientY };
+  });
+  window.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+    if (dragAnn) { movePointer(sx, sy); drawAlignmentVisual(); return; }
+    if (!lastPan) return;
+    alignmentView.offsetX += e.clientX - lastPan.x;
+    alignmentView.offsetY += e.clientY - lastPan.y;
+    lastPan = { x: e.clientX, y: e.clientY };
+    drawAlignmentVisual();
+  });
+  window.addEventListener('mouseup', () => { lastPan = null; dragAnn = null; });
+
+  canvas.addEventListener('touchstart', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches.length === 1) {
+      const sx = e.touches[0].clientX - rect.left, sy = e.touches[0].clientY - rect.top;
+      if (!beginPointer(sx, sy)) lastPan = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDist = null;
+    } else if (e.touches.length === 2) {
+      dragAnn = null;
+      const [t0, t1] = e.touches;
+      lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      lastPinchMid = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+      lastPan = null;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches.length === 1) {
+      const sx = e.touches[0].clientX - rect.left, sy = e.touches[0].clientY - rect.top;
+      if (dragAnn) { movePointer(sx, sy); drawAlignmentVisual(); return; }
+      if (lastPan) {
+        const p = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        alignmentView.offsetX += p.x - lastPan.x;
+        alignmentView.offsetY += p.y - lastPan.y;
+        lastPan = p;
+        drawAlignmentVisual();
+      }
+    } else if (e.touches.length === 2) {
+      const [t0, t1] = e.touches;
+      const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      const mid = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+      if (lastPinchDist) {
+        const sx = mid.x - rect.left, sy = mid.y - rect.top;
+        zoomAt(sx, sy, dist / lastPinchDist);
+        // 2本指の平行移動（パン）も同時に反映
+        alignmentView.offsetX += mid.x - lastPinchMid.x;
+        alignmentView.offsetY += mid.y - lastPinchMid.y;
+        drawAlignmentVisual();
+      }
+      lastPinchDist = dist;
+      lastPinchMid = mid;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    if (e.touches.length === 0) { lastPan = null; lastPinchDist = null; dragAnn = null; }
+    else if (e.touches.length === 1) {
+      lastPan = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDist = null;
+    }
+  });
+
+  canvas.addEventListener('dblclick', () => { resetAlignmentVisualView(); });
 }
 
 function getCurves() {
@@ -1543,13 +2023,13 @@ function judgeStraight(p, sec) {
   const wx=p.x-ax, wy=p.y-ay, proj=wx*ux+wy*uy, inside=proj>=0&&proj<=len;
   const clamped=Math.max(0,Math.min(len,proj)), foot={x:ax+ux*clamped,y:ay+uy*clamped};
   const ex=p.x-foot.x, ey=p.y-foot.y, signed=ux*ey-uy*ex, mm=Math.abs(signed)*1000;
-  return {type:'直線', sectionName:`${sec.from}〜${sec.to}`, foot, errorMm:mm, side:signed>0?'右':'左', priority:inside?1:9, remaining:Math.max(0,sec.accEnd-(sec.accStart+clamped))};
+  return {type:'直線', sectionName:`${sec.from}〜${sec.to}`, foot, errorMm:mm, side:signed>0?'右':'左', priority:inside?1:9, remaining:Math.max(0,sec.accEnd-(sec.accStart+clamped)), distFromBP:sec.accStart+clamped};
 }
 function judgeCurve(p, c) {
   const dx=p.x-c.ro.x, dy=p.y-c.ro.y;
   const dist=Math.hypot(dx,dy);
   if (dist<=1e-9) {
-    return {type:'曲線', sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`, curve:c, foot:{x:p.x,y:p.y}, roDist:dist, radialMm:NaN, errorMm:Infinity, side:'判定不可', short:'判定不可', priority:99, dx, dy, azDeg:0, remaining:0};
+    return {type:'曲線', sectionName:`第${c.id}曲線 ${c.dir==='L'?'左':'右'}`, curve:c, foot:{x:p.x,y:p.y}, roDist:dist, radialMm:NaN, errorMm:Infinity, side:'判定不可', short:'判定不可', priority:99, dx, dy, azDeg:0, remaining:0, distFromBP:c.startDist};
   }
   const radial = dist-c.R;
   const mm = Math.abs(radial*1000);
@@ -1571,7 +2051,8 @@ function judgeCurve(p, c) {
     short:`${dirText} ${fmt(mm,0)}`, priority: inArc?0:8,
     dx, dy, azDeg, ux, uy, insideOutside, checkDist, checkErrorMm,
     correctionX: foot.x-p.x, correctionY: foot.y-p.y,
-    remaining: Math.max(0, c.endDist-(c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA))))
+    remaining: Math.max(0, c.endDist-(c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA)))),
+    distFromBP: c.startDist+c.R*Math.min(Math.abs(delta),Math.abs(c.IA))
   };
 }
 function judgePoint(p) {
@@ -1630,6 +2111,7 @@ function calcSurvey() {
   renderSurveyProcess(surveyResults);
   const dsEl = document.getElementById('surveyDesignInfo');
   if (dsEl) dsEl.textContent = `曲線${getCurves().length}箇所　路線長 ${fmt(surveyGeom.totalDistance,2)}m（設計値）`;
+  if (typeof drawAlignmentVisual === 'function') drawAlignmentVisual();
 }
 
 // ══════════════════════════════════════
@@ -1639,21 +2121,24 @@ function calcSurvey() {
 const STD_PIPE_LENGTHS = [0.60, 0.80, 1.20, 2.43];
 const STD_PIPE_LABELS = {0.60:'1/4管', 0.80:'1/3管', 1.20:'半管', 2.43:'標準管'};
 function stdPipeLabel(l) { return STD_PIPE_LABELS[l] ? `${STD_PIPE_LABELS[l]} ${l}m` : `${l}m`; }
+// 継手種別による性能（耐水性は割愛）。
+// pulloutOpen=抜出し長: 推進完了時点（最終静止状態）で残っていてよい開口の上限
+// allowOpen=許容開口長: 推進中（方向修正等で一時的に）最大まで開いてもよい開口の上限（pulloutOpenより緩い）
 const JOINT_SPEC = [
-  {key:'JA', label:'JA型', allowOpen:30},
-  {key:'JB', label:'JB型', allowOpen:40},
-  {key:'JC', label:'JC型', allowOpen:60},
-]; // 安い順（JA→JC）。allowOpenは抜出し長=推進完了後の理論開口S1と比較する許容値
+  {key:'JA', label:'JA型', pulloutOpen:30, allowOpen:40},
+  {key:'JB', label:'JB型', pulloutOpen:40, allowOpen:50},
+  {key:'JC', label:'JC型', pulloutOpen:60, allowOpen:70},
+]; // 安い順（JA→JC）
 
 function calcS1(D, L, R, S4mm) {
   if (R <= D/2) return Infinity;
   return D * L / (R - D/2) * 1000 + S4mm;
 }
 
-// S1に対して、足りる中で最も安い継手を返す。どれも足りなければnull
+// S1（推進完了時点の残留開口）に対して、抜出し長が足りる中で最も安い継手を返す。どれも足りなければnull
 function calcCurveJointCheck(R, pipeLen, D, cushionMm) {
   const S1 = calcS1(D, pipeLen, R, cushionMm);
-  const spec = JOINT_SPEC.find(j => S1 <= j.allowOpen) || null;
+  const spec = JOINT_SPEC.find(j => S1 <= j.pulloutOpen) || null;
   return { S1, spec };
 }
 
@@ -1719,7 +2204,7 @@ function buildPipeSchedule(segments) {
     for (let j = 0; j < num; j++) {
       const start = seg.startDist + j * pipeLen;
       const end = seg.startDist + (j + 1) * pipeLen;
-      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen });
+      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen, ownS4: seg.spec.S4, ownCrush: seg.spec.crush || 0, ownJointAllowMm: seg.spec.jointAllowMm });
     }
   });
   const N = pipes.length;
@@ -1728,34 +2213,67 @@ function buildPipeSchedule(segments) {
     // 完成形でBPから見て曲線より奥（到達側）にある管は、施工中に必ずその曲線を通過してくる。
     // そのためBP側から見てこの管の位置(end)より手前にある曲線は、直接またがっていなくても対象に含める。
     // またがる曲線・通過してきた曲線のうち最も目地が広く開く曲線の継手仕様に準ずる（例外ルール）
-    let bestS1 = 0, bestSeg = null, inCurve = false;
+    let bestCurveS1 = 0, bestSeg = null, inCurve = false;
     curveSegs.forEach(seg => {
       const overlap = Math.min(pipe.end, seg.endDist) - Math.max(pipe.start, seg.startDist);
       if (overlap > 1e-9) inCurve = true;
       if (seg.startDist < pipe.end) {
         const S1 = calcS1(pipe.D, pipe.lp, seg.R, seg.spec.S4);
-        if (S1 > bestS1) { bestS1 = S1; bestSeg = seg; }
+        if (S1 > bestCurveS1) { bestCurveS1 = S1; bestSeg = seg; }
       }
     });
-    const spec = bestSeg ? (JOINT_SPEC.find(j => bestS1 <= j.allowOpen) || null) : JOINT_SPEC[0];
+    // 目地開口S1は「推進完了後、その管が最終的に静止した状態」の値を表示する。
+    // ・曲線内に留まる管はそのまま曲がった状態で完成するため、曲線通過時の幾何学的開口がそのまま残留値になる。
+    // ・それ以外（直線区間で静止する管。曲線を通過済みかどうかを問わない）は、
+    //   クッション材が軸力で圧縮された後の残留厚み分だけ隙間が残るため、
+    //   残留開口は「クッション材厚S4−つぶれ代」（その管自身の区間仕様）になる。
+    //   一度も曲線を通過しない直線区間でも、クッション自体の圧縮によりこの残留開口は生じる。
+    const S1 = inCurve ? bestCurveS1 : Math.max(0, pipe.ownS4 - pipe.ownCrush);
+    // 必要継手は2つの条件を両方満たす、最も安いものを選ぶ：
+    // ・推進完了後の残留開口S1が抜出し長(pulloutOpen)以内（完成後ずっと保持される条件）
+    // ・曲線通過時（一度でも経験する最大値=bestCurveS1。曲線を通過しない管は0）の開口が
+    //   許容開口長(allowOpen)以内（通過済みでも、過去に一時的にその開口まで開いた実績自体は変えられないため必須）
+    const recommendedSpec = JOINT_SPEC.find(j => bestCurveS1 <= j.allowOpen && S1 <= j.pulloutOpen) || null;
+    // 実際に選択されている継手（その管自身の区間仕様。標準仕様なら推進管仕様カードの選択値）
+    const actualSpec = JOINT_SPEC.find(j => j.pulloutOpen === pipe.ownJointAllowMm) || null;
     // 本数は現場の慣習に合わせ到達側(EP側)を1本目として数える（先頭に押し込まれる管＝到達側が1本目）
-    return { no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1: bestS1, spec, cushion: bestSeg ? bestSeg.spec.S4 : null };
+    // クッション表示は「その管が実際に属する区間（直線／曲線）自身の仕様」を使う。
+    // bestSegは目地開口計算に使った曲線（最も厳しい値を要求する曲線）であり、
+    // 直線区間の個別クッション仕様とは別物のため混同しない。
+    return { no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1, spec: recommendedSpec, actualSpec, cushion: pipe.ownS4 };
   });
   rows.reverse(); // 1本目(到達側)から順に並べる
   // 連続する同一判定（曲線番号＋現在地が曲線内か通過済みか＋継手）をまとめて範囲表示
   const groups = [];
   rows.forEach(r => {
-    const key = (r.curveNo || 'straight') + '|' + (r.inCurve ? 'in' : 'through') + '|' + (r.spec ? r.spec.key : 'NG');
+    const key = (r.curveNo || 'straight') + '|' + (r.inCurve ? 'in' : 'through') + '|' + (r.spec ? r.spec.key : 'NG')
+      + '|' + (r.actualSpec ? r.actualSpec.key : 'NG') + '|' + r.cushion + '|' + r.S1.toFixed(3);
     const last = groups[groups.length - 1];
     if (last && last.key === key) { last.to = r.no; last.maxS1 = Math.max(last.maxS1, r.S1); }
-    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, inCurve: r.inCurve, spec: r.spec, maxS1: r.S1, cushion: r.cushion });
+    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, inCurve: r.inCurve, spec: r.spec, actualSpec: r.actualSpec, maxS1: r.S1, cushion: r.cushion });
   });
   let html = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">本数</th><th>区間</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr>';
   groups.forEach(g => {
     const rangeLabel = g.from === g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
     const segLabel = g.curveNo ? (g.inCurve ? `第${g.curveNo}曲線` : `直線(第${g.curveNo}曲線通過済)`) : '直線';
-    const specLabel = g.spec ? g.spec.label : '<span style="color:var(--ng)">JCでも超過</span>';
+    // 「実際に選択されている継手（その区間仕様）」と「必要十分な最安の継手（推奨）」を併記する。
+    // 例: 標準仕様がJC型で、この区間はJA型で足りるなら「JC型（JA型を推奨）」。
+    //     実際の選択が必要水準に届いていなければ赤字で警告する。
+    const actualIdx = g.actualSpec ? JOINT_SPEC.indexOf(g.actualSpec) : -1;
+    const recIdx = g.spec ? JOINT_SPEC.indexOf(g.spec) : JOINT_SPEC.length; // null(JCでも超過)は最も厳しい扱い
+    let specLabel;
+    if (!g.actualSpec) {
+      specLabel = g.spec ? g.spec.label : '<span style="color:var(--ng)">JCでも超過</span>';
+    } else if (!g.spec) {
+      specLabel = `<span style="color:var(--ng)">${g.actualSpec.label}（JCでも超過）</span>`;
+    } else if (actualIdx === recIdx) {
+      specLabel = g.actualSpec.label;
+    } else if (actualIdx > recIdx) {
+      specLabel = `${g.actualSpec.label}（${g.spec.label}を推奨）`;
+    } else {
+      specLabel = `<span style="color:var(--ng)">${g.actualSpec.label}（要${g.spec.label}以上）</span>`;
+    }
     html += `<tr><td style="padding:4px;border-bottom:1px solid var(--line);text-align:center">${rangeLabel}</td>`
       + `<td style="text-align:center">${segLabel}</td>`
       + `<td style="text-align:center" class="mono">${g.maxS1.toFixed(1)}mm</td>`
@@ -2077,11 +2595,25 @@ function calculate() {
   syncStraightSpecsLength();
 
   // 区間分割
-  let usedLen = 0;
+  // 各直線の長さは、基本情報タブのcalcAlignment()が計算した正確な実長（BP-EP基準）を再利用する。
+  // 第1直線・最終直線は、立坑内に収まる分（launchDist/arrivalDist）を実長から差し引いて
+  // 「地山内（実際に推進力がかかる区間）」の長さにする。曲線が0本のときは同じ1本の直線に
+  // 両方の除外距離がかかる（第1直線=最終直線のため、最終直線側は0として二重計上を避ける）。
+  // calcAlignment()が未実行等でデータが噛み合わない場合のみ、従来の均等按分にフォールバックする。
   const totalCurveLen = curList.reduce((s,c) => s+c.CL, 0);
   const straightTotal = Math.max(0, groundLen - totalCurveLen);
+  const useRealLengths = realStraightLengths.length === curList.length + 1;
+  const straightLenAt = (idx) => {
+    let L = realStraightLengths[idx];
+    if (idx === 0) L -= launchDist;
+    if (idx === curList.length) L -= arrivalDist;
+    return Math.max(0, L);
+  };
+
   // 最終直線 = 到達側の直線
-  const epStraight = Math.min(arrivalDist > 0 ? arrivalDist : straightTotal * 0.3, straightTotal);
+  const epStraight = useRealLengths
+    ? (curList.length > 0 ? straightLenAt(curList.length) : 0)
+    : Math.min(arrivalDist > 0 ? arrivalDist : straightTotal * 0.3, straightTotal);
   const spStraight = straightTotal - epStraight;
 
   const segments = [];
@@ -2109,7 +2641,8 @@ function calculate() {
   // 重要: 曲線を先に処理してから、その曲線の（BP側で隣接する）直前の直線を後で足すこと。
   // 直線の増幅は「その直線とジャッキの間にある曲線」だけで決まるため、まだ通過していない
   // （EP側で隣接する）次の曲線のKで巻き込んで増幅してはならない。
-  const intermediateStraight = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
+  // フォールバック用（useRealLengths=falseの時のみ使う、残り長を曲線本数で均等按分した値）
+  const intermediateStraightFallback = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
     const cSpec = resolveSpec(c.spec);
@@ -2125,17 +2658,22 @@ function calculate() {
       L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, n: n_pipes, lambda, fo:curveFo, dF: F_cum - F_before, F_cum, ord: 2*curveNo, spec: cSpec
     });
     // 曲線通過後、次（BP側）の曲線に至るまでの直線（＝第curveNo直線）
-    if (i < reversedCurves.length - 1 && intermediateStraight > 0) {
-      const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec);
-      const { fo: midFo } = foForSpec(midSpec, H, q_total);
-      const dF = midFo * intermediateStraight;
-      F_cum += dF;
-      segments.push({ label:`第${curveNo}直線`, type:'straight', L:intermediateStraight, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec });
+    if (i < reversedCurves.length - 1) {
+      const midLen = useRealLengths ? straightLenAt(curveNo - 1) : intermediateStraightFallback;
+      if (midLen > 0) {
+        const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec);
+        const { fo: midFo } = foForSpec(midSpec, H, q_total);
+        const dF = midFo * midLen;
+        F_cum += dF;
+        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec });
+      }
     }
   });
 
   // 第1直線（発進側）
-  const spRemain = reversedCurves.length > 0 ? spStraight - intermediateStraight * (reversedCurves.length - 1) : spStraight;
+  const spRemain = useRealLengths
+    ? straightLenAt(0)
+    : (reversedCurves.length > 0 ? spStraight - intermediateStraightFallback * (reversedCurves.length - 1) : spStraight);
   if (spRemain > 0) {
     const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec);
     const { fo: firstFo } = foForSpec(firstSpec, H, q_total);
@@ -2539,6 +3077,321 @@ function syncForceFromCalc() {
   }
 }
 
+// ══════════════════════════════════════
+//  支圧壁 寸法図（平面図・縦断面図）
+// ══════════════════════════════════════
+function drawWallPlanView() {
+  const canvas = document.getElementById('wallPlanView');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const Bw = n('wallBw');
+  if (!Bw) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
+    return;
+  }
+  const { Beff, linerD, sagitta } = computeWallBeff();
+  const isCircle = wallShaftType === 'circle' || wallShaftType === 'casing';
+  const pitW = isCircle ? (n('wallCircleD') || Bw) : (n('wallPitW') || Bw);
+  const pitL = isCircle ? (n('wallCircleD') || Bw) : (n('wallPitL') || Bw);
+
+  // 世界座標: x=左右（幅方向）、y=推進方向（奥+）。縦方向を推進方向として描画する。
+  const worldW = Math.max(Bw, pitW) * 1.25;
+  const worldH = pitL * 1.3;
+  const margin = 40;
+  const scale = Math.min((w - margin * 2) / worldW, (h - margin * 2) / worldH);
+  const offX = w / 2;
+  const offY = h - margin;
+  const tx = (x) => offX + x * scale;
+  const ty = (y) => offY - y * scale; // 奥（+）を上に
+
+  if (isCircle) {
+    // 円形立坑: 支圧壁はライナープレート内側の円を弦Beffで切り取った円弓形になる
+    // （ユーザー提供の参考図で確認。矩形のように単純な帯状にはならない）。
+    const R_shaft = pitW / 2, R_liner = linerD / 2;
+    const cy = R_shaft; // 立坑中心の世界y座標（円は世界y=0〜pitWの範囲）
+    // ライナープレート径（呼び径、赤）
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(tx(0), ty(cy), R_shaft * scale, R_shaft * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#dc2626';
+    ctx.font = '11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`ライナープレート径 φ${pitW.toFixed(2)}m`, tx(0), ty(pitW) - 8);
+    // ライナープレート内側（板厚25mm×2＝50mm低減、青）
+    ctx.strokeStyle = '#1d6fd8';
+    ctx.beginPath();
+    ctx.ellipse(tx(0), ty(cy), R_liner * scale, R_liner * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#1d6fd8';
+    ctx.fillText(`ライナー内側(有効径) φ${linerD.toFixed(2)}m（板厚25mm×2辺）`, tx(0), ty(cy - R_liner) - 8);
+
+    // 推進管芯線（中心の縦線＝推進方向）
+    ctx.save();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(tx(0), ty(pitW * 1.15)); ctx.lineTo(tx(0), ty(-pitW * 0.1)); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('推進方向', tx(0), ty(-pitW * 0.1) - 6);
+
+    // 支圧壁（円弓形）: 立坑の奥側（y=0付近、推進方向の反対側）にライナー円の弦Beffで作る
+    const halfChord = Beff / 2;
+    const halfAngle = Math.asin(Math.min(1, halfChord / Math.max(R_liner, 1e-6)));
+    const nSeg = 24;
+    const segPts = [];
+    for (let i = 0; i <= nSeg; i++) {
+      const theta = -halfAngle + (2 * halfAngle) * (i / nSeg);
+      segPts.push({ x: R_liner * Math.sin(theta), y: cy - R_liner + R_liner * (1 - Math.cos(theta)) });
+    }
+    ctx.beginPath();
+    segPts.forEach((p, i) => { const px = tx(p.x), py = ty(p.y); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(29,111,216,0.25)';
+    ctx.fill();
+    ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 寸法ラベル（支圧壁幅Beff・支圧壁厚=中心の矢高sagitta。参考図の「支圧壁幅」「支圧壁厚」表記に合わせる）
+    const chordWorldY = cy - R_liner + sagitta;
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.fillText(`支圧壁幅 ${Beff.toFixed(2)}m`, tx(0), ty(chordWorldY) + 16);
+    ctx.fillText(`支圧壁厚(中心) ${(sagitta * 1000).toFixed(0)}mm`, tx(0), ty(cy - R_liner) - 24);
+    if (Beff < Bw - 1e-6) {
+      ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
+      ctx.fillText(`Bw=${Bw.toFixed(2)}m指定→ライナー内側に収まる幅へ低減`, tx(0), ty(chordWorldY) + 30);
+    }
+    return;
+  }
+
+  // 矩形・オープンカット立坑: 支圧壁は単純な矩形の帯
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(tx(-pitW / 2), ty(pitL), pitW * scale, pitL * scale);
+  ctx.fillStyle = '#64748b';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`立坑 ${pitW.toFixed(2)}×${pitL.toFixed(2)}m`, tx(0), ty(pitL) - 8);
+
+  // 推進管芯線（中心の縦線＝推進方向）
+  ctx.save();
+  ctx.strokeStyle = '#94a3b8';
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(tx(0), ty(pitL * 1.15)); ctx.lineTo(tx(0), ty(-pitL * 0.1)); ctx.stroke();
+  ctx.restore();
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('推進方向', tx(0), ty(-pitL * 0.1) - 6);
+
+  // 支圧壁（立坑の中ほどに配置。全幅Bw=破線、有効幅Beff=実線・塗り）
+  const wallY = pitL * 0.5;
+  const wallThickness = Math.max(worldH * 0.05, 0.1);
+  ctx.save();
+  ctx.strokeStyle = '#94a3b8';
+  ctx.setLineDash([4, 4]);
+  ctx.strokeRect(tx(-Bw / 2), ty(wallY + wallThickness / 2), Bw * scale, wallThickness * scale);
+  ctx.restore();
+  ctx.fillStyle = 'rgba(29,111,216,0.18)';
+  ctx.fillRect(tx(-Beff / 2), ty(wallY + wallThickness / 2), Beff * scale, wallThickness * scale);
+  ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tx(-Beff / 2), ty(wallY + wallThickness / 2), Beff * scale, wallThickness * scale);
+
+  ctx.font = 'bold 11px sans-serif';
+  ctx.fillStyle = '#0f172a';
+  ctx.fillText(`Bw=${Bw.toFixed(2)}m`, tx(0), ty(wallY - wallThickness / 2) + 16);
+  if (Beff < Bw - 1e-6) {
+    ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
+    ctx.fillText(`Beff=${Beff.toFixed(2)}m（立坑制約で低減）`, tx(0), ty(wallY - wallThickness / 2) + 30);
+  }
+}
+
+function drawWallSectionView() {
+  const canvas = document.getElementById('wallSectionView');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const Bw = n('wallBw'), Hw = n('wallHw'), hc = n('wallHc');
+  if (!Bw || !Hw) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
+    return;
+  }
+  const pipeD = n('pipeOuter') || 0.96;
+  const { Beff } = computeWallBeff(); // 円形立坑では弦Beff＜Bwになりうるため、実際の幅はBeffを使う
+
+  const dimGutter = 76; // 左側に寸法線を描くための余白
+  const margin = 30;
+  const worldW = Beff, worldH = Math.max(Hw, hc + pipeD / 2) * 1.2;
+  const scale = Math.min((w - margin * 2 - dimGutter) / worldW, (h - margin * 2) / worldH);
+  const baseY = h - margin; // y=0（基礎コンクリート上面）
+  const offX = dimGutter + margin + ((w - margin * 2 - dimGutter) - worldW * scale) / 2;
+  const tx = (x) => offX + x * scale;
+  const ty = (y) => baseY - y * scale;
+
+  // 基礎コンクリート上面(y=0)ライン
+  ctx.strokeStyle = '#cbd5e1';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '10px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText('基礎コンクリート上面（y=0）', dimGutter, ty(0) - 4);
+
+  // 支圧壁本体（幅は実際に有効なBeffを使う。円形立坑ではBwより狭くなりうる）
+  ctx.fillStyle = 'rgba(148,163,184,0.25)';
+  ctx.fillRect(tx(0), ty(Hw), Beff * scale, Hw * scale);
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(tx(0), ty(Hw), Beff * scale, Hw * scale);
+  ctx.fillStyle = '#334155';
+  ctx.font = '11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`支圧壁幅 ${Beff.toFixed(2)}m${Beff < Bw - 1e-6 ? `（指定Bw=${Bw.toFixed(2)}mから低減）` : ''}`, tx(Beff / 2), ty(Hw) - 8);
+  {
+    // 支圧壁厚（円形立坑では円弓形の中心厚さ＝平面図と同じsagitta。矩形立坑ではBw自体が厚さに相当しないため参考値として注記のみ）
+    const { sagitta: sag } = computeWallBeff();
+    if (sag > 0) {
+      ctx.fillStyle = '#64748b';
+      ctx.font = '10px sans-serif';
+      ctx.fillText(`支圧壁厚(中心、平面図参照)= ${(sag * 1000).toFixed(0)}mm`, tx(Beff / 2), ty(Hw) + 14);
+    }
+  }
+
+  // 推進管芯高さ線＋管断面
+  ctx.save();
+  ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+  ctx.setLineDash([5, 4]);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(tx(-0.15), ty(hc)); ctx.lineTo(tx(Beff + 0.15), ty(hc)); ctx.stroke();
+  ctx.restore();
+  ctx.beginPath();
+  ctx.arc(tx(Beff / 2), ty(hc), (pipeD / 2) * scale, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(29,111,216,0.15)';
+  ctx.fill();
+  ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(`推進管芯 hc=${hc.toFixed(2)}m`, tx(Beff + 0.2), ty(hc) + 4);
+
+  // 寸法線（管芯を基準に天端・下端までの距離を左側に表示）
+  const drawDim = (xPix, yA, yB, label) => {
+    const yTop = Math.min(yA, yB), yBot = Math.max(yA, yB);
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xPix, yTop); ctx.lineTo(xPix, yBot); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xPix - 4, yTop); ctx.lineTo(xPix + 4, yTop); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xPix - 4, yBot); ctx.lineTo(xPix + 4, yBot); ctx.stroke();
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(label, xPix - 6, (yTop + yBot) / 2 + 3);
+  };
+  drawDim(dimGutter * 0.35, ty(Hw), ty(0), `Hw=${Hw.toFixed(2)}m`);
+  drawDim(dimGutter * 0.65, ty(Hw), ty(hc), `天端まで ${(Hw - hc).toFixed(2)}m`);
+  drawDim(dimGutter * 0.65, ty(hc), ty(0), `下端まで ${hc.toFixed(2)}m`);
+}
+
+// 有効幅（立坑制約）の算出。calcBacklock()と寸法図（平面・断面）の両方から参照する共通ロジック
+// 円形立坑（circle/casing）の場合、支圧壁は矩形ではなく「ライナープレート内側の円」を
+// 弦（Beff）で切り取った円弓形（弓形）になる（ユーザー提供の参考図で確認済み）。
+// ライナープレート内側径 = 立坑径（呼び径）− 50mm（プレート厚み相当）。
+// 弦Beffに対する弓形の最大厚み（矢高、サジッタ）= R − √(R² − (Beff/2)²)。
+function computeWallBeff() {
+  const Bw = n('wallBw');
+  let maxBw = Bw;
+  let linerD = null, sagitta = 0;
+  if (wallShaftType === 'rect' || wallShaftType === 'open') {
+    maxBw = n('wallPitW') || Bw;
+  } else if (wallShaftType === 'circle' || wallShaftType === 'casing') {
+    const pitD = n('wallCircleD');
+    linerD = Math.max(0, pitD - 0.05);
+    maxBw = linerD;
+  }
+  const Beff = Math.min(Bw, maxBw);
+  if (linerD != null) {
+    const R = linerD / 2, halfChord = Math.min(Beff, linerD) / 2;
+    sagitta = R - Math.sqrt(Math.max(0, R * R - halfChord * halfChord));
+  }
+  return { Bw, maxBw, Beff, linerD, sagitta };
+}
+
+// ══════════════════════════════════════
+//  ジャッキ当たり部の局所支圧照査
+//  元押ジャッキの推力は支圧壁全面ではなく、間に挟む鉄板の当たり面積(A1)にだけ
+//  集中して伝わる。コンクリートは載荷面より広い断面(A2)に囲まれていると、その分
+//  局所的な支圧強度が割り増しされる（一般的な支圧応力度の割増し式、目安値）：
+//    fa = 0.25 × Fc × min(√(A2/A1), 2)
+//  必要Fc・必要厚さ（45°分散で鉄板からBeff×Hwまで広がるための最小厚さ）を逆算する。
+// ══════════════════════════════════════
+function calcLocalBearing() {
+  const el = document.getElementById('localBearingResult');
+  if (!el) return;
+  const bp = n('jackPlateW'), hp = n('jackPlateH'), Fc = n('wallFc'), F = n('wallForce');
+  const { Beff } = computeWallBeff();
+  const Hw = n('wallHw');
+  if (!bp || !hp || !Fc || !F || !Beff || !Hw) {
+    el.innerHTML = '<div class="note-box">鉄板寸法・コンクリート強度・支圧壁諸元・推進力を入力してください。</div>';
+    return;
+  }
+
+  const A1 = bp * hp; // 鉄板の当たり面積 [m²]
+  const A2 = Math.max(A1, Beff * Hw); // 支圧壁断面積（荷重が最終的に分散しきる先。鉄板より小さくはならない）
+  const sigma = F / A1; // 必要支圧応力度 [kN/m²]
+  const confinement = Math.min(Math.sqrt(A2 / A1), 2); // 支圧割増し係数（上限2倍）
+  const FcKNm2 = Fc * 1000; // N/mm² → kN/m²（1N/mm²=1000kN/m²）
+  const fa_current = 0.25 * FcKNm2 * confinement; // 現在採用しているFcでの許容支圧応力度
+  const ok = sigma <= fa_current;
+  const Fc_required = sigma / (0.25 * confinement) / 1000; // 必要コンクリート強度 [N/mm²]
+
+  // 必要厚さ（45°分散想定：鉄板の端からBeff×Hwの端まで、幅・高さ両方向とも45°で広がりきる厚さ）
+  const t_w = Math.max(0, (Beff - bp) / 2);
+  const t_h = Math.max(0, (Hw - hp) / 2);
+  const t_required = Math.max(t_w, t_h);
+  const fc_ok = Fc_required <= Fc + 1e-9;
+
+  el.innerHTML = `
+    <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <b>局所支圧応力度の照査</b>
+        <span class="pill ${ok ? 'ok' : 'ng'}">${ok ? 'OK' : 'NG'}</span>
+      </div>
+      <div style="font-size:12px;margin-top:6px;color:var(--sub)">
+        鉄板当たり面積　A₁ = b_p×h_p = ${bp.toFixed(2)}×${hp.toFixed(2)} = ${A1.toFixed(3)} m²<br>
+        支圧壁断面積　　A₂ = Beff×Hw = ${Beff.toFixed(2)}×${Hw.toFixed(2)} = ${A2.toFixed(2)} m²<br>
+        必要支圧応力度　σ = F/A₁ = ${F.toFixed(0)}/${A1.toFixed(3)} = <b>${sigma.toFixed(0)} kN/m²</b><br>
+        支圧割増し係数　min(√(A₂/A₁), 2) = ${confinement.toFixed(2)}<br>
+        現在のFc=${Fc}N/mm²での許容支圧応力度　fa = 0.25×Fc×係数 = 0.25×${FcKNm2.toFixed(0)}×${confinement.toFixed(2)} = <b>${fa_current.toFixed(0)} kN/m²</b><br>
+        判定: σ(${sigma.toFixed(0)}) ${ok ? '≤' : '>'} fa(${fa_current.toFixed(0)}) kN/m²
+      </div>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">必要コンクリート強度</div><div class="metric-value ${fc_ok ? 'ok' : 'ng'}">${Fc_required.toFixed(1)}</div><div class="metric-sub">N/mm²（採用${Fc}に対し${fc_ok ? '十分' : '不足'}）</div></div>
+      <div class="metric-card"><div class="metric-label">必要支圧壁厚さ</div><div class="metric-value">${(t_required * 1000).toFixed(0)}</div><div class="metric-sub">mm（45°分散想定、鉄板からBeff×Hwまで）</div></div>
+    </div>
+    <div class="note-box" style="font-size:11px;margin-top:4px">この割増し式（0.25×Fc、上限2倍）は一般的な支圧応力度の目安式です。実際の適用基準（道路橋示方書・JPTA指針等）に応じて係数を確認してください。</div>
+  `;
+}
+
 function calcBacklock() {
   const Bw = n('wallBw');
   const Hw = n('wallHw');
@@ -2549,22 +3402,17 @@ function calcBacklock() {
   const phi_deg = n('soilPhi');
   const phi = phi_deg * Math.PI / 180;
 
+  drawWallPlanView();
+  drawWallSectionView();
+  calcLocalBearing();
+
   if (!Bw || !Hw || !F) {
     document.getElementById('backlockResult').innerHTML = '<div class="note-box">支圧壁諸元と推進力を入力してください。</div>';
     return;
   }
 
   // 有効幅（立坑制約）
-  let maxBw = Bw;
-  if (wallShaftType === 'rect' || wallShaftType === 'open') maxBw = n('wallPitW') || Bw;
-  else if (wallShaftType === 'circle' || wallShaftType === 'casing') {
-    const pitD = n('wallCircleD');
-    const pipeD = n('pipeOuter') || 0.96;
-    const pitR = pitD / 2;
-    const halfChord = Math.sqrt(Math.max(0, pitR**2 - (pitR - pipeD/2)**2));
-    maxBw = Math.min(Bw, halfChord * 2);
-  }
-  const Beff = Math.min(Bw, maxBw);
+  const { maxBw, Beff } = computeWallBeff();
 
   // ① 基礎反力照査
   const f = F / (Beff * Hw);
@@ -2579,8 +3427,20 @@ function calcBacklock() {
   const check2_ok = sigma_max <= fa;
 
   // ③ 受働土圧安定照査
+  // 支圧壁自体の高さ(Hw)分の自重項だけでは、支圧壁より上にある土被りの上載荷重や
+  // 粘着力による抵抗を無視してしまい、実際の抵抗力を大きく過小評価してNGになりやすい。
+  // 土質条件タブの土被りH最大・粘着力Cを反映した標準的な受働土圧式に修正する：
+  //   Ep = (0.5×γ×Hw² + q×Hw)×Kp×Beff + 2×C×√Kp×Hw×Beff
+  //   q = γ×(支圧壁天端の土被り)、支圧壁天端の土被り = H最大 − (Hw−hc)（管中心基準の换算、負値は0とする）
   const Kp = Math.pow(Math.tan(Math.PI/4 + phi/2), 2);
-  const Ep = 0.5 * gamma * Hw * Hw * Kp * Beff;
+  const C_coh = n('soilC') || 0;
+  const Hmax_soil = n('soilHmax') || 0;
+  const depthToWallTop = Math.max(0, Hmax_soil - (Hw - hc));
+  const q_surcharge = gamma * depthToWallTop;
+  const Ep_weight = 0.5 * gamma * Hw * Hw * Kp * Beff;
+  const Ep_surcharge = q_surcharge * Hw * Kp * Beff;
+  const Ep_cohesion = 2 * C_coh * Math.sqrt(Kp) * Hw * Beff;
+  const Ep = Ep_weight + Ep_surcharge + Ep_cohesion;
   const check3_ok = Ep >= F;
 
   // バックロック選定
@@ -2599,14 +3459,26 @@ function calcBacklock() {
   const checks = [
     { no:'①', name:'基礎反力照査', formula:`f = F/(Bw×Hw) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${f.toFixed(1)} kN/m²`, limit:`≤ f_a=${fa} kN/m²`, ok: check1_ok },
     { no:'②', name:'偏心曲げ照査', formula:`e=${e.toFixed(3)}m, σmax=${sigma_max.toFixed(1)} kN/m²`, limit:`≤ f_a=${fa} kN/m²`, ok: check2_ok },
-    { no:'③', name:'受働土圧安定照査', formula:`Kp=${Kp.toFixed(3)}, Ep=${Ep.toFixed(0)} kN vs F=${F.toFixed(0)} kN`, limit:`Ep ≥ F`, ok: check3_ok },
+    { no:'③', name:'受働土圧安定照査', formula:`
+      Kp = tan²(45°+φ/2) = tan²(45°+${phi_deg}°/2) = ${Kp.toFixed(3)}<br>
+      支圧壁天端の土被り = H最大 − (Hw−hc) = ${Hmax_soil.toFixed(2)} − (${Hw.toFixed(2)}−${hc.toFixed(2)}) = ${depthToWallTop.toFixed(2)} m<br>
+      上載荷重 q = γ×土被り = ${gamma}×${depthToWallTop.toFixed(2)} = ${q_surcharge.toFixed(1)} kN/m²<br>
+      (a)自重項　0.5×γ×Hw²×Kp×Beff = 0.5×${gamma}×${Hw.toFixed(2)}²×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_weight.toFixed(0)} kN<br>
+      (b)上載荷重項　q×Hw×Kp×Beff = ${q_surcharge.toFixed(1)}×${Hw.toFixed(2)}×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_surcharge.toFixed(0)} kN<br>
+      (c)粘着力項　2×C×√Kp×Hw×Beff = 2×${C_coh}×${Math.sqrt(Kp).toFixed(3)}×${Hw.toFixed(2)}×${Beff.toFixed(2)} = ${Ep_cohesion.toFixed(0)} kN<br>
+      <b>Ep = (a)+(b)+(c) = ${Ep_weight.toFixed(0)}+${Ep_surcharge.toFixed(0)}+${Ep_cohesion.toFixed(0)} = ${Ep.toFixed(0)} kN</b>　vs　F = ${F.toFixed(0)} kN
+    `, limit:`Ep ≥ F`, ok: check3_ok },
   ];
 
   const allOk = check1_ok && check2_ok && check3_ok;
 
-  document.getElementById('backlockResult').innerHTML = `
-    <div class="card">
-      <div class="card-title ${allOk?'ok':'warn'}">🧱 支圧壁 3段階照査結果</div>
+  // このブロックは毎回innerHTMLごと再生成されるため、アコーディオンの開閉状態を
+  // 再生成前に読み取り、再生成後に復元する（さもないと入力のたびに閉じてしまう）
+  const backlockEl = document.getElementById('backlockResult');
+  const prevOpenId = backlockEl.querySelector('.card.accordion.open')?.id || null;
+  backlockEl.innerHTML = `
+    <div class="card accordion" id="wallCheckCard">
+      <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 3段階照査結果</div>
       <div class="note-box" style="font-size:11px">有効幅 Beff=${Beff.toFixed(2)} m（立坑制約: maxBw=${maxBw.toFixed(2)}m）</div>
       ${checks.map(c=>`
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
@@ -2619,8 +3491,8 @@ function calcBacklock() {
         </div>
       `).join('')}
     </div>
-    <div class="card">
-      <div class="card-title accent">🔩 バックロック選定</div>
+    <div class="card accordion" id="wallBacklockCard">
+      <div class="card-title accent" onclick="toggleAccordion(this)">🔩 バックロック選定</div>
       <div class="metrics-grid">
         <div class="metric-card"><div class="metric-label">推奨型番</div><div class="metric-value" style="font-size:18px">${blSelected.name}</div></div>
         <div class="metric-card"><div class="metric-label">許容耐荷力</div><div class="metric-value">${(blSelected.F*1000).toFixed(0)}</div><div class="metric-sub">kN</div></div>
@@ -2632,6 +3504,9 @@ function calcBacklock() {
       </div>
     </div>
   `;
+  if (prevOpenId) { const el = document.getElementById(prevOpenId); if (el) el.classList.add('open'); }
+  drawWallPlanView();
+  drawWallSectionView();
 }
 
 // ══════════════════════════════════════
@@ -2682,7 +3557,8 @@ function getProjectData() {
     wall: {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
       circleD: n('wallCircleD'), Bw: n('wallBw'), Hw: n('wallHw'),
-      hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce')
+      hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce'),
+      jackPlateW: n('jackPlateW'), jackPlateH: n('jackPlateH'), fc: n('wallFc')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -2720,6 +3596,7 @@ function setProjectData(d) {
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
+    if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush);
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
     // 継手種別: 旧フォーマットはJC/JB/JA表記、新フォーマットは許容mm値(60/40/30)
     const jointMap = {'JC':'60','JB':'40','JA':'30','60':'60','40':'40','30':'30'};
@@ -2821,6 +3698,8 @@ function setProjectData(d) {
     setV('wallBw', wl.Bw||3); setV('wallHw', wl.Hw||2);
     setV('wallHc', wl.hc||0.8); setV('wallFa', wl.fa||3000);
     setV('wallForce', wl.force||0);
+    setV('jackPlateW', wl.jackPlateW||0.5); setV('jackPlateH', wl.jackPlateH||0.5);
+    setV('wallFc', wl.fc||24);
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
@@ -2906,6 +3785,7 @@ function updateProjectSummary() {
     calcSurvey();
   }
   updateProjectSummary();
+  setupAlignmentVisualInteraction();
 })();
 </script>
 </body>
