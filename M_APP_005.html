@@ -583,6 +583,10 @@ tr.row-ng td{color:var(--ng)}
       <div class="field-row"><label>管中心高さ h_c [m]</label><input id="wallHc" class="mono" type="number" step="0.05" value="0.8" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>許容支圧応力度 f_a [kN/m²]</label><input id="wallFa" class="mono" type="number" step="10" value="3000" oninput="calcBacklock()"><span class="unit">kN/m²</span></div>
     </div>
+    <div class="note-box" style="font-size:11px">
+      ⚠️ この値は自動計算されていません。初期値3000kN/m²は根拠のないプレースホルダーです。現場で採用するコンクリート仕様（設計基準強度F_c等）に基づき、適用する基準（道路橋示方書等）に従って手動で設定してください。<br>
+      ※下の「🔨 ジャッキ当たり部の局所支圧照査」カードの採用コンクリート強度F_cとは別の値です。局所支圧照査ではF_cから式で自動算出していますが、こちらの基礎反力照査・偏心曲げ照査では同様の自動算出は行っていません。
+    </div>
     <div class="field-row">
       <label>推進力 F [kN]（Tab2計算結果を自動反映 or 手動入力）</label>
       <input id="wallForce" class="mono" type="number" step="1" value="" oninput="calcBacklock()">
