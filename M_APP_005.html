@@ -137,11 +137,12 @@ tr.row-selected{background:#eff6ff}
 .report-formula{font-size:12px;color:var(--navy);background:var(--bg);border-radius:6px;padding:8px 10px;margin:8px 0 0;white-space:normal;overflow-wrap:break-word}
 .report-svg{width:100%;height:auto;display:block;margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:8px}
 .calc-steps{background:var(--bg);border-radius:8px;padding:6px 12px;margin-top:8px}
-.calc-step{display:grid;grid-template-columns:9em 1fr auto;gap:10px;padding:5px 0;font-size:12px;align-items:baseline;border-bottom:1px dashed var(--line)}
+.calc-step{padding:6px 0;font-size:12px;border-bottom:1px dashed var(--line)}
 .calc-step:last-child{border-bottom:0}
-.cs-label{color:var(--sub);white-space:nowrap}
-.cs-expr{color:var(--ink);overflow-wrap:break-word}
-.cs-result{font-weight:700;color:var(--navy);white-space:nowrap;text-align:right}
+.cs-label{color:var(--sub);overflow-wrap:break-word;margin-bottom:2px}
+.cs-body{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.cs-expr{color:var(--ink);overflow-wrap:break-word;min-width:0}
+.cs-result{font-weight:700;color:var(--navy);white-space:nowrap;text-align:right;margin-left:auto}
 .verdict-table td.pass{color:var(--ok);font-weight:800}
 .verdict-table td.fail{color:var(--ng);font-weight:800}
 
@@ -667,7 +668,7 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>支圧壁天端 水準高 [m]</label><input id="wallElWallTop" class="mono" type="number" step="0.001" value="2.5" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row"><label>立坑中心と推進中心のオフセット [m]</label><input id="wallCenterOffset" class="mono" type="number" step="0.01" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
       </div>
-      <p class="report-note" style="margin:4px 2px 0">オフセットは立坑の幾何中心から見た推進管中心のずれ（通常0）。円形立坑の多段ジャッキ配置の局所厚さ計算にも反映されます。</p>
+      <p class="report-note" style="margin:4px 2px 0">オフセットは立坑の幾何中心から見た推進管中心のずれ（通常0）。円形立坑のジャッキ配置（推力分散用）の局所厚さ計算にも反映されます。</p>
     </div>
 
     <div class="field-row" style="margin-top:8px">
@@ -690,15 +691,26 @@ tr.row-selected{background:#eff6ff}
   </div>
 
   <div class="card accordion" id="jackStagesCard">
-    <div class="card-title" onclick="toggleAccordion(this)">🔩 多段ジャッキ配置（曲線造成用）</div>
+    <div class="card-title" onclick="toggleAccordion(this)">🔩 ジャッキ配置（推力分散用）</div>
     <div class="ok-box" style="font-size:11px">
-      曲線造成用の油圧ジャッキは複数段に分けて据え付けます（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します。ジャッキ能力は全段共通（「⚡推進力」タブの「ジャッキ1本の能力」を使用）です。各段のジャッキ幅（推進中央線からの片側幅）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。実際の配置ルール（例: 3段目は2段目と同じ幅で2段目の上に乗る、2段目は推進定規の内側とジャッキ内側が合う幅にする、等）は現場・機種ごとに異なるため自動計算はせず、すべて数値を確認しながら入力する形にしています。
+      最下段のジャッキ1段だけで管を押すと、押輪（プレスリング）を介して推力が管の下部に偏って伝わってしまいます。これを避けるため、通常は複数段のジャッキを据え付け、押輪・ストラットを通してなるべく均一に推力が伝わるようにします（曲線とは関係ありません。曲線を作るための装置ではなく、直進時も含め常時使う推力分散のための配置です）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置を想定）。ジャッキ能力は全段共通（「⚡推進力」タブの「ジャッキ1本の能力」を使用）です。各段のジャッキ幅（推進中央線からの片側幅）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。実際の段数・配置ルール（例: 3段目は2段目と同じ幅で2段目の上に乗る、2段目はストラットの内側とジャッキ内側が合う幅にする、等）は現場・機種ごとに異なるため自動計算はせず、すべて数値を確認しながら入力する形にしています。<br><br>
+      ※刃口推進はズリ（掘削土砂）をバケットでウインチ・クレーン揚重するため、押輪・ストラットは上部が開いた馬蹄形になります（バケットを真上に引き上げるため）。泥濃推進等バケット出し入れが不要な工法では押輪が円形になり、ジャッキは管高さ中心の左右に据え付けられることが多いです。
     </div>
     <div class="two-col">
-      <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="autoSave()"><span class="unit">mm</span></div>
-      <div class="field-row"><label>推進定規幅（H鋼サイズで決定） [mm]</label><input id="railWidth" class="mono" type="number" step="1" value="200" oninput="autoSave()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="drawJackPositionDiagram()" onchange="calcBacklock()"><span class="unit">mm</span></div>
+      <div class="field-row full">
+        <label>推進定規に使うH形鋼</label>
+        <select id="railSize" onchange="calcBacklock()">
+          <option value="200">H-200（200×200）</option>
+          <option value="250">H-250（250×250）</option>
+          <option value="300">H-300（300×300）</option>
+          <option value="350">H-350（350×350）</option>
+          <option value="400">H-400（400×400）</option>
+        </select>
+      </div>
     </div>
-    <p class="report-note" style="margin:0 2px 6px">参考図の例: 管底から50mm下がりにH鋼を敷設。推進定規幅はH鋼のサイズと下がり量で決まる（規格は現場の使用H鋼に合わせて入力）。</p>
+    <p class="report-note" style="margin:0 2px 6px">管底から指定した下がり量の位置を定規の下面（基礎側）とし、選んだH形鋼の成（せい）の分だけ上に延ばして、その上面の内側角が管外径に接する位置に左右の定規を描きます（下図参照）。</p>
+    <canvas id="jackPositionDiagram" style="width:100%;height:320px;border:1px solid var(--line);border-radius:8px;display:block;background:#fff;margin:6px 0"></canvas>
     <div id="jackStagesTable"><div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div></div>
     <button type="button" class="big-btn secondary" style="min-height:36px;font-size:12px;margin-top:6px" onclick="copyStage2ToUpper()">2段目の値を3段目以降にコピー</button>
   </div>
@@ -849,10 +861,12 @@ function showToast(msg, dur=2200) {
 // カードを開いた直後に中のcanvas(id)へ対応する再描画関数を呼ぶ（新しいcanvasを追加したらここに登録する）
 const CANVAS_REFRESH_FNS = {
   alignmentVisual: () => drawAlignmentVisual(),
+  reportAlignmentVisual: () => drawAlignmentVisual('reportAlignmentVisual', { scale: 1, offsetX: 0, offsetY: 0 }),
   distDiagram: () => updateGroundLen(),
   forceGraph: () => { if (lastCalcResult) drawForceGraph(lastCalcResult.segments, lastCalcResult.Fa, lastCalcResult.Fo); },
   wallPlanView: () => drawWallPlanView(),
   wallSectionView: () => drawWallSectionView(),
+  jackPositionDiagram: () => drawJackPositionDiagram(),
 };
 
 function toggleAccordion(titleEl) {
@@ -937,7 +951,7 @@ function setMethod(m) {
   document.getElementById('waterRow').style.display = (m !== 'blade') ? '' : 'none';
   document.getElementById('deinohRow').style.display = (m === 'deinoh') ? '' : 'none';
   document.getElementById('bladeRow').style.display = (m === 'blade') ? '' : 'none';
-  renderJackStages(computeWallBeff()); // 多段ジャッキ配置は刃口推進工法専用のため、工法切替時に即座に反映する
+  renderJackStages(computeWallBeff()); // ジャッキ配置（推力分散用）は刃口推進工法専用のため、工法切替時に即座に反映する
   autoSave();
 }
 
@@ -1548,8 +1562,16 @@ function drawAlignmentGrid(ctx, w, h, scale, offX, offY) {
   ctx.fillText(`方眼: ${step}m`, 6, h - 6);
 }
 
-function drawAlignmentVisual() {
-  const canvas = document.getElementById('alignmentVisual');
+// targetId・viewOverrideを省略すると、従来通り基本情報タブのインタラクティブな
+// 線形ビジュアル表示（#alignmentVisual、ズーム/パン状態はalignmentView/alignmentViewBaseで保持）
+// を描画する。計算書（施工条件セクション）等、別のcanvasに同じ図を静的表示したい場合は
+// targetIdとview（{scale,offsetX,offsetY}、通常は等倍{scale:1,offsetX:0,offsetY:0}）を渡す。
+// この場合はグローバルなズーム/パン状態・注記円のヒットテスト情報を書き換えない
+// （インタラクティブ表示側の状態を壊さないため）。
+function drawAlignmentVisual(targetId, viewOverride) {
+  const canvasId = targetId || 'alignmentVisual';
+  const isInteractive = canvasId === 'alignmentVisual';
+  const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.offsetWidth, h = canvas.offsetHeight;
@@ -1625,11 +1647,12 @@ function drawAlignmentVisual() {
   const baseScale = Math.min((w - margin * 2) / spanY, (h - margin * 2) / spanX);
   const baseOffX = margin + ((w - margin * 2) - spanY * baseScale) / 2 - minY * baseScale;
   const baseOffY = margin + ((h - margin * 2) - spanX * baseScale) / 2 + maxX * baseScale;
-  alignmentViewBase = { scale: baseScale, offX: baseOffX, offY: baseOffY };
+  if (isInteractive) alignmentViewBase = { scale: baseScale, offX: baseOffX, offY: baseOffY };
 
-  const scale = baseScale * alignmentView.scale;
-  const offX = baseOffX + alignmentView.offsetX;
-  const offY = baseOffY + alignmentView.offsetY;
+  const view = viewOverride || alignmentView;
+  const scale = baseScale * view.scale;
+  const offX = baseOffX + view.offsetX;
+  const offY = baseOffY + view.offsetY;
   // 表示: 縦軸=X（上+）・横軸=Y（右+）＝内部(x,y)を90°回転して描画
   const tx = p => offX + p.y * scale;
   const ty = p => offY - p.x * scale;
@@ -1712,8 +1735,9 @@ function drawAlignmentVisual() {
     });
   }
 
-  // 曲線要素の注記（円で囲んで表示）。ドラッグで移動・右下ハンドルで拡大縮小できる。
-  lastCurveAnnotationScreens = [];
+  // 曲線要素の注記（円で囲んで表示）。ドラッグで移動・右下ハンドルで拡大縮小できる
+  // （インタラクティブな#alignmentVisualのみ。静的表示では位置だけ再利用し当たり判定は更新しない）。
+  if (isInteractive) lastCurveAnnotationScreens = [];
   curveInfos.forEach(ci => {
     const state = curveAnnotationState[ci.no] || (curveAnnotationState[ci.no] = { worldPos: null, scale: 1 });
     const lines = [
@@ -1759,7 +1783,7 @@ function drawAlignmentVisual() {
     const hx = cx2 + rx - 6, hy = cy2 + ry - 6;
     ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
     ctx.fillRect(hx - 5, hy - 5, 10, 10);
-    lastCurveAnnotationScreens.push({ no: ci.no, cx: cx2, cy: cy2, rx, ry, hx, hy });
+    if (isInteractive) lastCurveAnnotationScreens.push({ no: ci.no, cx: cx2, cy: cy2, rx, ry, hx, hy });
   });
 }
 
@@ -2979,9 +3003,11 @@ const METHOD_LABEL = { blade:'刃口推進工法', slurry:'泥水推進工法', 
 
 function fmt(x, d) { return (x == null || isNaN(x)) ? '—' : Number(x).toFixed(d ?? 2); }
 
-// 計算書の「途中式」1行分（項目名・数値を代入した式・結果）を組み立てるヘルパー
+// 計算書の「途中式」1行分（項目名・数値を代入した式・結果）を組み立てるヘルパー。
+// 項目名（式の名前）は長くなりがちなため独立した行にし、数値代入した式と結果はその下に
+// 並べる（横一列に詰め込むと項目名が列幅からはみ出して数値と重なってしまうため）。
 function stepRow(label, expr, result) {
-  return `<div class="calc-step"><span class="cs-label">${label}</span><span class="cs-expr mono">${expr}</span><span class="cs-result mono">${result}</span></div>`;
+  return `<div class="calc-step"><div class="cs-label">${label}</div><div class="cs-body"><span class="cs-expr mono">${expr}</span><span class="cs-result mono">${result}</span></div></div>`;
 }
 function calcSteps(rows) { return `<div class="calc-steps">${rows.join('')}</div>`; }
 
@@ -3041,7 +3067,8 @@ function renderReport(res) {
       <tbody>${curveRows3}</tbody>
     </table></div>
     <p class="report-note">路線長 ${fmt(total,2)}m のうち、発進側 ${fmt(launchDist,2)}m・到達側 ${fmt(arrivalDist,2)}m は立坑内（地山摩擦が生じない区間）として除外している。</p>
-    ${svgConstructionSchematic(curList, realStraightLengths)}
+    <canvas id="reportAlignmentVisual" class="report-svg" style="height:340px;background:#fff"></canvas>
+    <p class="report-note">「📈線形ビジュアル表示」（基本情報タブ）と同じ図です（縦軸=X上+・横軸=Y右+、曲線=青・直線=緑、BC/IP/SP/EC/RO/BP/EPと各曲線要素R・IA・CL・SL・TLを表示）。</p>
   `;
 
   // ── 4. 管にかかる等分布荷重 ──
@@ -3188,6 +3215,12 @@ function renderReport(res) {
     ${reportSection(7,'管の許容耐荷力の検討',s7)}
     ${reportSection(8,'推進設備の検討（元押ジャッキ）',s8)}
   `;
+
+  // reportCardが開いている（=canvasにサイズがある）場合のみ即座に描画できる。
+  // 閉じている間はtoggleAccordion()のCANVAS_REFRESH_FNSが開いたタイミングで描画する。
+  if (document.getElementById('reportCard')?.classList.contains('open')) {
+    drawAlignmentVisual('reportAlignmentVisual', { scale: 1, offsetX: 0, offsetY: 0 });
+  }
 }
 
 function reportSection(no, title, bodyHtml) {
@@ -3202,52 +3235,13 @@ function printReport() {
   document.body.classList.add('printing-report');
   const reportCard = document.getElementById('reportCard');
   if (reportCard) reportCard.classList.add('open');
+  // printing-report適用でレイアウト幅が変わるため、印刷直前に線形ビジュアルcanvasを再描画する
+  drawAlignmentVisual('reportAlignmentVisual', { scale: 1, offsetX: 0, offsetY: 0 });
   window.print();
   setTimeout(() => {
     document.documentElement.classList.remove('printing-report');
     document.body.classList.remove('printing-report');
   }, 300);
-}
-
-// 施工概略図: 発進→(直線・曲線を交互に)→到達 の模式図。長さに比例して幅を按分する。
-function svgConstructionSchematic(curList, realLens) {
-  const W = 760, H = 130, marginX = 44, baseY = 78;
-  const totalLen = realLens.reduce((a, b) => a + b, 0) + curList.reduce((a, c) => a + c.CL, 0);
-  const usableW = W - marginX * 2;
-  const scale = totalLen > 0 ? usableW / totalLen : 1;
-
-  const segs = [];
-  for (let i = 0; i < curList.length; i++) {
-    segs.push({ type: 'straight', L: realLens[i] || 0, label: i === 0 ? '第1直線' : `第${i + 1}直線` });
-    segs.push({ type: 'curve', L: curList[i].CL, label: `第${i + 1}曲線`, R: curList[i].R, dir: curList[i].dir });
-  }
-  segs.push({ type: 'straight', L: realLens[realLens.length - 1] || 0, label: curList.length === 0 ? '第1直線（BP→EP）' : '最終直線' });
-
-  let x = marginX;
-  let path = `M${x},${baseY}`;
-  let labels = '';
-  segs.forEach(s => {
-    const w = Math.max(0, s.L * scale);
-    if (w <= 0.5) return;
-    if (s.type === 'straight') {
-      path += ` L${(x + w).toFixed(1)},${baseY}`;
-    } else {
-      const bump = s.dir === 'R' ? -16 : 16; // 右曲線=上に凸、左曲線=下に凸（模式的表現）
-      path += ` Q${(x + w / 2).toFixed(1)},${baseY + bump} ${(x + w).toFixed(1)},${baseY}`;
-    }
-    const cx = x + w / 2;
-    labels += `<text x="${cx.toFixed(1)}" y="${baseY + 30}" text-anchor="middle" font-size="10" fill="#55677a">${s.label}<tspan x="${cx.toFixed(1)}" dy="13">${s.L.toFixed(2)}m${s.type === 'curve' ? ` (R=${s.R}m)` : ''}</tspan></text>`;
-    x += w;
-  });
-
-  return `<svg class="report-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-    <path d="${path}" fill="none" stroke="#24406b" stroke-width="3" stroke-linejoin="round"/>
-    <circle cx="${marginX}" cy="${baseY}" r="4.5" fill="#1f7a5c"/>
-    <text x="${marginX}" y="${baseY - 12}" text-anchor="middle" font-size="11" font-weight="700" fill="#1f7a5c">発進</text>
-    <circle cx="${(marginX + usableW).toFixed(1)}" cy="${baseY}" r="4.5" fill="#b3261e"/>
-    <text x="${(marginX + usableW).toFixed(1)}" y="${baseY - 12}" text-anchor="middle" font-size="11" font-weight="700" fill="#b3261e">到達</text>
-    ${labels}
-  </svg>`;
 }
 
 // 管にかかる等分布荷重の断面模式図: 緩み幅Be・トンネル直径Bt・すべり面の概念図（縦方向は模式的表示で実寸比例ではない）
@@ -3541,6 +3535,19 @@ function drawForceGraph(segments, Fa, Fo) {
 let wallShaftType = 'rect';
 let wallLevelMode = 'direct'; // 'direct'=Hw/hc直接入力、'level'=水準高から自動計算
 let jackStageWidths = []; // 段ごとのジャッキ幅（推進中央線からの片側幅）[m]（インデックス0=1段目）
+let jackStageHeights = []; // 段ごとの設置高さ H（定規下面を0とした、その段のジャッキ底面の高さ）[m]（インデックス0=1段目）
+
+// 推進定規に使うH形鋼の規格（成せい・幅とも同寸の正方形断面シリーズ、単位m）
+const H_BEAM_SIZES = {
+  200: { H: 0.200, B: 0.200 },
+  250: { H: 0.250, B: 0.250 },
+  300: { H: 0.300, B: 0.300 },
+  350: { H: 0.350, B: 0.350 },
+  400: { H: 0.400, B: 0.400 },
+};
+function currentRailBeam() {
+  return H_BEAM_SIZES[v('railSize')] || H_BEAM_SIZES[200];
+}
 
 // ══════════════════════════════════════
 //  支圧壁 高さ/管中心高さ ― 水準高（標高）モード
@@ -3875,7 +3882,12 @@ function computeWallBeff() {
 }
 
 // ══════════════════════════════════════
-//  多段ジャッキ配置（曲線造成用）― 段数は推進力タブの元押ジャッキ使用台数÷2で決まる
+//  ジャッキ配置（推力分散用）― 最下段のジャッキ1段だけで管を押すと、押輪（プレスリング）を
+//  介して推力が管の下部に偏って伝わってしまうため、通常は複数段のジャッキを据え付け、
+//  押輪・ストラットを通してなるべく均一に推力が伝わるようにする。曲線を作るための機構では
+//  なく、直進時も含め常時使う配置（旧称「多段ジャッキ配置」は、ジャッキストローク延長用に
+//  太い油圧シリンダの中に細い油圧シリンダを入れ子にした製品を指す別の言葉と紛らわしいため
+//  使わない）。段数は推進力タブの元押ジャッキ使用台数÷2で決まる
 //  （1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置が前提）。
 //  各段の「ジャッキ幅」は推進中央線からの片側幅（実際の配置図の描き方に合わせた値、
 //  中心対称スパンの半分ではなく、そのまま円中心軸からのオフセットxとして使う）。
@@ -3897,6 +3909,11 @@ function copyStage2ToUpper() {
   if (jackStageWidths.length < 2) { showToast('3段目以降がありません'); return; }
   for (let i = 2; i < jackStageWidths.length; i++) {
     jackStageWidths[i] = jackStageWidths[1];
+    // 高さは「前段の上に乗る」既定則を保つため、2段目の値そのものではなく
+    // 直前の段からジャッキ外径分ずつ積み上げる
+    const cap = n('jackCapUnit') || 0;
+    const diaM = jackDiameterFromCapacity(cap) / 1000;
+    jackStageHeights[i] = jackStageHeights[i - 1] + diaM;
   }
   calcBacklock();
   showToast('2段目の値を3段目以降にコピーしました');
@@ -3906,11 +3923,15 @@ function renderJackStages(wallBeffInfo) {
   const el = document.getElementById('jackStagesTable');
   if (!el) return;
 
-  // 多段ジャッキ配置（曲線造成用）は刃口推進工法専用の仕様（ユーザー確認済み方針）。
-  // 泥水・泥土圧・泥濃推進はシールド機内の中折れ機構等で曲線を作るため、支圧壁に
-  // 直接ジャッキを多段配置するこの構成には該当しない。
+  // このジャッキ配置（推力分散用）UIは刃口推進工法専用の仕様（ユーザー確認済み方針）。
+  // 刃口推進はズリ（掘削土砂）バケットをウインチ・クレーンで揚重する必要があるため、
+  // 押輪・ストラットが上部の開いた馬蹄形になり、段を積み上げて配置する（本UIが想定する形）。
+  // 泥濃推進等バケット出し入れが不要な工法は押輪が円形で、ジャッキは通常管高さ中心の
+  // 左右に据え付けるだけの単純な構成のため、この段別配置UIの対象外としている。
   if (currentMethod !== 'blade') {
     el.innerHTML = '<div class="note-box">この機能は刃口推進工法専用です（「📋基本情報」タブの推進工法で刃口推進を選択すると表示されます）。</div>';
+    const diagCanvas = document.getElementById('jackPositionDiagram');
+    if (diagCanvas) { const c = diagCanvas.getContext('2d'); c.clearRect(0, 0, diagCanvas.width, diagCanvas.height); }
     return;
   }
 
@@ -3922,13 +3943,23 @@ function renderJackStages(wallBeffInfo) {
     return;
   }
 
-  // 段数に合わせて配列を伸縮（既存の入力値は保持する）
-  while (jackStageWidths.length < stageCount) jackStageWidths.push(0);
-  jackStageWidths.length = stageCount;
-
   // ジャッキ能力は全段共通（推進力タブの「ジャッキ1本の能力」をそのまま使う）
   const cap = n('jackCapUnit') || 0;
-  const dia = jackDiameterFromCapacity(cap);
+  const dia = jackDiameterFromCapacity(cap); // mm
+  const diaM = dia / 1000; // m
+  const railH = currentRailBeam().H; // m
+
+  // 段数に合わせて配列を伸縮（既存の入力値は保持する）。設置高さHの初期値は
+  // 1段目=0（定規下面にジャッキ底面）、2段目=railH（定規上面にジャッキ底面）、
+  // 3段目以降=前段の高さ+ジャッキ外径（前段の上面に次段が乗る）というユーザー指定の規則で埋める。
+  while (jackStageWidths.length < stageCount) jackStageWidths.push(0);
+  jackStageWidths.length = stageCount;
+  while (jackStageHeights.length < stageCount) {
+    const i = jackStageHeights.length;
+    const defaultH = i === 0 ? 0 : (i === 1 ? railH : jackStageHeights[i - 1] + diaM);
+    jackStageHeights.push(defaultH);
+  }
+  jackStageHeights.length = stageCount;
 
   const { Beff, linerD, sagitta } = wallBeffInfo;
   const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
@@ -3953,24 +3984,153 @@ function renderJackStages(wallBeffInfo) {
       <td>${stageNo}段目</td>
       <td class="mono">${jacks}基</td>
       <td><input class="mono" type="number" step="0.01" min="0" value="${w}" style="width:80px"
-        onchange="jackStageWidths[${i}]=parseFloat(this.value)||0;calcBacklock()"> m</td>
+        data-jack-field="width" data-jack-idx="${i}"
+        oninput="jackStageWidths[${i}]=parseFloat(this.value)||0;drawJackPositionDiagram()"
+        onchange="calcBacklock()"> m</td>
+      <td><input class="mono" type="number" step="0.01" value="${jackStageHeights[i]}" style="width:80px"
+        data-jack-field="height" data-jack-idx="${i}"
+        oninput="jackStageHeights[${i}]=parseFloat(this.value)||0;drawJackPositionDiagram()"
+        onchange="calcBacklock()"> m</td>
       ${thicknessCell}
     </tr>`;
   }).join('');
 
   el.innerHTML = `
-    <p class="report-note" style="margin:0 2px 6px">ジャッキ能力は全段共通: <b class="mono">${cap} kN</b>（ジャッキ径目安 <b class="mono">${dia.toFixed(0)} mm</b>）。「⚡推進力」タブの「ジャッキ1本の能力」で変更できます。</p>
+    <p class="report-note" style="margin:0 2px 6px">ジャッキ能力は全段共通: <b class="mono">${cap} kN</b>（ジャッキ径目安 <b class="mono">${dia.toFixed(0)} mm</b>）。「⚡推進力」タブの「ジャッキ1本の能力」で変更できます。設置高さHは、定規（H鋼）の下面を0とした、その段のジャッキ底面までの高さです。</p>
     <div class="tbl-wrap"><table class="report-table">
-      <thead><tr><th>段</th><th>基数</th><th>ジャッキ幅[m]<br>（片側・中心オフセット）</th><th>局所支圧壁厚さ</th></tr></thead>
+      <thead><tr><th>段</th><th>基数</th><th>ジャッキ幅[m]<br>（片側・中心オフセット）</th><th>設置高さ H[m]<br>（定規下面基準）</th><th>局所支圧壁厚さ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
     ${isCircleShaft ? `<p class="report-note">円形立坑（ライナー内側径${(linerD||0).toFixed(2)}m、中心厚さ${sagitta.toFixed(3)}m）における各段の据付位置での厚さです。ジャッキ幅0のままだと中心厚さと同じ値になります。</p>`
       : '<p class="report-note">矩形・小判型等では据付位置による厚さの変化はありません（局所厚さの計算は円形立坑のみ）。</p>'}
   `;
+
+  drawJackPositionDiagram();
 }
 
 // ══════════════════════════════════════
-//  ジャッキ当たり部の局所支圧照査
+//  ジャッキ配置の断面図（管外径・内径・基礎・左右の定規・各段のジャッキ位置）
+//  管中心を原点(0,0)・上+・右+とする座標系で計算する。
+//  定規（H鋼）は「管底からrailDropだけ下がった位置」を定規の下面（基礎に接する面）とし、
+//  そこから選んだH形鋼の成（railH）だけ上に立ち上げる。定規の上面内側の角が管外径に
+//  接する位置（x = √(Ro²-railTopY²)）を左右の定規の内側端とし、そこから外側にrailB分の
+//  幅を持たせる。各段のジャッキは、設置高さH（定規下面基準・その段のジャッキ底面の高さ）
+//  とジャッキ幅（推進中央線からの片側オフセット）から中心位置を求め、円で描く。
+//  入力中の値をリアルタイムに反映するため、配列（onchangeでのみ更新）ではなく、
+//  テーブル内の入力欄の現在値を直接読み取って描画する。
+// ══════════════════════════════════════
+function drawJackPositionDiagram() {
+  const canvas = document.getElementById('jackPositionDiagram');
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth, h = canvas.offsetHeight;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+
+  const D = n('pipeOuter') || 0;
+  const Di = n('pipeInner') || 0;
+  const Ro = D / 2;
+  if (!Ro) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('推進管仕様（外径）を入力すると表示されます', w / 2, h / 2);
+    return;
+  }
+
+  const railDrop = (n('railDrop') || 0) / 1000; // mm→m
+  const railBeam = currentRailBeam();
+  const railH = railBeam.H, railB = railBeam.B;
+  const cap = n('jackCapUnit') || 0;
+  const jackDiaM = jackDiameterFromCapacity(cap) / 1000;
+  const jackR = jackDiaM / 2;
+  const offset = n('wallCenterOffset') || 0;
+
+  // テーブルの入力欄から現在値をライブ読取（配列はonchangeでのみ更新されるため）
+  const widthEls = document.querySelectorAll('#jackStagesTable input[data-jack-field="width"]');
+  const heightEls = document.querySelectorAll('#jackStagesTable input[data-jack-field="height"]');
+  const widths = widthEls.length ? Array.from(widthEls).map(el => parseFloat(el.value) || 0) : jackStageWidths.slice();
+  const heights = heightEls.length ? Array.from(heightEls).map(el => parseFloat(el.value) || 0) : jackStageHeights.slice();
+
+  const railBottomY = -Ro - railDrop;
+  const railTopY = railBottomY + railH;
+  const xTouch = Math.sqrt(Math.max(0, Ro * Ro - Math.min(railTopY * railTopY, Ro * Ro)));
+
+  // 表示範囲（管・定規・全ジャッキを含むバウンディングボックス）
+  let minX = -Ro, maxX = Ro, minY = railBottomY - 0.15, maxY = Ro;
+  const railOuterX = xTouch + railB;
+  minX = Math.min(minX, -railOuterX); maxX = Math.max(maxX, railOuterX);
+  widths.forEach((wv, i) => {
+    const jx = Math.abs(wv + offset) + jackR;
+    minX = Math.min(minX, -jx); maxX = Math.max(maxX, jx);
+    const jy = railBottomY + (heights[i] || 0) + jackDiaM;
+    maxY = Math.max(maxY, jy);
+  });
+
+  const margin = 36;
+  const spanX = Math.max(maxX - minX, 0.3), spanY = Math.max(maxY - minY, 0.3);
+  const scale = Math.min((w - margin * 2) / spanX, (h - margin * 2) / spanY);
+  const offX = margin + ((w - margin * 2) - spanX * scale) / 2 - minX * scale;
+  const offY = margin + ((h - margin * 2) - spanY * scale) / 2 + maxY * scale;
+  const tx = x => offX + x * scale;
+  const ty = y => offY - y * scale;
+
+  // 基礎（定規下面より下を塗る）
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(tx(minX - 0.1), ty(railBottomY), tx(maxX + 0.1) - tx(minX - 0.1), ty(minY - 0.05) - ty(railBottomY));
+  ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+  ctx.strokeRect(tx(minX - 0.1), ty(railBottomY), tx(maxX + 0.1) - tx(minX - 0.1), ty(minY - 0.05) - ty(railBottomY));
+  ctx.fillStyle = '#64748b'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('基礎コンクリート', tx(minX - 0.05), ty(minY - 0.08));
+
+  // 中心線
+  ctx.strokeStyle = '#cbd5e1'; ctx.setLineDash([3, 3]); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(tx(minX - 0.05), ty(0)); ctx.lineTo(tx(maxX + 0.05), ty(0)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx(0), ty(maxY + 0.05)); ctx.lineTo(tx(0), ty(minY - 0.05)); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 管（外径・内径）
+  ctx.beginPath(); ctx.arc(tx(0), ty(0), Math.max(1, Ro * scale), 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(219,234,254,0.5)'; ctx.fill();
+  ctx.strokeStyle = '#1d6fd8'; ctx.lineWidth = 2; ctx.stroke();
+  if (Di > 0) {
+    ctx.beginPath(); ctx.arc(tx(0), ty(0), (Di / 2) * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1; ctx.setLineDash([4, 3]); ctx.stroke(); ctx.setLineDash([]);
+  }
+  ctx.fillStyle = '#1d6fd8'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`管外径 D=${D.toFixed(2)}m`, tx(0), ty(Ro) - 8);
+
+  // 定規（左右、H形鋼）
+  [-1, 1].forEach(sign => {
+    const xIn = sign * xTouch, xOut = sign * (xTouch + railB);
+    const x0 = Math.min(xIn, xOut), x1 = Math.max(xIn, xOut);
+    ctx.fillStyle = '#fde68a';
+    ctx.fillRect(tx(x0), ty(railTopY), tx(x1) - tx(x0), ty(railBottomY) - ty(railTopY));
+    ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(tx(x0), ty(railTopY), tx(x1) - tx(x0), ty(railBottomY) - ty(railTopY));
+    ctx.fillStyle = '#7c4a00'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`H-${v('railSize')}`, tx((x0 + x1) / 2), ty((railTopY + railBottomY) / 2) + 3);
+  });
+
+  // 各段のジャッキ（左右対称の円として表示。基数の内訳は表を参照）
+  widths.forEach((wv, i) => {
+    const hv = heights[i] || 0;
+    const cy = railBottomY + hv + jackR;
+    [-1, 1].forEach(sign => {
+      const cx = sign * Math.abs(wv + offset);
+      ctx.beginPath(); ctx.arc(tx(cx), ty(cy), Math.max(3, jackR * scale), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(179,38,30,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = '#b3261e'; ctx.lineWidth = 1.5; ctx.stroke();
+    });
+    ctx.fillStyle = '#b3261e'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`${i + 1}段目`, tx(0), ty(cy) - jackR * scale - 6);
+  });
+
+  ctx.fillStyle = '#8695a7'; ctx.font = '9px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText('※管中心を原点とした模式図。ジャッキ径は容量から求めた目安値です。', tx(minX - 0.05), h - 6);
+}
 //  元押ジャッキの推力は支圧壁全面ではなく、間に挟む鉄板の当たり面積(A1)にだけ
 //  集中して伝わる。コンクリートは載荷面より広い断面(A2)に囲まれていると、その分
 //  局所的な支圧強度が割り増しされる（一般的な支圧応力度の割増し式、目安値）：
@@ -4218,7 +4378,8 @@ function getProjectData() {
       levelMode: wallLevelMode, elBase: n('wallElBase'), elPipeInvert: n('wallElPipeInvert'),
       elWallTop: n('wallElWallTop'), centerOffset: n('wallCenterOffset'),
       thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice(),
-      railDrop: n('railDrop'), railWidth: n('railWidth')
+      jackStageHeights: jackStageHeights.slice(),
+      railDrop: n('railDrop'), railSize: v('railSize')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -4379,8 +4540,17 @@ function setProjectData(d) {
     setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
     setV('wallElWallTop', wl.elWallTop||2.5); setV('wallCenterOffset', wl.centerOffset||0);
     setV('wallThickness', wl.thickness||0.8);
-    setV('railDrop', wl.railDrop||50); setV('railWidth', wl.railWidth||200);
+    setV('railDrop', wl.railDrop||50);
+    // railSizeは新形式（H形鋼規格の選択）。旧形式はrailWidth（幅の実測値[mm]）を直接保存していたため、
+    // 最も近い規格に丸めて後方互換をとる。
+    let railSizeVal = wl.railSize;
+    if (railSizeVal == null && wl.railWidth != null) {
+      const sizeKeys = Object.keys(H_BEAM_SIZES).map(Number);
+      railSizeVal = sizeKeys.reduce((best, k) => Math.abs(k - wl.railWidth) < Math.abs(best - wl.railWidth) ? k : best, sizeKeys[0]);
+    }
+    setV('railSize', railSizeVal || 200);
     jackStageWidths = Array.isArray(wl.jackStageWidths) ? wl.jackStageWidths.slice() : [];
+    jackStageHeights = Array.isArray(wl.jackStageHeights) ? wl.jackStageHeights.slice() : [];
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
