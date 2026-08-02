@@ -711,7 +711,7 @@ tr.row-selected{background:#eff6ff}
 
     <div id="wallLevelInputs" style="display:none;margin-top:4px">
       <div class="note-box" style="font-size:11px">
-        図面に水準高（標高）が記載されている場合はこちらを使うと、H_w・h_cを自動計算します（基礎コンクリート天端を基準に換算）。管中心高さは「管底水準高＋管外径/2」から求めます。
+        図面に水準高（標高）が記載されている場合はこちらを使うと、H_w・h_cを自動計算します（基礎コンクリート天端を基準に換算）。管底水準高は管内側下端（フローライン、下水道の慣例）を想定しており、管中心高さは「管底水準高＋管内径/2」から求めます。
       </div>
       <div class="two-col">
         <div class="field-row"><label>基礎コンクリート天端 水準高 [m]</label><input id="wallElBase" class="mono" type="number" step="0.001" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
@@ -3869,9 +3869,12 @@ function updateWallLevelDerived() {
   const elBase = n('wallElBase');
   const elInvert = n('wallElPipeInvert');
   const elTop = n('wallElWallTop');
-  const D = n('pipeOuter') || 0;
+  // 管底水準高は管の内側下端（フローライン）基準（下水道の慣例、反力面積.xlsxの
+  // 管中心水準高=管底水準高+管内径/2という式でも確認済み）。誤って外径/2を使うと
+  // 管厚分（片側）だけ管中心が高く算出されてしまう。
+  const Di = n('pipeInner') || 0;
   const Hw = elTop - elBase;
-  const hc = (elInvert - elBase) + D / 2;
+  const hc = (elInvert - elBase) + Di / 2;
   setV('wallHw', Math.max(0, Hw).toFixed(3));
   setV('wallHc', Math.max(0, hc).toFixed(3));
   calcBacklock();
