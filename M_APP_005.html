@@ -783,9 +783,11 @@ tr.row-selected{background:#eff6ff}
   <div class="card accordion" id="wallDiagramCard">
     <div class="card-title" onclick="toggleAccordion(this)">📐 支圧壁 寸法図（平面・断面）</div>
     <div style="font-size:13px;font-weight:bold;color:var(--navy);margin:4px 0">平面図（上から見た図）</div>
-    <canvas id="wallPlanView" style="width:100%;height:220px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <canvas id="wallPlanView" style="width:100%;height:230px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <div id="wallPlanViewCaption" class="report-note" style="margin:4px 2px 0;line-height:1.7"></div>
     <div style="font-size:13px;font-weight:bold;color:var(--navy);margin:10px 0 4px">縦断面図（推進方向から見た図）</div>
-    <canvas id="wallSectionView" style="width:100%;height:260px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <canvas id="wallSectionView" style="width:100%;height:230px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <div id="wallSectionViewCaption" class="report-note" style="margin:4px 2px 0;line-height:1.7"></div>
   </div>
 
   <div id="backlockResult"></div>
@@ -3289,10 +3291,17 @@ function printReport() {
   if (reportCard) reportCard.classList.add('open');
   // printing-report適用でレイアウト幅が変わるため、印刷直前に線形ビジュアルcanvasを再描画する
   drawAlignmentVisual('reportAlignmentVisual', { scale: 1, offsetX: 0, offsetY: 0 });
+  // 「PDFに保存」時の既定ファイル名はdocument.titleから決まるため、印刷直前だけ
+  // 「現場名＋スパン名＋推力計算」に切り替える（印刷後は元のタイトルに戻す）。
+  const originalTitle = document.title;
+  const name = v('siteName') || '現場名未入力';
+  const span = v('siteSpan') || '';
+  document.title = `${name}${span ? span : ''}推力計算`;
   window.print();
   setTimeout(() => {
     document.documentElement.classList.remove('printing-report');
     document.body.classList.remove('printing-report');
+    document.title = originalTitle;
   }, 300);
 }
 
@@ -3901,6 +3910,14 @@ function syncForceFromCalc() {
 // ══════════════════════════════════════
 //  支圧壁 寸法図（平面図・縦断面図）
 // ══════════════════════════════════════
+// 平面図キャプション欄（#wallPlanViewCaption）に凡例HTMLを書き込む共通ヘルパー。
+// 41章: キャンバス内に文字ラベルを積み上げると重なって読めなくなっていたため、
+// キャンバスには図形のみを描き、説明文はすべてこちらのHTML凡例に出す。
+function setWallPlanCaption(lines) {
+  const el = document.getElementById('wallPlanViewCaption');
+  if (el) el.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+}
+
 function drawWallPlanView() {
   const canvas = document.getElementById('wallPlanView');
   if (!canvas) return;
@@ -3916,6 +3933,7 @@ function drawWallPlanView() {
   if (!Bw) {
     ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
+    setWallPlanCaption([]);
     return;
   }
   const { Beff, linerD, sagitta } = computeWallBeff();
@@ -3938,23 +3956,22 @@ function drawWallPlanView() {
     // （ユーザー提供の参考図で確認。矩形のように単純な帯状にはならない）。
     const R_shaft = pitW / 2, R_liner = linerD / 2;
     const cy = R_shaft; // 立坑中心の世界y座標（円は世界y=0〜pitWの範囲）
+    const caption = [];
+
     // ライナープレート径（呼び径、赤）
     ctx.strokeStyle = '#dc2626';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.ellipse(tx(0), ty(cy), R_shaft * scale, R_shaft * scale, 0, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = '#dc2626';
-    ctx.font = '11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`ライナープレート径 φ${pitW.toFixed(2)}m`, tx(0), ty(pitW) - 8);
+    caption.push(`<span style="color:#dc2626">━</span> ライナープレート径 φ${pitW.toFixed(2)}m`);
+
     // ライナープレート内側（板厚25mm×2＝50mm低減、青）
     ctx.strokeStyle = '#1d6fd8';
     ctx.beginPath();
     ctx.ellipse(tx(0), ty(cy), R_liner * scale, R_liner * scale, 0, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = '#1d6fd8';
-    ctx.fillText(`ライナー内側(有効径) φ${linerD.toFixed(2)}m（板厚25mm×2辺）`, tx(0), ty(cy - R_liner) - 8);
+    caption.push(`<span style="color:#1d6fd8">━</span> ライナー内側(有効径) φ${linerD.toFixed(2)}m（板厚25mm×2辺）`);
 
     const wbi = computeWallBeff();
     const offset = wbi.offset || 0;
@@ -3969,9 +3986,7 @@ function drawWallPlanView() {
       ctx.ellipse(tx(0), ty(cy), wbi.R_eff * scale, wbi.R_eff * scale, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = '#ea580c';
-      ctx.font = '11px sans-serif';
-      ctx.fillText(`補強リング考慮後 有効径 φ${(wbi.R_eff * 2).toFixed(2)}m`, tx(0), ty(cy - wbi.R_eff) - 8);
+      caption.push(`<span style="color:#ea580c">┄</span> 補強リング考慮後 有効径 φ${(wbi.R_eff * 2).toFixed(2)}m`);
     }
 
     // 推進中心線（推進方向。立坑中心とオフセットしていてもバックロックは常にこの線に
@@ -3979,10 +3994,9 @@ function drawWallPlanView() {
     ctx.save();
     ctx.strokeStyle = '#94a3b8';
     ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(tx(offset), ty(pitW * 1.15)); ctx.lineTo(tx(offset), ty(-pitW * 0.1)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx(offset), ty(pitW * 1.08)); ctx.lineTo(tx(offset), ty(-pitW * 0.08)); ctx.stroke();
     ctx.restore();
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(offset ? `推進方向（立坑中心からオフセット${offset >= 0 ? '+' : ''}${offset.toFixed(2)}m）` : '推進方向', tx(offset), ty(-pitW * 0.1) - 6);
+    caption.push(`<span style="color:#94a3b8">┄</span> 推進方向${offset ? `（立坑中心からオフセット${offset >= 0 ? '+' : ''}${offset.toFixed(2)}m）` : ''}`);
 
     const type = effectiveBackrockType();
     const isTaperBackrock = backrockUse && type === 'taper' && backrockCurrentModel;
@@ -4030,10 +4044,7 @@ function drawWallPlanView() {
       segPts.forEach((p, i) => { const px = tx(p.x), py = ty(p.y); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
       ctx.closePath();
       ctx.stroke();
-      ctx.fillStyle = '#b48319';
-      ctx.font = '10px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('間詰めコンクリート（ハッチング部）', tx(0), ty(cy - R_hatch * 0.6));
+      caption.push(`<span style="color:#b48319">▤</span> 間詰めコンクリート`);
 
       // バックロック台形本体（前面W1が中心寄り・背面W2がライナー側。推進中心線に対称）
       const yFront = cy - hCenter, yBack = cy - hCenter - model.T;
@@ -4051,19 +4062,13 @@ function drawWallPlanView() {
       ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
       ctx.lineWidth = 2;
       ctx.stroke();
-
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 11px sans-serif';
-      ctx.fillText(`${model.name}　W1=${model.W1}m / W2=${model.W2}m / T=${model.T}m`, tx(offset), ty(yFront) + 16);
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText(`角当たり位置 hCenter=${hCenter.toFixed(3)}m（立坑中心から前面まで）`, tx(offset), ty(yFront) + 30);
+      caption.push(`<span style="color:${FORCE_GRAPH_COLOR.curve}">■</span> <b>${model.name}</b>　幅広辺W1=${model.W1}m・幅短辺W2=${model.W2}m・厚さT=${model.T}m`);
+      caption.push(`角当たり位置（立坑中心から前面まで） hCenter=${hCenter.toFixed(3)}m`);
 
       if (!placementOk) {
-        ctx.fillStyle = '#b91c1c';
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillText('⚠ この型番は有効径に収まりません', tx(offset), ty(yBack) - 10);
+        caption.push(`<b style="color:#b91c1c">⚠ この型番は有効径に収まりません（幅短辺が広すぎます）。より小さい型番を選ぶか、補強リングサイズ・立坑径・オフセットを見直してください。</b>`);
       }
+      setWallPlanCaption(caption);
       return;
     }
 
@@ -4085,20 +4090,16 @@ function drawWallPlanView() {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // 寸法ラベル（支圧壁幅Beff・支圧壁厚=中心の矢高sagitta。参考図の「支圧壁幅」「支圧壁厚」表記に合わせる）
-    const chordWorldY = cy - R_liner + sagitta;
-    ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 11px sans-serif';
-    ctx.fillText(`支圧壁幅 ${Beff.toFixed(2)}m`, tx(0), ty(chordWorldY) + 16);
-    ctx.fillText(`支圧壁厚(中心) ${(sagitta * 1000).toFixed(0)}mm`, tx(0), ty(cy - R_liner) - 24);
+    caption.push(`<span style="color:${FORCE_GRAPH_COLOR.curve}">■</span> 支圧壁幅 ${Beff.toFixed(2)}m・厚さ(中心) ${(sagitta * 1000).toFixed(0)}mm`);
     if (Beff < Bw - 1e-6) {
-      ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
-      ctx.fillText(`Bw=${Bw.toFixed(2)}m指定→ライナー内側に収まる幅へ低減`, tx(0), ty(chordWorldY) + 30);
+      caption.push(`Bw=${Bw.toFixed(2)}m指定→ライナー内側に収まる幅へ低減`);
     }
+    setWallPlanCaption(caption);
     return;
   }
 
   // 矩形・オープンカット・小判型立坑: 支圧壁は単純な矩形の帯（形が変わるのは立坑の輪郭だけ）
+  const caption = [];
   ctx.strokeStyle = '#64748b';
   ctx.lineWidth = 1.5;
   if (wallShaftType === 'oval') {
@@ -4117,19 +4118,15 @@ function drawWallPlanView() {
   } else {
     ctx.strokeRect(tx(-pitW / 2), ty(pitL), pitW * scale, pitL * scale);
   }
-  ctx.fillStyle = '#64748b';
-  ctx.font = '11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`立坑 ${pitW.toFixed(2)}×${pitL.toFixed(2)}m`, tx(0), ty(pitL) - 8);
+  caption.push(`<span style="color:#64748b">━</span> 立坑 ${pitW.toFixed(2)}×${pitL.toFixed(2)}m`);
 
   // 推進管芯線（中心の縦線＝推進方向）
   ctx.save();
   ctx.strokeStyle = '#94a3b8';
   ctx.setLineDash([4, 4]);
-  ctx.beginPath(); ctx.moveTo(tx(0), ty(pitL * 1.15)); ctx.lineTo(tx(0), ty(-pitL * 0.1)); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(tx(0), ty(pitL * 1.08)); ctx.lineTo(tx(0), ty(-pitL * 0.08)); ctx.stroke();
   ctx.restore();
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillText('推進方向', tx(0), ty(-pitL * 0.1) - 6);
+  caption.push(`<span style="color:#94a3b8">┄</span> 推進方向`);
 
   // 支圧壁（立坑の中ほどに配置。全幅Bw=破線、有効幅Beff=実線・塗り）
   const wallY = pitL * 0.5;
@@ -4145,13 +4142,11 @@ function drawWallPlanView() {
   ctx.lineWidth = 2;
   ctx.strokeRect(tx(-Beff / 2), ty(wallY + wallThickness / 2), Beff * scale, wallThickness * scale);
 
-  ctx.font = 'bold 11px sans-serif';
-  ctx.fillStyle = '#0f172a';
-  ctx.fillText(`Bw=${Bw.toFixed(2)}m`, tx(0), ty(wallY - wallThickness / 2) + 16);
+  caption.push(`<span style="color:${FORCE_GRAPH_COLOR.curve}">■</span> Bw=${Bw.toFixed(2)}m`);
   if (Beff < Bw - 1e-6) {
-    ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
-    ctx.fillText(`Beff=${Beff.toFixed(2)}m（立坑制約で低減）`, tx(0), ty(wallY - wallThickness / 2) + 30);
+    caption.push(`Beff=${Beff.toFixed(2)}m（立坑制約で低減）`);
   }
+  setWallPlanCaption(caption);
 }
 
 function drawWallSectionView() {
@@ -4165,18 +4160,21 @@ function drawWallSectionView() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
+  const capEl = document.getElementById('wallSectionViewCaption');
   const Bw = n('wallBw'), HwDesign = n('wallHw'), Hw = effectiveWallHw(), hc = n('wallHc');
   if (!Bw || !Hw) {
     ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
+    if (capEl) capEl.innerHTML = '';
     return;
   }
-  const pipeD = n('pipeOuter') || 0.96;
-  const { Beff } = computeWallBeff(); // 円形立坑では弦Beff＜Bwになりうるため、実際の幅はBeffを使う
+  const pipeOuter = n('pipeOuter') || 0.96;
+  const pipeInner = n('pipeInner') || 0; // 内径（41章：外径だけでなく内径の線も描く）
+  const { Beff, sagitta } = computeWallBeff(); // 円形立坑では弦Beff＜Bwになりうるため、実際の幅はBeffを使う
 
   const dimGutter = 76; // 左側に寸法線を描くための余白
   const margin = 30;
-  const worldW = Beff, worldH = Math.max(Hw, hc + pipeD / 2) * 1.2;
+  const worldW = Beff, worldH = Math.max(Hw, hc + pipeOuter / 2) * 1.2;
   const scale = Math.min((w - margin * 2 - dimGutter) / worldW, (h - margin * 2) / worldH);
   const baseY = h - margin; // y=0（基礎コンクリート上面）
   const offX = dimGutter + margin + ((w - margin * 2 - dimGutter) - worldW * scale) / 2;
@@ -4198,34 +4196,33 @@ function drawWallSectionView() {
   ctx.strokeStyle = '#334155';
   ctx.lineWidth = 2;
   ctx.strokeRect(tx(0), ty(Hw), Beff * scale, Hw * scale);
-  ctx.fillStyle = '#334155';
-  ctx.font = '11px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`支圧壁幅 ${Beff.toFixed(2)}m${Beff < Bw - 1e-6 ? `（指定Bw=${Bw.toFixed(2)}mから低減）` : ''}`, tx(Beff / 2), ty(Hw) - 8);
-  {
-    // 支圧壁厚（円形立坑では円弓形の中心厚さ＝平面図と同じsagitta。矩形立坑ではBw自体が厚さに相当しないため参考値として注記のみ）
-    const { sagitta: sag } = computeWallBeff();
-    if (sag > 0) {
-      ctx.fillStyle = '#64748b';
-      ctx.font = '10px sans-serif';
-      ctx.fillText(`支圧壁厚(中心、平面図参照)= ${(sag * 1000).toFixed(0)}mm`, tx(Beff / 2), ty(Hw) + 14);
-    }
-  }
 
-  // 推進管芯高さ線＋管断面
+  // 推進管芯高さ線＋管断面（外径・内径の両方を描く。41章）
   ctx.save();
   ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
   ctx.setLineDash([5, 4]);
   ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.moveTo(tx(-0.15), ty(hc)); ctx.lineTo(tx(Beff + 0.15), ty(hc)); ctx.stroke();
   ctx.restore();
+  // 外径
   ctx.beginPath();
-  ctx.arc(tx(Beff / 2), ty(hc), (pipeD / 2) * scale, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(29,111,216,0.15)';
+  ctx.arc(tx(Beff / 2), ty(hc), (pipeOuter / 2) * scale, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(29,111,216,0.12)';
   ctx.fill();
   ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
   ctx.lineWidth = 1.5;
   ctx.stroke();
+  // 内径（外径と区別できるよう破線・別色）
+  if (pipeInner > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(tx(Beff / 2), ty(hc), (pipeInner / 2) * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = '#64748b';
+    ctx.setLineDash([3, 2]);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
   ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'left';
@@ -4248,12 +4245,17 @@ function drawWallSectionView() {
   drawDim(dimGutter * 0.65, ty(Hw), ty(hc), `天端まで ${(Hw - hc).toFixed(2)}m`);
   drawDim(dimGutter * 0.65, ty(hc), ty(0), `下端まで ${hc.toFixed(2)}m`);
 
+  // キャプション（41章：以前はキャンバス上に文字を積み重ねて描いており、支圧壁幅・厚さ・
+  // 施工高さの注記が同じ場所に重なって読めなくなっていた。キャンバスは図形のみにし、
+  // 説明文はすべてHTML凡例に出す）。
+  const caption = [];
+  caption.push(`<span style="color:#334155">■</span> 支圧壁幅 ${Beff.toFixed(2)}m${Beff < Bw - 1e-6 ? `（指定Bw=${Bw.toFixed(2)}mから低減）` : ''}`);
+  if (sagitta > 0) caption.push(`支圧壁厚(中心、平面図参照) = ${(sagitta * 1000).toFixed(0)}mm`);
+  caption.push(`<span style="color:${FORCE_GRAPH_COLOR.curve}">━</span> 推進管外径 φ${pipeOuter.toFixed(2)}m　<span style="color:#64748b">┈</span> 内径 φ${pipeInner.toFixed(2)}m`);
   if (backrockUse && Math.abs(Hw - HwDesign) > 1e-6) {
-    ctx.fillStyle = '#b45309';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`設計高さ${HwDesign.toFixed(2)}m→プレキャストは0.5m単位のため施工高さHw=${Hw.toFixed(2)}mに切り上げ`, tx(Beff / 2), ty(Hw) - (computeWallBeff().sagitta > 0 ? 26 : 8));
+    caption.push(`<b style="color:#b45309">設計高さ${HwDesign.toFixed(2)}m→プレキャストは0.5m単位のため施工高さHw=${Hw.toFixed(2)}mに切り上げ</b>`);
   }
+  if (capEl) capEl.innerHTML = caption.map(l => `<div>${l}</div>`).join('');
 }
 
 // 支圧壁の「施工高さ」の算出（39章）。バックロック使用時、支圧壁はプレキャストブロックを
