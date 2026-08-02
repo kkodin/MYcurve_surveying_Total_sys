@@ -636,6 +636,19 @@ tr.row-selected{background:#eff6ff}
     </div>
     <div id="wallCircleInputs" style="display:none;margin-top:8px">
       <div class="field-row"><label>立坑内径 φ [m]</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+      <div class="field-row full">
+        <label>ライナープレート補強リング</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="wallRingBtn_off" class="mode-btn active" onclick="setWallRingUse(false)">なし</button>
+          <button type="button" id="wallRingBtn_on" class="mode-btn" onclick="setWallRingUse(true)">あり</button>
+        </div>
+      </div>
+      <div id="wallRingHRow" class="field-row" style="display:none">
+        <label>補強リング H鋼サイズ（せい）[mm]</label>
+        <input id="wallRingH" class="mono" type="number" step="5" value="100" oninput="calcBacklock()">
+        <span class="unit">mm</span>
+      </div>
+      <p class="report-note" id="wallRingNote" style="display:none;margin:2px 2px 0">補強リングがある場合、バックロック幅短辺の角が当たる半径を「ライナープレート内側半径 − H鋼せい/2」まで減じて計算します。</p>
     </div>
   </div>
 
@@ -3599,6 +3612,48 @@ const BACKROCK_TAPER = [
 // テーパー形の断面下端に共通して付く鋼材リップの高さ（カタログ図の「90」表記、mm。全サイズ共通の細部寸法）
 const BACKROCK_TAPER_LIP_H = 0.09;
 
+// ══════════════════════════════════════
+//  ライナープレート補強リング・バックロック設置位置（38章）
+//  補強リング（H鋼）がある場合、リングの分だけライナー内側の有効半径が減る。
+//  「呼び径から半径を求めた上で、H鋼せいの半分を差し引いた位置にバックロック幅短辺の
+//  角が当たる」というユーザー指定の考え方に基づき、半径ベースで R_eff = R − H/2 とする。
+// ══════════════════════════════════════
+let wallRingUse = false; // ライナープレートに補強リング(H鋼)がある場合はtrue
+function setWallRingUse(use) {
+  wallRingUse = use;
+  const onBtn = document.getElementById('wallRingBtn_on'), offBtn = document.getElementById('wallRingBtn_off');
+  if (onBtn) onBtn.classList.toggle('active', use);
+  if (offBtn) offBtn.classList.toggle('active', !use);
+  const row = document.getElementById('wallRingHRow'), note = document.getElementById('wallRingNote');
+  if (row) row.style.display = use ? '' : 'none';
+  if (note) note.style.display = use ? '' : 'none';
+  calcBacklock();
+  autoSave();
+}
+function effectiveLinerRadius(R) {
+  if (!wallRingUse) return R;
+  const H = (n('wallRingH') || 0) / 1000; // mm→m
+  return Math.max(0, R - H / 2);
+}
+
+// バックロック（テーパー形）の実際の据付位置の計算。
+// バックロックは常に推進方向線に対して直角（＝幅方向が推進方向と垂直）に据え付けられる。
+// これは立坑中心と推進線がオフセットしていても変わらない――ずれるのは支圧壁の中心ではなく
+// 推進中心線・ジャッキの位置の方、という考え方（ユーザー指定）。したがって支圧壁（W1・W2の
+// 中心）は推進中心線（立坑中心からoffsetValだけ側方にずれた線）に対して対称に据え付けられ、
+// 立坑中心そのものに対しては対称にならない。
+// 台形の幅短辺(W2、外側＝ライナー側)の角のうち、立坑中心から見て遠い方（|offset|+W2/2側）が
+// 有効半径R_effに接するところまで押し込んだ位置を実際の設置位置とする。
+function computeBackrockPlacement(model, R_eff, offsetVal) {
+  const W2 = model.W2 != null ? model.W2 : model.W;
+  const T = model.T;
+  const yFar = Math.abs(offsetVal || 0) + W2 / 2;
+  if (yFar >= R_eff) return { ok: false, hCenter: 0, hFar: 0, yFar };
+  const hFar = Math.sqrt(R_eff * R_eff - yFar * yFar); // 幅短辺(W2)の角の、立坑中心からの奥行位置
+  const hCenter = hFar - T; // 幅広辺(W1、前面)の、立坑中心からの奥行位置
+  return { ok: hCenter >= 0, hCenter: Math.max(0, hCenter), hFar, yFar };
+}
+
 function selectBackrock(dia, type) {
   const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
   const inRange = table.filter(b => dia >= b.diaMin && dia <= b.diaMax);
@@ -3609,6 +3664,7 @@ function selectBackrock(dia, type) {
 
 let backrockUse = true; // 既定でバックロック使用を前提とする（ユーザー確認済み方針）
 let backrockType = 'auto'; // 'auto'|'square'|'taper'（autoは立坑形状: 円形/ケーシング→taper、それ以外→square）
+let backrockCurrentModel = null; // 直近にapplyBackrockSelection()で選定されたモデル（computeWallBeff()の据付位置計算で参照）
 
 function setBackrockUse(use) {
   backrockUse = use;
@@ -3666,6 +3722,7 @@ function applyBackrockSelection() {
   const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
   const manualModel = backrockModelOverride ? table.find(b => b.name === backrockModelOverride) : null;
   const model = manualModel || selectBackrock(dia, type);
+  backrockCurrentModel = model; // computeWallBeff()の据付位置計算（38章）から参照する
   const outOfRange = dia < table[0].diaMin || dia > table[table.length - 1].diaMax;
   const outsideOwnRange = manualModel && (dia < manualModel.diaMin || dia > manualModel.diaMax);
 
@@ -3703,36 +3760,45 @@ function applyBackrockSelection() {
   }
 
   if (type === 'taper' && isCircleShaftNow) {
-    html += renderBackrockGapConcrete(model);
+    // Bw/厚さのDOM反映後にcomputeWallBeff()を呼び直し、角当たり位置から求めた正しいsagitta等を得る
+    html += renderBackrockGapConcrete(model, computeWallBeff());
   }
 
   el.innerHTML = html;
   return model;
 }
 
-// 間詰めコンクリート数量計算（反力面積.xlsx準拠）。
-// 支圧壁が占める弓形断面（ライナー内側円とテーパー形背面の間）から、バックロック台形ブロック
-// 自体の断面積を差し引いた残りが、間詰めコンクリートで埋める必要のある断面積になる。
-//   R = ライナープレート内側半径（=(立坑呼び径-50mm)/2）
-//   T = 支圧壁厚さ（wallThickness、中心厚さ／サジッタ）
-//   θ = 2×acos((R-T)/R)　[deg]　… 支圧壁が占める中心角
-//   A1 = R²×π×(θ/360) − W×(R-T)/2　… 弓形断面積（W=Beff、35章で厚さから逆算した弦幅）
-//   A2 = (W1+W2)/2×(T-lip) + lip×W1　… バックロック台形ブロックの断面積（lip=底部の鋼材リップ高さ）
+// 間詰めコンクリート数量計算（反力面積.xlsx準拠、38章で角当たり位置・オフセット・補強リング対応に修正）。
+// 支圧壁（バックロック台形ブロック）の前面(W1側)がライナー中心からhCenterの位置にあるとして、
+// その前面を弦とする弓形断面全体（=間詰めコンクリートが必要になりうる範囲。ハッチング部分）から、
+// バックロック台形ブロック自体の断面積を差し引いた残りが、実際に間詰めコンクリートで埋める
+// 必要のある断面積になる。
+//   R_eff = 角当たり計算に使った有効半径（補強リングがあれば R − H/2）
+//   sagitta = R_eff − hCenter　… 弓形の矢高（角当たり位置から求めた、前面の弦の深さ）
+//   θ = 2×acos((R_eff-sagitta)/R_eff) = 2×acos(hCenter/R_eff)　[deg]　… 支圧壁前面の弦が占める中心角
+//   A1 = R_eff²×π×(θ/360) − W×hCenter/2　… 弓形断面積（W=前面の弦幅）
+//   A2 = (W1+W2)/2×(T-lip) + lip×W1　… バックロック台形ブロックの断面積（T=カタログの厚さ、lip=底部の鋼材リップ高さ）
 //   A  = A1 − A2　… 間詰めコンクリート断面積
 //   V  = A × H　… 間詰めコンクリート体積（Hは実際に積み上げた高さ）
-function renderBackrockGapConcrete(model) {
+function renderBackrockGapConcrete(model, wallBeffInfo) {
   const pitD = n('wallCircleD');
   if (!pitD || (wallShaftType !== 'circle' && wallShaftType !== 'casing')) {
     return '<p class="report-note" style="color:var(--sub)">間詰めコンクリート数量は円形立坑（ライナープレート）でのみ計算します。</p>';
   }
-  const linerD = Math.max(0, pitD - 0.05);
-  const R = linerD / 2;
-  const T = Math.min(Math.max(0, n('wallThickness') || 0), R);
-  const thetaDeg = 2 * (Math.acos((R - T) / R) * 180 / Math.PI);
-  const W = 2 * Math.sqrt(Math.max(0, T * (2 * R - T))); // Beffと同じ式（35章）
+  const { R_eff, sagitta, hCenter, placementOk, offset } = wallBeffInfo;
+  const fitNote = !placementOk
+    ? '<p class="report-note" style="color:var(--ng)">⚠ この型番の幅短辺(W2)が、有効半径（補強リング考慮後）に収まりません。より小さい型番を選ぶか、補強リングサイズ・立坑径・オフセットを見直してください。</p>'
+    : '';
+  const conditionNote = (offset || wallRingUse)
+    ? `<p class="report-note">${offset ? `推進中心線オフセット ${offset >= 0 ? '+' : ''}${offset.toFixed(3)}m` : ''}${offset && wallRingUse ? '、' : ''}${wallRingUse ? `補強リング H${(n('wallRingH') || 0).toFixed(0)}mm` : ''}を反映した有効半径 R_eff=${R_eff.toFixed(3)}m・据付位置 hCenter=${hCenter.toFixed(3)}mで計算しています。</p>`
+    : '';
+  const R = R_eff;
+  const T = Math.min(Math.max(0, sagitta), R); // 前面の弦の矢高（角当たり位置から求めた実際の値）
+  const thetaDeg = R > 0 ? 2 * (Math.acos(Math.max(-1, Math.min(1, (R - T) / R))) * 180 / Math.PI) : 0;
+  const W = 2 * Math.sqrt(Math.max(0, T * (2 * R - T))); // 前面の弦幅（角当たり位置hCenterに対応する弦）
   const A1 = R * R * Math.PI * (thetaDeg / 360) - (W * (R - T)) / 2;
   const lip = BACKROCK_TAPER_LIP_H;
-  const A2 = (model.W1 + model.W2) / 2 * (T - lip) + lip * model.W1;
+  const A2 = (model.W1 + model.W2) / 2 * (model.T - lip) + lip * model.W1; // ブロック自体の断面積はカタログの厚さTを使う
   const A = A1 - A2;
   const Hw = n('wallHw') || 0;
   const pieces = Math.max(1, Math.ceil(Hw / model.H));
@@ -3742,14 +3808,18 @@ function renderBackrockGapConcrete(model) {
     ? '<p class="report-note" style="color:var(--ng)">⚠ バックロック断面がライナー内側の弓形断面より大きく、間詰め断面がマイナスになっています。立坑径・支圧壁厚さの組合せを見直してください。</p>'
     : '';
   return `
+    ${fitNote}
     <div class="calc-steps" style="margin-top:6px">
+      ${stepRow('角当たり位置(円中心から前面まで) hCenter', `√(R_eff²-yFar²)-T　（R_eff=${R_eff.toFixed(3)}, T=${model.T}）`, `${hCenter.toFixed(3)} m`)}
+      ${stepRow('前面の矢高 sagitta=R_eff-hCenter', `${R_eff.toFixed(3)}-${hCenter.toFixed(3)}`, `${sagitta.toFixed(3)} m`)}
       ${stepRow('中心角 θ=2×acos((R-T)/R)', `2×acos((${R.toFixed(3)}-${T.toFixed(3)})/${R.toFixed(3)})`, `${thetaDeg.toFixed(2)} °`)}
       ${stepRow('弦幅 W', `2√(${T.toFixed(3)}×(2×${R.toFixed(3)}-${T.toFixed(3)}))`, `${W.toFixed(3)} m`)}
       ${stepRow('弓形断面積 A1=R²π(θ/360)-W(R-T)/2', `${R.toFixed(3)}²×π×(${thetaDeg.toFixed(2)}/360)-${W.toFixed(3)}×(${R.toFixed(3)}-${T.toFixed(3)})/2`, `${A1.toFixed(3)} m²`)}
-      ${stepRow(`${model.name}断面積 A2=(W1+W2)/2×(T-リップ)+リップ×W1`, `(${model.W1}+${model.W2})/2×(${T.toFixed(3)}-${lip})+${lip}×${model.W1}`, `${A2.toFixed(3)} m²`)}
+      ${stepRow(`${model.name}断面積 A2=(W1+W2)/2×(T-リップ)+リップ×W1`, `(${model.W1}+${model.W2})/2×(${model.T.toFixed(3)}-${lip})+${lip}×${model.W1}`, `${A2.toFixed(3)} m²`)}
       ${stepRow('間詰め断面積 A=A1-A2', `${A1.toFixed(3)}-${A2.toFixed(3)}`, `<b>${A.toFixed(3)} m²</b>`)}
       ${stepRow('間詰めコンクリート体積 V=A×H', `${A.toFixed(3)}×${actualH.toFixed(2)}（${pieces}段）`, `<b>${V.toFixed(3)} m³</b>`)}
     </div>
+    ${conditionNote}
     ${ngNote}
   `;
 }
@@ -3884,16 +3954,118 @@ function drawWallPlanView() {
     ctx.fillStyle = '#1d6fd8';
     ctx.fillText(`ライナー内側(有効径) φ${linerD.toFixed(2)}m（板厚25mm×2辺）`, tx(0), ty(cy - R_liner) - 8);
 
-    // 推進管芯線（中心の縦線＝推進方向）
+    const wbi = computeWallBeff();
+    const offset = wbi.offset || 0;
+
+    // 補強リング（あれば橙破線で、角当たり計算に使った有効径を表示。38章）
+    if (wallRingUse && wbi.R_eff != null && wbi.R_eff < R_liner - 1e-6) {
+      ctx.save();
+      ctx.strokeStyle = '#ea580c';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(tx(0), ty(cy), wbi.R_eff * scale, wbi.R_eff * scale, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#ea580c';
+      ctx.font = '11px sans-serif';
+      ctx.fillText(`補強リング考慮後 有効径 φ${(wbi.R_eff * 2).toFixed(2)}m`, tx(0), ty(cy - wbi.R_eff) - 8);
+    }
+
+    // 推進中心線（推進方向。立坑中心とオフセットしていてもバックロックは常にこの線に
+    // 対して直角・対称に据え付けられる＝ずれるのは推進中心線側という考え方。38章）
     ctx.save();
     ctx.strokeStyle = '#94a3b8';
     ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(tx(0), ty(pitW * 1.15)); ctx.lineTo(tx(0), ty(-pitW * 0.1)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx(offset), ty(pitW * 1.15)); ctx.lineTo(tx(offset), ty(-pitW * 0.1)); ctx.stroke();
     ctx.restore();
     ctx.fillStyle = '#94a3b8';
-    ctx.fillText('推進方向', tx(0), ty(-pitW * 0.1) - 6);
+    ctx.fillText(offset ? `推進方向（立坑中心からオフセット${offset >= 0 ? '+' : ''}${offset.toFixed(2)}m）` : '推進方向', tx(offset), ty(-pitW * 0.1) - 6);
 
-    // 支圧壁（円弓形）: 立坑の奥側（y=0付近、推進方向の反対側）にライナー円の弦Beffで作る
+    const type = effectiveBackrockType();
+    const isTaperBackrock = backrockUse && type === 'taper' && backrockCurrentModel;
+
+    if (isTaperBackrock) {
+      // バックロック（テーパー形）: 幅短辺(W2)の角が有効径に接する位置(hCenter)まで
+      // 前面(W1側)を押し込んだ実寸法の台形として描く。台形は推進中心線に対して直角・対称
+      // （立坑中心に対しては非対称になりうる）。台形の外側（ライナーまでの間）はすべて
+      // 間詰めコンクリート＝ハッチングで表示する（38章、ユーザー提供の参考図に対応）。
+      const { hCenter, R_eff, placementOk } = wbi;
+      const model = backrockCurrentModel;
+      const R_hatch = R_eff;
+      const chordHalf = Math.sqrt(Math.max(0, R_hatch * R_hatch - hCenter * hCenter));
+      const halfAngle = Math.asin(Math.min(1, chordHalf / Math.max(R_hatch, 1e-6)));
+      const nSeg = 24;
+      const segPts = [];
+      for (let i = 0; i <= nSeg; i++) {
+        const theta = -halfAngle + (2 * halfAngle) * (i / nSeg);
+        segPts.push({ x: R_hatch * Math.sin(theta), y: cy - R_hatch + R_hatch * (1 - Math.cos(theta)) });
+      }
+      // 間詰めコンクリート範囲（弓形全体をハッチングで塗る。台形は後で上から重ねて描く）
+      ctx.save();
+      ctx.beginPath();
+      segPts.forEach((p, i) => { const px = tx(p.x), py = ty(p.y); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(180,131,25,0.18)';
+      ctx.fill();
+      ctx.clip();
+      ctx.strokeStyle = 'rgba(180,131,25,0.55)';
+      ctx.lineWidth = 1;
+      const hatchSpacingPx = 7;
+      const left = tx(-R_hatch * 1.1), right = tx(R_hatch * 1.1);
+      const top = ty(cy + R_hatch * 0.1), bottom = ty(cy - R_hatch * 1.1);
+      const span = bottom - top;
+      for (let hx = left - Math.abs(span); hx < right + Math.abs(span); hx += hatchSpacingPx) {
+        ctx.beginPath();
+        ctx.moveTo(hx, top);
+        ctx.lineTo(hx + span, bottom);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.strokeStyle = '#b48319';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      segPts.forEach((p, i) => { const px = tx(p.x), py = ty(p.y); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+      ctx.closePath();
+      ctx.stroke();
+      ctx.fillStyle = '#b48319';
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('間詰めコンクリート（ハッチング部）', tx(0), ty(cy - R_hatch * 0.6));
+
+      // バックロック台形本体（前面W1が中心寄り・背面W2がライナー側。推進中心線に対称）
+      const yFront = cy - hCenter, yBack = cy - hCenter - model.T;
+      const trapPts = [
+        { x: offset - model.W1 / 2, y: yFront },
+        { x: offset + model.W1 / 2, y: yFront },
+        { x: offset + model.W2 / 2, y: yBack },
+        { x: offset - model.W2 / 2, y: yBack },
+      ];
+      ctx.beginPath();
+      trapPts.forEach((p, i) => { const px = tx(p.x), py = ty(p.y); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(29,111,216,0.45)';
+      ctx.fill();
+      ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText(`${model.name}　W1=${model.W1}m / W2=${model.W2}m / T=${model.T}m`, tx(offset), ty(yFront) + 16);
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(`角当たり位置 hCenter=${hCenter.toFixed(3)}m（立坑中心から前面まで）`, tx(offset), ty(yFront) + 30);
+
+      if (!placementOk) {
+        ctx.fillStyle = '#b91c1c';
+        ctx.font = 'bold 11px sans-serif';
+        ctx.fillText('⚠ この型番は有効径に収まりません', tx(offset), ty(yBack) - 10);
+      }
+      return;
+    }
+
+    // 現場打ち、またはスクウェア形を円形立坑に強制適用した場合: 従来通り円弓形（レンズ）で表示
     const halfChord = Beff / 2;
     const halfAngle = Math.asin(Math.min(1, halfChord / Math.max(R_liner, 1e-6)));
     const nSeg = 24;
@@ -4087,28 +4259,40 @@ function computeWallBeff() {
     const linerD = Math.max(0, pitD - 0.05);
     const maxBw = linerD;
     const R = linerD / 2;
+    const R_eff = effectiveLinerRadius(R); // 補強リング分を差し引いた有効半径（38章）
+    const offset = n('wallCenterOffset') || 0;
     if (!backrockUse) {
       // 現場打ちの円形立坑: 支圧壁厚さ(wallThickness)を入力し、その厚さになる弦幅(Beff)を
       // サジッタの逆算で求める（35章、ユーザー確認済み方針）。
       // ライナープレート内側径 = 立坑呼び径(wallCircleD) − 50mm という前提は従来通り維持する。
       //   t = R − √(R²−(Beff/2)²)　⇔　Beff = 2√(t(2R−t))　（0≤t≤Rの範囲でのみ実数解を持つ）
-      const t = Math.min(Math.max(0, n('wallThickness') || 0), R);
-      const Beff = Math.min(linerD, 2 * Math.sqrt(Math.max(0, t * (2 * R - t))));
-      return { Bw, maxBw, Beff, linerD, sagitta: t };
+      const t = Math.min(Math.max(0, n('wallThickness') || 0), R_eff);
+      const Beff = Math.min(linerD, 2 * Math.sqrt(Math.max(0, t * (2 * R_eff - t))));
+      return { Bw, maxBw, Beff, linerD, sagitta: t, R_eff, offset, hCenter: R_eff - t, placementOk: true };
     }
     // バックロック使用時: 実際の計算書（BR-SST４台1350計算書.pdf）に倣い、幅(Bw)はカタログの
-    // 型番の幅をそのまま使う（幾何学的な逆算はしない。ライナーとの隙間は間詰めコンクリートの
-    // 数量計算＝renderBackrockGapConcrete()側で別途扱う）。厚さはwallThicknessをそのまま採用する。
+    // 型番の幅をそのまま使う（幾何学的な逆算はしない）。厚さ（sagitta/hCenter）は、テーパー形
+    // であれば幅短辺(W2)の角が有効半径R_effに接する位置から求める（38章、computeBackrockPlacement）。
+    // それ以外（型番未選定・スクウェア形を円形立坑に強制適用等）はwallThicknessをそのまま使う。
     const Beff = Math.min(Bw, maxBw);
-    const t = n('wallThickness') || 0;
-    return { Bw, maxBw, Beff, linerD, sagitta: t };
+    const type = effectiveBackrockType();
+    let sagitta = n('wallThickness') || 0;
+    let hCenter = R_eff - sagitta;
+    let placementOk = true;
+    if (type === 'taper' && backrockCurrentModel) {
+      const placement = computeBackrockPlacement(backrockCurrentModel, R_eff, offset);
+      hCenter = placement.hCenter;
+      sagitta = Math.max(0, R_eff - hCenter);
+      placementOk = placement.ok;
+    }
+    return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter, placementOk };
   }
   let maxBw = Bw;
   if (wallShaftType === 'rect' || wallShaftType === 'open' || wallShaftType === 'oval') {
     maxBw = n('wallPitW') || Bw;
   }
   const Beff = Math.min(Bw, maxBw);
-  return { Bw, maxBw, Beff, linerD: null, sagitta: 0 };
+  return { Bw, maxBw, Beff, linerD: null, sagitta: 0, R_eff: null, offset: 0, hCenter: null, placementOk: true };
 }
 
 // ══════════════════════════════════════
@@ -4191,17 +4375,17 @@ function renderJackStages(wallBeffInfo) {
   }
   jackStageHeights.length = stageCount;
 
-  const { Beff, linerD, sagitta } = wallBeffInfo;
+  const { Beff, linerD, sagitta, R_eff, hCenter } = wallBeffInfo;
   const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
   const offset = n('wallCenterOffset') || 0;
-  const R = linerD != null ? linerD / 2 : null;
-  const hCenter = R != null ? R - sagitta : null; // 弦（支圧壁前面）から円中心までの距離
+  // 局所厚さの計算は、補強リング考慮後の有効半径R_effと、角当たり位置から求めたhCenterを使う（38章）。
+  const R = R_eff;
 
   const rows = jackStageWidths.map((w, i) => {
     const stageNo = i + 1;
     const jacks = stageNo * 2;
     let thicknessCell = '<td class="mono" style="color:var(--sub)">—</td>';
-    if (isCircleShaft && R != null) {
+    if (isCircleShaft && R != null && hCenter != null) {
       const x = Math.abs(w + offset);
       if (x > R) {
         thicknessCell = '<td class="mono" style="color:var(--ng)">立坑径超過</td>';
@@ -4669,7 +4853,8 @@ function getProjectData() {
       jackStageHeights: jackStageHeights.slice(),
       railDrop: n('railDrop'), railSize: v('railSize'),
       backrockUse, backrockType, backrockModelOverride, epAlpha: n('wallEpAlpha'),
-      steelT: n('wallSteelT'), steelSa: n('wallSteelSa')
+      steelT: n('wallSteelT'), steelSa: n('wallSteelSa'),
+      ringUse: wallRingUse, ringH: n('wallRingH')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -4859,6 +5044,15 @@ function setProjectData(d) {
       const btn = document.getElementById(`backrockTypeBtn_${t}`);
       if (btn) btn.classList.toggle('active', t === backrockType);
     });
+    // 補強リングの復元も、backrockUse等と同様にsetWallShaft()より前に変数・見た目を合わせておく
+    setV('wallRingH', wl.ringH || 100);
+    wallRingUse = !!wl.ringUse;
+    const ringOnBtn = document.getElementById('wallRingBtn_on'), ringOffBtn = document.getElementById('wallRingBtn_off');
+    if (ringOnBtn) ringOnBtn.classList.toggle('active', wallRingUse);
+    if (ringOffBtn) ringOffBtn.classList.toggle('active', !wallRingUse);
+    const ringRow = document.getElementById('wallRingHRow'), ringNote = document.getElementById('wallRingNote');
+    if (ringRow) ringRow.style.display = wallRingUse ? '' : 'none';
+    if (ringNote) ringNote.style.display = wallRingUse ? '' : 'none';
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
