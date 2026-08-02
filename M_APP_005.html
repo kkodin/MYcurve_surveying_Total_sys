@@ -733,11 +733,11 @@ tr.row-selected{background:#eff6ff}
       ※下の「🔨 ジャッキ当たり部の局所支圧照査」カードの採用コンクリート強度F_cとは別の値です。局所支圧照査ではF_cから式で自動算出していますが、こちらの基礎反力照査・偏心曲げ照査では同様の自動算出は行っていません。①②いずれかがNGの場合は照査結果カードに警告が表示されます。
     </div>
     <div class="field-row">
-      <label>推進力 F [kN]（Tab2計算結果を自動反映 or 手動入力）</label>
+      <label>推進力 F [kN]（推進力計算結果を自動反映 or 手動入力）</label>
       <input id="wallForce" class="mono" type="number" step="1" value="" oninput="calcBacklock()">
       <span class="unit">kN</span>
     </div>
-    <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">Tab2の計算結果を読込</button>
+    <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">推進力計算結果を読み込む</button>
   </div>
 
   <div class="card accordion" id="jackStagesCard">
@@ -2922,7 +2922,7 @@ function calculate() {
   // renderResults()内でグラフ用canvasのoffsetWidthを読むため、非表示のまま描画すると幅0になり何も描かれない。
   resEl.style.display = '';
   renderResults(lastCalcResult);
-  // Tab2の推進力をTab3支圧壁へ反映
+  // 推進力タブの計算結果を支圧壁タブへ反映
   setV('wallForce', Math.ceil(F_total));
   showToast('計算完了 F=' + F_total.toFixed(0) + ' kN');
 }
@@ -3892,7 +3892,7 @@ function syncForceFromCalc() {
     calcBacklock();
     showToast('推進力を読み込みました');
   } else {
-    showToast('先にTab2で計算を実行してください');
+    showToast('先に「推進力」タブで計算を実行してください');
   }
 }
 
