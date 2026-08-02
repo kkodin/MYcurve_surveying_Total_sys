@@ -639,6 +639,41 @@ tr.row-selected{background:#eff6ff}
     </div>
   </div>
 
+  <div class="card accordion" id="backrockCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🧱 バックロック（分割式プレキャスト支圧壁）</div>
+    <div class="ok-box" style="font-size:11px">
+      廃材が出ない・現場打ちより薄く立坑内を広く使える・工期短縮等のメリットから、支圧壁は現場打ちコンクリートではなく<b>バックロック</b>（プレキャストコンクリートブロックを積み重ね、ライナープレートとの隙間に間詰めコンクリートを充填する工法）を使用する前提で計算します。円形立坑は間詰め材料を削減できる<b>テーパー形</b>、矩形立坑は<b>スクウェア形</b>が標準ですが、下記で切り替えられます。
+    </div>
+    <div class="field-row full">
+      <label>支圧壁の構築方法</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="backrockUseBtn_on" class="mode-btn active" onclick="setBackrockUse(true)">バックロックを使用</button>
+        <button type="button" id="backrockUseBtn_off" class="mode-btn" onclick="setBackrockUse(false)">現場打ち（手入力）</button>
+      </div>
+    </div>
+    <div id="backrockTypeRow" class="field-row full">
+      <label>形状タイプ</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="backrockTypeBtn_auto" class="mode-btn active" onclick="setBackrockType('auto')">自動（立坑形状で判定）</button>
+        <button type="button" id="backrockTypeBtn_square" class="mode-btn" onclick="setBackrockType('square')">スクウェア形（矩形）</button>
+        <button type="button" id="backrockTypeBtn_taper" class="mode-btn" onclick="setBackrockType('taper')">テーパー形（円形）</button>
+      </div>
+    </div>
+    <div id="backrockModelRow" class="field-row full">
+      <label>型番</label>
+      <select id="backrockModelSelect" onchange="setBackrockModelOverride(this.value)">
+        <option value="">自動選定（呼び径の対象範囲から判定）</option>
+      </select>
+      <p class="report-note" style="margin:4px 2px 0">カタログの対象範囲は目安です。現場条件によっては範囲外の型番を採用し、本カードの③④照査で個別に安全性を確認した上で使用することもあります（実例: BR-SST４台1350計算書.pdf）。</p>
+    </div>
+    <div id="backrockSteelRow" class="two-col">
+      <div class="field-row"><label>鋼材部厚さ t（④曲げ照査用）[mm]</label><input id="wallSteelT" class="mono" type="number" step="0.5" value="11" oninput="calcBacklock()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>鋼材 許容引張応力度 σsa [N/mm²]</label><input id="wallSteelSa" class="mono" type="number" step="1" value="140" oninput="calcBacklock()"><span class="unit">N/mm²</span></div>
+    </div>
+    <p class="report-note" style="margin:0 2px 6px">鋼材部厚さtは製品の溝形鋼寸法（カタログの例: 溝形鋼11×250×90）に合わせて調整してください。σsaの既定値140N/mm²は道路橋示方書（日本道路協会）準拠の参考値です。</p>
+    <div id="backrockResult"></div>
+  </div>
+
   <div class="card accordion">
     <div class="card-title" onclick="toggleAccordion(this)">🧱 支圧壁の諸元</div>
     <div class="ok-box" style="font-size:11px">基礎コンクリート上面（y=0）を基準とします。支圧壁の下端は基礎コンクリート上面。</div>
@@ -656,7 +691,9 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>支圧壁 高さ H_w [m]</label><input id="wallHw" class="mono" type="number" step="0.1" value="2.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>管中心高さ h_c [m]</label><input id="wallHc" class="mono" type="number" step="0.05" value="0.8" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>許容支圧応力度 f_a [N/mm²]</label><input id="wallFa" class="mono" type="number" step="1" value="24" oninput="calcBacklock()"><span class="unit">N/mm²</span></div>
+      <div class="field-row"><label>受働土圧 割増し係数 α（③照査用）</label><input id="wallEpAlpha" class="mono" type="number" step="0.1" min="1.5" max="2.5" value="2.5" oninput="calcBacklock()"><span class="unit">—</span></div>
     </div>
+    <p class="report-note" style="margin:0 2px 8px">αは支圧壁幅の範囲だけでなく側方に広がる土のくさびの抵抗を考慮した割増し係数（実務では1.5〜2.5の範囲で選定。実例の計算書ではα=2.5を採用）。</p>
 
     <div id="wallLevelInputs" style="display:none;margin-top:4px">
       <div class="note-box" style="font-size:11px">
@@ -3537,6 +3574,186 @@ let wallLevelMode = 'direct'; // 'direct'=Hw/hc直接入力、'level'=水準高�
 let jackStageWidths = []; // 段ごとのジャッキ幅（推進中央線からの片側幅）[m]（インデックス0=1段目）
 let jackStageHeights = []; // 段ごとの設置高さ H（定規下面を0とした、その段のジャッキ底面の高さ）[m]（インデックス0=1段目）
 
+// ══════════════════════════════════════
+//  バックロック（推進工法用分割式プレキャスト支圧壁、秩父コンクリート工業「バックロック」カタログ準拠）
+//  廃材が出ない・工期短縮等のメリットから、支圧壁は現場打ちではなくバックロックを
+//  使用する前提で計算する（ユーザー確認済み方針）。
+//  ・スクウェア形（矩形立坑向け）: 幅W・厚さT・高さH(1ピース0.5m)・参考重量
+//  ・テーパー形（円形＝ライナープレート立坑向け、間詰め材料を削減できる台形断面）:
+//    幅1(下端)・幅2(上端)・厚さT・高さH(1ピース0.5m)・参考重量
+//  対象標準推進管の範囲は隣接する型番と重複するため、選定は「範囲内で最小の型番」を採用する。
+// ══════════════════════════════════════
+const BACKROCK_SQUARE = [
+  { name: 'BR-SS', diaMin: 800,  diaMax: 1200, W: 2.4, T: 0.6, H: 0.5, weight: 2.0 },
+  { name: 'BR-S',  diaMin: 1100, diaMax: 1650, W: 2.8, T: 0.6, H: 0.5, weight: 2.4 },
+  { name: 'BR-M',  diaMin: 1500, diaMax: 2000, W: 3.6, T: 0.6, H: 0.5, weight: 3.1 },
+  { name: 'BR-L',  diaMin: 2200, diaMax: 2800, W: 4.0, T: 0.8, H: 0.5, weight: 4.4 },
+  { name: 'BR-LL', diaMin: 2600, diaMax: 3000, W: 4.6, T: 0.8, H: 0.5, weight: 5.0 },
+];
+const BACKROCK_TAPER = [
+  { name: 'BR-SST', diaMin: 800,  diaMax: 1200, W1: 2.0, W2: 1.0, T: 0.5, H: 0.5, weight: 1.1 },
+  { name: 'BR-ST',  diaMin: 1100, diaMax: 1800, W1: 2.8, W2: 1.6, T: 0.6, H: 0.5, weight: 1.9 },
+  { name: 'BR-MT',  diaMin: 1650, diaMax: 2400, W1: 3.6, W2: 2.4, T: 0.6, H: 0.5, weight: 2.6 },
+  { name: 'BR-LT',  diaMin: 2400, diaMax: 3000, W1: 4.4, W2: 3.0, T: 0.8, H: 0.5, weight: 4.1 },
+];
+// テーパー形の断面下端に共通して付く鋼材リップの高さ（カタログ図の「90」表記、mm。全サイズ共通の細部寸法）
+const BACKROCK_TAPER_LIP_H = 0.09;
+
+function selectBackrock(dia, type) {
+  const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
+  const inRange = table.filter(b => dia >= b.diaMin && dia <= b.diaMax);
+  if (inRange.length) return inRange[0];
+  // 範囲外: 呼び径が全型番の範囲より小さい/大きい場合は最小/最大の型番で代用する（要現場確認）
+  return dia < table[0].diaMin ? table[0] : table[table.length - 1];
+}
+
+let backrockUse = true; // 既定でバックロック使用を前提とする（ユーザー確認済み方針）
+let backrockType = 'auto'; // 'auto'|'square'|'taper'（autoは立坑形状: 円形/ケーシング→taper、それ以外→square）
+
+function setBackrockUse(use) {
+  backrockUse = use;
+  document.getElementById('backrockUseBtn_on').classList.toggle('active', use);
+  document.getElementById('backrockUseBtn_off').classList.toggle('active', !use);
+  document.getElementById('backrockTypeRow').style.display = use ? '' : 'none';
+  calcBacklock();
+  autoSave();
+}
+function setBackrockType(type) {
+  backrockType = type;
+  ['auto', 'square', 'taper'].forEach(t => document.getElementById(`backrockTypeBtn_${t}`).classList.toggle('active', t === type));
+  refreshBackrockModelOptions();
+  calcBacklock();
+  autoSave();
+}
+function effectiveBackrockType() {
+  if (backrockType !== 'auto') return backrockType;
+  return (wallShaftType === 'circle' || wallShaftType === 'casing') ? 'taper' : 'square';
+}
+
+let backrockModelOverride = ''; // ''=自動選定、それ以外は型番名（例:'BR-SST'）を手動指定
+function setBackrockModelOverride(name) {
+  backrockModelOverride = name || '';
+  calcBacklock();
+  autoSave();
+}
+// 現在の形状タイプに応じて型番選択セレクトの選択肢を作り直す（タイプ切替のたびに呼ぶ）
+function refreshBackrockModelOptions() {
+  const sel = document.getElementById('backrockModelSelect');
+  if (!sel) return;
+  const type = effectiveBackrockType();
+  const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
+  const prev = backrockModelOverride;
+  sel.innerHTML = '<option value="">自動選定（呼び径の対象範囲から判定）</option>' +
+    table.map(b => `<option value="${b.name}">${b.name}（φ${b.diaMin}〜φ${b.diaMax}mm）</option>`).join('');
+  // 直前の手動指定が現在のタイプの表に無ければ自動選定に戻す
+  sel.value = table.some(b => b.name === prev) ? prev : '';
+  backrockModelOverride = sel.value;
+}
+
+// バックロック選定・厚さ/幅の反映・（テーパー形のみ）間詰めコンクリート数量計算。
+// wallBeffInfoはこの時点でまだ選定結果を反映していない値のため、選定後にcomputeWallBeff()を
+// もう一度呼び直して最終的なBeffを得る（テーパー形はwallThicknessを書き換えるため、この
+// 関数を呼んだ後でcomputeWallBeff()を呼び直す必要がある＝calcBacklock()側で行う）。
+function applyBackrockSelection() {
+  const el = document.getElementById('backrockResult');
+  if (!el) return null;
+  if (!backrockUse) {
+    el.innerHTML = '<p class="report-note">現場打ちコンクリートで支圧壁を構築する前提です（下の「支圧壁の諸元」を直接入力してください）。</p>';
+    return null;
+  }
+  const dia = parseInt(v('pipeDia')) || 0;
+  const type = effectiveBackrockType();
+  const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
+  const manualModel = backrockModelOverride ? table.find(b => b.name === backrockModelOverride) : null;
+  const model = manualModel || selectBackrock(dia, type);
+  const outOfRange = dia < table[0].diaMin || dia > table[table.length - 1].diaMax;
+  const outsideOwnRange = manualModel && (dia < manualModel.diaMin || dia > manualModel.diaMax);
+
+  // Bw・厚さは、円形・矩形いずれの立坑でもカタログ値をそのまま採用する（実際の計算書
+  // 「BR-SST４台1350計算書.pdf」で確認した実務の方式。円形立坑でもBeffを幾何学的に逆算せず、
+  // 型番の幅をそのまま使っている。ライナーとの隙間は間詰めコンクリートの数量計算で別途扱う）。
+  // テーパー形はW1(下端の広い方の幅)を代表幅として使う（計算書の「幅：2.0m」がBR-SSTのW1と一致）。
+  const isCircleShaftNow = (wallShaftType === 'circle' || wallShaftType === 'casing');
+  setV('wallThickness', model.T);
+  setV('wallBw', type === 'square' ? model.W : model.W1);
+
+  const bwEl = document.getElementById('wallBw');
+  const thicknessEl = document.getElementById('wallThickness');
+  if (bwEl) bwEl.readOnly = true;
+  if (thicknessEl) thicknessEl.readOnly = true;
+
+  const Hw = n('wallHw') || 0;
+  const pieces = Math.max(1, Math.ceil(Hw / model.H));
+  const actualH = pieces * model.H;
+
+  let html = `
+    <div class="metrics-grid">
+      <div class="metric-card"><div class="metric-label">${manualModel ? '型番（手動指定）' : '選定型番（自動）'}</div><div class="metric-value" style="font-size:18px">${model.name}</div></div>
+      <div class="metric-card"><div class="metric-label">ピース数（高さ${model.H}m/ピース）</div><div class="metric-value">${pieces}</div><div class="metric-sub">段（実高さ${actualH.toFixed(2)}m）</div></div>
+      <div class="metric-card"><div class="metric-label">1ピース参考重量</div><div class="metric-value">${model.weight.toFixed(1)}</div><div class="metric-sub">t</div></div>
+      <div class="metric-card"><div class="metric-label">総重量（参考）</div><div class="metric-value">${(model.weight * pieces).toFixed(1)}</div><div class="metric-sub">t</div></div>
+    </div>
+    <p class="report-note">対象標準推進管 φ${model.diaMin}〜φ${model.diaMax}mm（呼び径φ${dia}mm）${type === 'square' ? `　幅${model.W}m・厚さ${model.T}m` : `　幅1(下)${model.W1}m・幅2(上)${model.W2}m・厚さ${model.T}m`}${!manualModel && outOfRange ? '　<span style="color:var(--ng);font-weight:700">⚠ この呼び径はカタログの対象範囲外です。メーカーに確認してください。</span>' : ''}${outsideOwnRange ? `　<span style="color:var(--warn);font-weight:700">⚠ 呼び径φ${dia}mmは${model.name}の対象範囲外での採用です。下の③④照査で安全性を個別に確認してください（実例: BR-SST４台1350計算書.pdf も同様の範囲外採用）。</span>` : ''}</p>
+  `;
+
+  if (type === 'square' && isCircleShaftNow) {
+    html += '<p class="report-note" style="color:var(--warn)">⚠ 円形立坑でスクウェア形を選択しています。スクウェア形は矩形立坑向けの平板ブロックのため、実際の適用可否はメーカーに確認してください（幅・厚さともカタログ値をそのまま採用しています）。</p>';
+  } else if (type === 'taper' && !isCircleShaftNow) {
+    html += '<p class="report-note" style="color:var(--warn)">⚠ 矩形立坑でテーパー形（円形立坑向け）を選択しています。幅は下端幅W1を代用していますが、実際の適用可否はメーカーに確認してください。</p>';
+  }
+
+  if (type === 'taper' && isCircleShaftNow) {
+    html += renderBackrockGapConcrete(model);
+  }
+
+  el.innerHTML = html;
+  return model;
+}
+
+// 間詰めコンクリート数量計算（反力面積.xlsx準拠）。
+// 支圧壁が占める弓形断面（ライナー内側円とテーパー形背面の間）から、バックロック台形ブロック
+// 自体の断面積を差し引いた残りが、間詰めコンクリートで埋める必要のある断面積になる。
+//   R = ライナープレート内側半径（=(立坑呼び径-50mm)/2）
+//   T = 支圧壁厚さ（wallThickness、中心厚さ／サジッタ）
+//   θ = 2×acos((R-T)/R)　[deg]　… 支圧壁が占める中心角
+//   A1 = R²×π×(θ/360) − W×(R-T)/2　… 弓形断面積（W=Beff、35章で厚さから逆算した弦幅）
+//   A2 = (W1+W2)/2×(T-lip) + lip×W1　… バックロック台形ブロックの断面積（lip=底部の鋼材リップ高さ）
+//   A  = A1 − A2　… 間詰めコンクリート断面積
+//   V  = A × H　… 間詰めコンクリート体積（Hは実際に積み上げた高さ）
+function renderBackrockGapConcrete(model) {
+  const pitD = n('wallCircleD');
+  if (!pitD || (wallShaftType !== 'circle' && wallShaftType !== 'casing')) {
+    return '<p class="report-note" style="color:var(--sub)">間詰めコンクリート数量は円形立坑（ライナープレート）でのみ計算します。</p>';
+  }
+  const linerD = Math.max(0, pitD - 0.05);
+  const R = linerD / 2;
+  const T = Math.min(Math.max(0, n('wallThickness') || 0), R);
+  const thetaDeg = 2 * (Math.acos((R - T) / R) * 180 / Math.PI);
+  const W = 2 * Math.sqrt(Math.max(0, T * (2 * R - T))); // Beffと同じ式（35章）
+  const A1 = R * R * Math.PI * (thetaDeg / 360) - (W * (R - T)) / 2;
+  const lip = BACKROCK_TAPER_LIP_H;
+  const A2 = (model.W1 + model.W2) / 2 * (T - lip) + lip * model.W1;
+  const A = A1 - A2;
+  const Hw = n('wallHw') || 0;
+  const pieces = Math.max(1, Math.ceil(Hw / model.H));
+  const actualH = pieces * model.H;
+  const V = A * actualH;
+  const ngNote = A < 0
+    ? '<p class="report-note" style="color:var(--ng)">⚠ バックロック断面がライナー内側の弓形断面より大きく、間詰め断面がマイナスになっています。立坑径・支圧壁厚さの組合せを見直してください。</p>'
+    : '';
+  return `
+    <div class="calc-steps" style="margin-top:6px">
+      ${stepRow('中心角 θ=2×acos((R-T)/R)', `2×acos((${R.toFixed(3)}-${T.toFixed(3)})/${R.toFixed(3)})`, `${thetaDeg.toFixed(2)} °`)}
+      ${stepRow('弦幅 W', `2√(${T.toFixed(3)}×(2×${R.toFixed(3)}-${T.toFixed(3)}))`, `${W.toFixed(3)} m`)}
+      ${stepRow('弓形断面積 A1=R²π(θ/360)-W(R-T)/2', `${R.toFixed(3)}²×π×(${thetaDeg.toFixed(2)}/360)-${W.toFixed(3)}×(${R.toFixed(3)}-${T.toFixed(3)})/2`, `${A1.toFixed(3)} m²`)}
+      ${stepRow(`${model.name}断面積 A2=(W1+W2)/2×(T-リップ)+リップ×W1`, `(${model.W1}+${model.W2})/2×(${T.toFixed(3)}-${lip})+${lip}×${model.W1}`, `${A2.toFixed(3)} m²`)}
+      ${stepRow('間詰め断面積 A=A1-A2', `${A1.toFixed(3)}-${A2.toFixed(3)}`, `<b>${A.toFixed(3)} m²</b>`)}
+      ${stepRow('間詰めコンクリート体積 V=A×H', `${A.toFixed(3)}×${actualH.toFixed(2)}（${pieces}段）`, `<b>${V.toFixed(3)} m³</b>`)}
+    </div>
+    ${ngNote}
+  `;
+}
+
 // 推進定規に使うH形鋼の規格（成せい・幅とも同寸の正方形断面シリーズ、単位m）
 const H_BEAM_SIZES = {
   200: { H: 0.200, B: 0.200 },
@@ -3594,6 +3811,7 @@ function setWallShaft(type, el) {
     oval: '小判型立坑: 矩形部＋半円部の組合せ形状。直線部の内法幅が支圧壁最大幅の制約となります（半円部は考慮しません）。'
   };
   document.getElementById('wallTypeNote').textContent = notes[type] || '';
+  refreshBackrockModelOptions(); // 立坑形状でbackrockType='auto'時の実効タイプが変わるため選択肢を作り直す
   calcBacklock();
   autoSave();
 }
@@ -3864,21 +4082,33 @@ function drawWallSectionView() {
 // 弦Beffに対する弓形の最大厚み（矢高、サジッタ）= R − √(R² − (Beff/2)²)。
 function computeWallBeff() {
   const Bw = n('wallBw');
+  if (wallShaftType === 'circle' || wallShaftType === 'casing') {
+    const pitD = n('wallCircleD');
+    const linerD = Math.max(0, pitD - 0.05);
+    const maxBw = linerD;
+    const R = linerD / 2;
+    if (!backrockUse) {
+      // 現場打ちの円形立坑: 支圧壁厚さ(wallThickness)を入力し、その厚さになる弦幅(Beff)を
+      // サジッタの逆算で求める（35章、ユーザー確認済み方針）。
+      // ライナープレート内側径 = 立坑呼び径(wallCircleD) − 50mm という前提は従来通り維持する。
+      //   t = R − √(R²−(Beff/2)²)　⇔　Beff = 2√(t(2R−t))　（0≤t≤Rの範囲でのみ実数解を持つ）
+      const t = Math.min(Math.max(0, n('wallThickness') || 0), R);
+      const Beff = Math.min(linerD, 2 * Math.sqrt(Math.max(0, t * (2 * R - t))));
+      return { Bw, maxBw, Beff, linerD, sagitta: t };
+    }
+    // バックロック使用時: 実際の計算書（BR-SST４台1350計算書.pdf）に倣い、幅(Bw)はカタログの
+    // 型番の幅をそのまま使う（幾何学的な逆算はしない。ライナーとの隙間は間詰めコンクリートの
+    // 数量計算＝renderBackrockGapConcrete()側で別途扱う）。厚さはwallThicknessをそのまま採用する。
+    const Beff = Math.min(Bw, maxBw);
+    const t = n('wallThickness') || 0;
+    return { Bw, maxBw, Beff, linerD, sagitta: t };
+  }
   let maxBw = Bw;
-  let linerD = null, sagitta = 0;
   if (wallShaftType === 'rect' || wallShaftType === 'open' || wallShaftType === 'oval') {
     maxBw = n('wallPitW') || Bw;
-  } else if (wallShaftType === 'circle' || wallShaftType === 'casing') {
-    const pitD = n('wallCircleD');
-    linerD = Math.max(0, pitD - 0.05);
-    maxBw = linerD;
   }
   const Beff = Math.min(Bw, maxBw);
-  if (linerD != null) {
-    const R = linerD / 2, halfChord = Math.min(Beff, linerD) / 2;
-    sagitta = R - Math.sqrt(Math.max(0, R * R - halfChord * halfChord));
-  }
-  return { Bw, maxBw, Beff, linerD, sagitta };
+  return { Bw, maxBw, Beff, linerD: null, sagitta: 0 };
 }
 
 // ══════════════════════════════════════
@@ -4187,7 +4417,6 @@ function calcLocalBearing() {
 }
 
 function calcBacklock() {
-  const Bw = n('wallBw');
   const Hw = n('wallHw');
   const hc = n('wallHc');
   const faInput = n('wallFa'); // N/mm²（コンクリートの許容支圧応力度、ユーザー入力）
@@ -4201,25 +4430,36 @@ function calcBacklock() {
   drawWallSectionView();
   calcLocalBearing();
 
+  // バックロック選定（使用する場合、wallThickness・wallBwをここで書き換える）。
+  // 以降のBw・有効幅計算は、この書き換え後の値を使う必要があるため、Bwはこの後で読み直す。
+  const backrockModel = applyBackrockSelection();
+
   // 有効幅（立坑制約）― F・Hw未入力でも表示できるよう、早期returnより前で計算する
   const wallBeffInfo = computeWallBeff();
   const { maxBw, Beff, linerD, sagitta } = wallBeffInfo;
 
-  // 支圧壁厚さ: 円形立坑は幾何学的に決まる（サジッタ）ため自動計算・読取専用にする。
-  // それ以外（矩形・小判型・オープン・ケーシング）は厚さが幾何学的に一意に決まらないため、
-  // 現場の設計値を手入力する。
+  // 円形立坑・現場打ち(backrockUse=false)のときだけ、支圧壁厚さ(wallThickness)から
+  // その厚さになる弦幅(Beff)を幾何学的に逆算し、wallBwを自動計算（読取専用）にする（35章）。
+  // それ以外（矩形等、またはバックロック使用時）はwallBwが直接の入力値（バックロック使用時は
+  // カタログの幅をそのまま採用する実務に合わせている。36章参照）。
   const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
   const thicknessEl = document.getElementById('wallThickness');
   const thicknessNoteEl = document.getElementById('wallThicknessNote');
-  if (thicknessEl) {
-    thicknessEl.readOnly = isCircleShaft;
+  const bwEl = document.getElementById('wallBw');
+  if (isCircleShaft && !backrockUse && bwEl) bwEl.value = Beff.toFixed(3);
+
+  if (!backrockUse) {
+    if (thicknessEl) thicknessEl.readOnly = false;
+    if (bwEl) bwEl.readOnly = isCircleShaft;
     if (isCircleShaft) {
-      thicknessEl.value = sagitta.toFixed(3);
-      if (thicknessNoteEl) thicknessNoteEl.textContent = `円形立坑のため、弦幅Beff=${Beff.toFixed(2)}mから幾何学的に自動計算（中心厚さ／サジッタ）。手入力はできません。`;
+      if (thicknessNoteEl) thicknessNoteEl.textContent = `円形立坑のため、この厚さになる弦幅Beffを幾何学的に自動計算し、支圧壁幅B_wに反映しています（ライナープレート内側径=呼び径−50mm、Beff=${Beff.toFixed(2)}m）。幅を直接指定したい場合は矩形等に変更してください。`;
     } else {
-      if (thicknessNoteEl) thicknessNoteEl.textContent = '矩形・小判型等では厚さは幾何学的に一意に決まらないため、設計値を入力してください。';
+      if (thicknessNoteEl) thicknessNoteEl.textContent = '矩形・小判型等では厚さは幾何学的に一意に決まらないため、設計値を入力してください（幅B_wは直接指定します）。';
     }
+  } else if (thicknessNoteEl) {
+    thicknessNoteEl.textContent = `バックロック使用のため、選定型番（${backrockModel ? backrockModel.name : '—'}）の幅・厚さをそのまま反映しています（上の「バックロック」カード参照。実際の計算書に倣い、円形立坑でも幅を幾何学的に逆算せずカタログ値を直接使用）。`;
   }
+  const Bw = n('wallBw');
 
   renderJackStages(wallBeffInfo);
 
@@ -4244,31 +4484,82 @@ function calcBacklock() {
   // 支圧壁自体の高さ(Hw)分の自重項だけでは、支圧壁より上にある土被りの上載荷重や
   // 粘着力による抵抗を無視してしまい、実際の抵抗力を大きく過小評価してNGになりやすい。
   // 土質条件タブの土被りH最大・粘着力Cを反映した標準的な受働土圧式に修正する：
-  //   Ep = (0.5×γ×Hw² + q×Hw)×Kp×Beff + 2×C×√Kp×Hw×Beff
+  //   Ep = α×Beff×(0.5×γ×Hw²×Kp + q×Hw×Kp + 2×C×√Kp×Hw)
   //   q = γ×(支圧壁天端の土被り)、支圧壁天端の土被り = H最大 − (Hw−hc)（管中心基準の换算、負値は0とする）
+  // α（受働土圧の割増し係数、1.5〜2.5）は、支圧壁幅の範囲だけでなく側方に3次元的に広がる
+  // 土のくさびの抵抗を考慮した割増し係数。実際の計算書（BR-SST４台1350計算書.pdf）で
+  // α=2.5を採用しているのを確認し、本アプリにも導入した（既存実装にはこの係数が抜けていた）。
   const Kp = Math.pow(Math.tan(Math.PI/4 + phi/2), 2);
   const C_coh = n('soilC') || 0;
   const Hmax_soil = n('soilHmax') || 0;
   const depthToWallTop = Math.max(0, Hmax_soil - (Hw - hc));
   const q_surcharge = gamma * depthToWallTop;
+  const alphaEp = n('wallEpAlpha') || 2.5;
   const Ep_weight = 0.5 * gamma * Hw * Hw * Kp * Beff;
   const Ep_surcharge = q_surcharge * Hw * Kp * Beff;
   const Ep_cohesion = 2 * C_coh * Math.sqrt(Kp) * Hw * Beff;
-  const Ep = Ep_weight + Ep_surcharge + Ep_cohesion;
+  const Ep_sum = Ep_weight + Ep_surcharge + Ep_cohesion;
+  const Ep = alphaEp * Ep_sum;
   const check3_ok = Ep >= F;
 
-  // バックロック選定
-  const BL_TABLE = [
-    {name:'BL-400', F:400, W:0.42, H:0.40, B:0.40},
-    {name:'BL-600', F:600, W:0.62, H:0.60, B:0.60},
-    {name:'BL-800', F:800, W:0.82, H:0.80, B:0.80},
-    {name:'BL-1000',F:1000,W:1.03,H:1.00,B:1.00},
-    {name:'BL-1500',F:1500,W:1.55,H:1.50,B:1.50},
-    {name:'BL-2000',F:2000,W:2.05,H:2.00,B:2.00},
-  ];
-  const F_kN_each = F / (Math.ceil(Beff / 0.4));
-  const selected = BL_TABLE.filter(bl => bl.F * 1000 >= F);
-  const blSelected = selected.length ? selected[0] : BL_TABLE[BL_TABLE.length - 1];
+  // ④ プレキャスト支圧壁（バックロック）自体の曲げ照査（バックロック使用時のみ）
+  // 現場打ちの一体壁と異なり、分割式プレキャストブロックは元押ジャッキの2点（左右）でしか
+  // 支持されないため、ブロック自体が「等分布荷重q・2点支持・左右オーバーハングL1/L2」の
+  // 梁として曲げを受ける。これをブロック断面（鋼材部を鉄筋とみなした複鉄筋長方形梁、
+  // 単位高さ1m）の許容応力度設計で照査する。実際の計算書
+  // （BR-SST４台1350計算書.pdf）の式・数値と完全一致することを検算済み。
+  let check4 = null;
+  if (backrockUse) {
+    const q4 = f; // ①のfと同一式（q=F/(Bo×H0)）
+    const jackHalfWidth = (jackStageWidths.length && jackStageWidths[0] > 0) ? jackStageWidths[0] : Beff / 4;
+    const L = 2 * jackHalfWidth; // ジャッキ2点の間隔（対称配置と仮定）
+    const L1 = Math.max(0, (Beff - L) / 2), L2 = L1;
+    const Ra4 = L > 0 ? (q4 / (2 * L)) * (L1 + L + L2) * (L1 + L - L2) : 0;
+    const Mc4 = L > 0 ? (Ra4 * Ra4) / (2 * q4) - L1 * Ra4 : 0;
+    const Ma4 = -q4 / 2 * L1 * L1;
+    const Mb4 = -q4 / 2 * L2 * L2;
+    const Mapplied = Math.max(Math.abs(Mc4), Math.abs(Ma4), Math.abs(Mb4));
+
+    // 断面（単位高さb=1000mm、厚さH=wallThickness）
+    const bMM = 1000;
+    const HMM = (n('wallThickness') || 0) * 1000;
+    const tSteel = n('wallSteelT') || 11;
+    const coverMM = 5.5; // カタログ実例の圧縮鉄筋位置(=かぶり)を固定値として採用
+    const dMM = Math.max(1, HMM - coverMM);
+    const dpMM = coverMM;
+    const As = tSteel * bMM;
+    const p4 = As / (bMM * dMM);
+    const pp4 = p4; // 引張側・圧縮側とも同じ鋼材厚さのため対称
+    const nRatio = 7; // 弾性係数比（高強度プレキャストコンクリートの実務値、実例に合わせ固定）
+    const dRatio = dpMM / dMM;
+    const k4 = Math.sqrt(2 * nRatio * (p4 + pp4 * dRatio) + nRatio * nRatio * Math.pow(p4 + pp4, 2)) - nRatio * (p4 + pp4);
+    const x4 = k4 * dMM;
+    const Lc4 = k4 / 2 * (1 - k4 / 3) + nRatio * pp4 / k4 * (k4 - dRatio) * (1 - dRatio);
+    const j4 = (1 - dRatio) - (k4 * k4) / (2 * nRatio * p4 * (1 - k4)) * (k4 / 3 - dRatio);
+    const v4 = j4 * p4 / Lc4;
+    const BACKROCK_FC = 60; // カタログ記載のコンクリート部強度(N/mm²)は全型番共通の固定値
+    const sigmaCa = BACKROCK_FC / 3;
+    const sigmaSa = n('wallSteelSa') || 140;
+    const Mrc4 = sigmaCa * bMM * dMM * dMM * Lc4 / 1e6;
+    const Mrs4 = sigmaSa * bMM * dMM * dMM * Lc4 * v4 / 1e6;
+    const Mres = Math.min(Mrc4, Mrs4);
+    const check4_ok = Mres >= Mapplied;
+    check4 = {
+      no: '④', name: 'プレキャスト支圧壁の曲げ照査', ok: check4_ok,
+      formula: `
+        等分布荷重 q = F/(Bo×H0) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${q4.toFixed(1)} kN/m²<br>
+        ジャッキ作用位置 L=2×片側幅 = ${L.toFixed(3)}m、L1=L2=(Bo-L)/2 = ${L1.toFixed(3)}m<br>
+        Ra = q/(2L)×(L1+L+L2)×(L1+L-L2) = ${Ra4.toFixed(1)} kN<br>
+        Mc(中央) = Ra²/(2q)-L1×Ra = ${Mc4.toFixed(1)} kN・m　Ma(ジャッキ位置) = -q/2×L1² = ${Ma4.toFixed(1)} kN・m　Mb = ${Mb4.toFixed(1)} kN・m<br>
+        断面: b=${bMM}mm・H=${HMM.toFixed(0)}mm・鋼材厚t=${tSteel}mm・d=${dMM.toFixed(1)}mm・p=${p4.toFixed(4)}・n=${nRatio}<br>
+        k=${k4.toFixed(4)}　Lc=${Lc4.toFixed(4)}　j=${j4.toFixed(4)}　v=${v4.toFixed(4)}<br>
+        σca=Fc/3=${BACKROCK_FC}/3=${sigmaCa.toFixed(1)}N/mm²（バックロックのコンクリート強度は全型番共通60N/mm²）　σsa=${sigmaSa}N/mm²<br>
+        Mrc=σca・b・d²・Lc=${Mrc4.toFixed(0)} kN・m　Mrs=σsa・b・d²・Lc・v=${Mrs4.toFixed(0)} kN・m<br>
+        <b>抵抗モーメント M=min(Mrc,Mrs)=${Mres.toFixed(0)} kN・m</b>　vs　生じるモーメント最大値=${Mapplied.toFixed(1)} kN・m
+      `,
+      limit: 'M ≥ 生じるモーメント最大値(|Mc|,|Ma|,|Mb|)'
+    };
+  }
 
   const checks = [
     { no:'①', name:'基礎反力照査', formula:`f = F/(Bw×Hw) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${f.toFixed(1)} kN/m²（=${(f/1000).toFixed(3)} N/mm²）`, limit:`≤ f_a=${faInput} N/mm²（=${fa.toFixed(0)} kN/m²）`, ok: check1_ok },
@@ -4280,11 +4571,13 @@ function calcBacklock() {
       (a)自重項　0.5×γ×Hw²×Kp×Beff = 0.5×${gamma}×${Hw.toFixed(2)}²×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_weight.toFixed(0)} kN<br>
       (b)上載荷重項　q×Hw×Kp×Beff = ${q_surcharge.toFixed(1)}×${Hw.toFixed(2)}×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_surcharge.toFixed(0)} kN<br>
       (c)粘着力項　2×C×√Kp×Hw×Beff = 2×${C_coh}×${Math.sqrt(Kp).toFixed(3)}×${Hw.toFixed(2)}×${Beff.toFixed(2)} = ${Ep_cohesion.toFixed(0)} kN<br>
-      <b>Ep = (a)+(b)+(c) = ${Ep_weight.toFixed(0)}+${Ep_surcharge.toFixed(0)}+${Ep_cohesion.toFixed(0)} = ${Ep.toFixed(0)} kN</b>　vs　F = ${F.toFixed(0)} kN
+      (a)+(b)+(c) = ${Ep_weight.toFixed(0)}+${Ep_surcharge.toFixed(0)}+${Ep_cohesion.toFixed(0)} = ${Ep_sum.toFixed(0)} kN<br>
+      <b>Ep = α×((a)+(b)+(c)) = ${alphaEp.toFixed(2)}×${Ep_sum.toFixed(0)} = ${Ep.toFixed(0)} kN</b>　vs　F = ${F.toFixed(0)} kN
     `, limit:`Ep ≥ F`, ok: check3_ok },
   ];
+  if (check4) checks.push(check4);
 
-  const allOk = check1_ok && check2_ok && check3_ok;
+  const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok);
 
   // このブロックは毎回innerHTMLごと再生成されるため、アコーディオンの開閉状態を
   // 再生成前に読み取り、再生成後に復元する（さもないと入力のたびに閉じてしまう）
@@ -4292,8 +4585,9 @@ function calcBacklock() {
   const prevOpenId = backlockEl.querySelector('.card.accordion.open')?.id || null;
   backlockEl.innerHTML = `
     <div class="card accordion" id="wallCheckCard">
-      <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 3段階照査結果</div>
+      <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 ${check4 ? '4' : '3'}段階照査結果</div>
       ${(!check1_ok || !check2_ok) ? `<div class="ng-box" style="font-size:12px">⚠️ ${!check1_ok && !check2_ok ? '①基礎反力照査・②偏心曲げ照査がともにNGです' : !check1_ok ? '①基礎反力照査がNGです' : '②偏心曲げ照査がNGです'}。許容支圧応力度 f_a（現在 ${faInput} N/mm²）が実際の値より大きすぎないか確認するか、支圧壁の幅Bw・高さHwを見直してください。</div>` : ''}
+      ${check4 && !check4.ok ? `<div class="ng-box" style="font-size:12px">⚠️ ④プレキャスト支圧壁の曲げ照査がNGです。ジャッキの据付位置（片側幅）を支圧壁の端に寄せて曲げを小さくするか、鋼材部厚さt・支圧壁厚さを見直してください。</div>` : ''}
       <div class="note-box" style="font-size:11px">有効幅 Beff=${Beff.toFixed(2)} m（立坑制約: maxBw=${maxBw.toFixed(2)}m）</div>
       ${checks.map(c=>`
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
@@ -4307,15 +4601,9 @@ function calcBacklock() {
       `).join('')}
     </div>
     <div class="card accordion" id="wallBacklockCard">
-      <div class="card-title accent" onclick="toggleAccordion(this)">🔩 バックロック選定</div>
-      <div class="metrics-grid">
-        <div class="metric-card"><div class="metric-label">推奨型番</div><div class="metric-value" style="font-size:18px">${blSelected.name}</div></div>
-        <div class="metric-card"><div class="metric-label">許容耐荷力</div><div class="metric-value">${(blSelected.F*1000).toFixed(0)}</div><div class="metric-sub">kN</div></div>
-        <div class="metric-card"><div class="metric-label">高さ H</div><div class="metric-value">${blSelected.H.toFixed(2)}</div><div class="metric-sub">m</div></div>
-        <div class="metric-card"><div class="metric-label">幅 B</div><div class="metric-value">${blSelected.B.toFixed(2)}</div><div class="metric-sub">m</div></div>
-      </div>
+      <div class="card-title accent" onclick="toggleAccordion(this)">✅ 総合判定</div>
       <div class="${allOk?'ok-box':'ng-box'}" style="font-size:12px">
-        ${allOk ? '全照査 OK — 現在の設定で施工可能です。' : '一部照査 NG — 支圧壁の寸法や土質条件を見直してください。'}
+        ${allOk ? '全照査 OK — 現在の設定で施工可能です。' : '一部照査 NG — 支圧壁の寸法や土質条件を見直してください。'}${backrockUse ? '（バックロック使用時の寸法は上の「🧱 バックロック」カードを参照）' : ''}
       </div>
     </div>
   `;
@@ -4379,7 +4667,9 @@ function getProjectData() {
       elWallTop: n('wallElWallTop'), centerOffset: n('wallCenterOffset'),
       thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice(),
       jackStageHeights: jackStageHeights.slice(),
-      railDrop: n('railDrop'), railSize: v('railSize')
+      railDrop: n('railDrop'), railSize: v('railSize'),
+      backrockUse, backrockType, backrockModelOverride, epAlpha: n('wallEpAlpha'),
+      steelT: n('wallSteelT'), steelSa: n('wallSteelSa')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -4551,6 +4841,24 @@ function setProjectData(d) {
     setV('railSize', railSizeVal || 200);
     jackStageWidths = Array.isArray(wl.jackStageWidths) ? wl.jackStageWidths.slice() : [];
     jackStageHeights = Array.isArray(wl.jackStageHeights) ? wl.jackStageHeights.slice() : [];
+    setV('wallEpAlpha', wl.epAlpha || 2.5);
+    setV('wallSteelT', wl.steelT || 11);
+    setV('wallSteelSa', wl.steelSa || 140);
+    // バックロック使用/型式の復元。setWallShaft()がcalcBacklock()→applyBackrockSelection()を
+    // 呼ぶ前に、変数とボタンの見た目を先に合わせておく（setBackrockUse/Typeを直接呼ぶと
+    // まだ他のフィールドが揃っていない状態でcalcBacklock()が走ってしまうため使わない）。
+    backrockUse = wl.backrockUse !== false; // 既定true（旧保存データもバックロック前提に寄せる）
+    backrockType = wl.backrockType || 'auto';
+    backrockModelOverride = wl.backrockModelOverride || '';
+    const brOnBtn = document.getElementById('backrockUseBtn_on'), brOffBtn = document.getElementById('backrockUseBtn_off');
+    if (brOnBtn) brOnBtn.classList.toggle('active', backrockUse);
+    if (brOffBtn) brOffBtn.classList.toggle('active', !backrockUse);
+    const brTypeRow = document.getElementById('backrockTypeRow');
+    if (brTypeRow) brTypeRow.style.display = backrockUse ? '' : 'none';
+    ['auto', 'square', 'taper'].forEach(t => {
+      const btn = document.getElementById(`backrockTypeBtn_${t}`);
+      if (btn) btn.classList.toggle('active', t === backrockType);
+    });
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
