@@ -692,9 +692,15 @@ tr.row-selected{background:#eff6ff}
   <div class="card accordion" id="jackStagesCard">
     <div class="card-title" onclick="toggleAccordion(this)">🔩 多段ジャッキ配置（曲線造成用）</div>
     <div class="ok-box" style="font-size:11px">
-      曲線造成用の油圧ジャッキは複数段に分けて据え付けます（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します。各段の据付幅（その段のジャッキ間の中心対称スパン）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。
+      曲線造成用の油圧ジャッキは複数段に分けて据え付けます（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します。ジャッキ能力は全段共通（「⚡推進力」タブの「ジャッキ1本の能力」を使用）です。各段のジャッキ幅（推進中央線からの片側幅）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。実際の配置ルール（例: 3段目は2段目と同じ幅で2段目の上に乗る、2段目は推進定規の内側とジャッキ内側が合う幅にする、等）は現場・機種ごとに異なるため自動計算はせず、すべて数値を確認しながら入力する形にしています。
     </div>
+    <div class="two-col">
+      <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="autoSave()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>推進定規幅（H鋼サイズで決定） [mm]</label><input id="railWidth" class="mono" type="number" step="1" value="200" oninput="autoSave()"><span class="unit">mm</span></div>
+    </div>
+    <p class="report-note" style="margin:0 2px 6px">参考図の例: 管底から50mm下がりにH鋼を敷設。推進定規幅はH鋼のサイズと下がり量で決まる（規格は現場の使用H鋼に合わせて入力）。</p>
     <div id="jackStagesTable"><div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div></div>
+    <button type="button" class="big-btn secondary" style="min-height:36px;font-size:12px;margin-top:6px" onclick="copyStage2ToUpper()">2段目の値を3段目以降にコピー</button>
   </div>
 
   <div class="card accordion" id="localBearingCard">
@@ -931,6 +937,7 @@ function setMethod(m) {
   document.getElementById('waterRow').style.display = (m !== 'blade') ? '' : 'none';
   document.getElementById('deinohRow').style.display = (m === 'deinoh') ? '' : 'none';
   document.getElementById('bladeRow').style.display = (m === 'blade') ? '' : 'none';
+  renderJackStages(computeWallBeff()); // 多段ジャッキ配置は刃口推進工法専用のため、工法切替時に即座に反映する
   autoSave();
 }
 
@@ -3533,7 +3540,7 @@ function drawForceGraph(segments, Fa, Fo) {
 // ══════════════════════════════════════
 let wallShaftType = 'rect';
 let wallLevelMode = 'direct'; // 'direct'=Hw/hc直接入力、'level'=水準高から自動計算
-let jackStageWidths = []; // 段ごとの据付幅[m]（インデックス0=1段目）
+let jackStageWidths = []; // 段ごとのジャッキ幅（推進中央線からの片側幅）[m]（インデックス0=1段目）
 
 // ══════════════════════════════════════
 //  支圧壁 高さ/管中心高さ ― 水準高（標高）モード
@@ -3870,15 +3877,43 @@ function computeWallBeff() {
 // ══════════════════════════════════════
 //  多段ジャッキ配置（曲線造成用）― 段数は推進力タブの元押ジャッキ使用台数÷2で決まる
 //  （1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置が前提）。
-//  円形立坑の場合、各段のジャッキ据付幅（中心対称スパン）から、その位置での支圧壁の
-//  局所厚さを幾何学的に求める：中心厚さ（サジッタ）は弦幅Beffの中央で最大になり、
-//  中心から離れるほど薄くなって弦の端でゼロになる（実際にコンクリートが円弧に沿って
-//  先細りになるため）。局所厚さ(x) = √(R²-x²) − √(R²-(Beff/2)²)
-//  = √(R²-x²) − (R − sagitta)。構造照査は行わず、参考表示のみ（ユーザー確認済み方針）。
+//  各段の「ジャッキ幅」は推進中央線からの片側幅（実際の配置図の描き方に合わせた値、
+//  中心対称スパンの半分ではなく、そのまま円中心軸からのオフセットxとして使う）。
+//  円形立坑の場合、この位置での支圧壁の局所厚さを幾何学的に求める：中心厚さ（サジッタ）
+//  は弦幅Beffの中央で最大になり、中心から離れるほど薄くなって弦の端でゼロになる
+//  （実際にコンクリートが円弧に沿って先細りになるため）。
+//  局所厚さ(x) = √(R²-x²) − √(R²-(Beff/2)²) = √(R²-x²) − (R − sagitta)。
+//  構造照査は行わず、参考表示のみ（ユーザー確認済み方針）。
 // ══════════════════════════════════════
+
+// ジャッキ容量[kN]から円筒外径[mm]の目安値を求める（100t=1000kN→200mm、150t=1500kN→250mm、
+// 200t=2000kN→300mm という実機カタログ値を基準に、500kN刻みで50mm増える線形関係で内挿・外挿する目安）
+function jackDiameterFromCapacity(capKN) {
+  if (!capKN) return 0;
+  return 200 + (capKN - 1000) / 500 * 50;
+}
+
+function copyStage2ToUpper() {
+  if (jackStageWidths.length < 2) { showToast('3段目以降がありません'); return; }
+  for (let i = 2; i < jackStageWidths.length; i++) {
+    jackStageWidths[i] = jackStageWidths[1];
+  }
+  calcBacklock();
+  showToast('2段目の値を3段目以降にコピーしました');
+}
+
 function renderJackStages(wallBeffInfo) {
   const el = document.getElementById('jackStagesTable');
   if (!el) return;
+
+  // 多段ジャッキ配置（曲線造成用）は刃口推進工法専用の仕様（ユーザー確認済み方針）。
+  // 泥水・泥土圧・泥濃推進はシールド機内の中折れ機構等で曲線を作るため、支圧壁に
+  // 直接ジャッキを多段配置するこの構成には該当しない。
+  if (currentMethod !== 'blade') {
+    el.innerHTML = '<div class="note-box">この機能は刃口推進工法専用です（「📋基本情報」タブの推進工法で刃口推進を選択すると表示されます）。</div>';
+    return;
+  }
+
   const jackCount = n('jackCount') || 0;
   const stageCount = Math.max(0, Math.floor(jackCount / 2));
 
@@ -3887,9 +3922,13 @@ function renderJackStages(wallBeffInfo) {
     return;
   }
 
-  // 段数に合わせてjackStageWidthsを伸縮（既存の入力値は保持する）
+  // 段数に合わせて配列を伸縮（既存の入力値は保持する）
   while (jackStageWidths.length < stageCount) jackStageWidths.push(0);
   jackStageWidths.length = stageCount;
+
+  // ジャッキ能力は全段共通（推進力タブの「ジャッキ1本の能力」をそのまま使う）
+  const cap = n('jackCapUnit') || 0;
+  const dia = jackDiameterFromCapacity(cap);
 
   const { Beff, linerD, sagitta } = wallBeffInfo;
   const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
@@ -3902,7 +3941,7 @@ function renderJackStages(wallBeffInfo) {
     const jacks = stageNo * 2;
     let thicknessCell = '<td class="mono" style="color:var(--sub)">—</td>';
     if (isCircleShaft && R != null) {
-      const x = Math.abs(w / 2 + offset);
+      const x = Math.abs(w + offset);
       if (x > R) {
         thicknessCell = '<td class="mono" style="color:var(--ng)">立坑径超過</td>';
       } else {
@@ -3913,18 +3952,19 @@ function renderJackStages(wallBeffInfo) {
     return `<tr>
       <td>${stageNo}段目</td>
       <td class="mono">${jacks}基</td>
-      <td><input class="mono" type="number" step="0.01" min="0" value="${w}" style="width:90px"
+      <td><input class="mono" type="number" step="0.01" min="0" value="${w}" style="width:80px"
         onchange="jackStageWidths[${i}]=parseFloat(this.value)||0;calcBacklock()"> m</td>
       ${thicknessCell}
     </tr>`;
   }).join('');
 
   el.innerHTML = `
+    <p class="report-note" style="margin:0 2px 6px">ジャッキ能力は全段共通: <b class="mono">${cap} kN</b>（ジャッキ径目安 <b class="mono">${dia.toFixed(0)} mm</b>）。「⚡推進力」タブの「ジャッキ1本の能力」で変更できます。</p>
     <div class="tbl-wrap"><table class="report-table">
-      <thead><tr><th>段</th><th>基数</th><th>据付幅[m]（中心対称スパン）</th><th>局所支圧壁厚さ</th></tr></thead>
+      <thead><tr><th>段</th><th>基数</th><th>ジャッキ幅[m]<br>（片側・中心オフセット）</th><th>局所支圧壁厚さ</th></tr></thead>
       <tbody>${rows}</tbody>
     </table></div>
-    ${isCircleShaft ? `<p class="report-note">円形立坑（ライナー内側径${(linerD||0).toFixed(2)}m、中心厚さ${sagitta.toFixed(3)}m）における各段の据付位置での厚さです。据付幅0のままだと中心厚さと同じ値になります。</p>`
+    ${isCircleShaft ? `<p class="report-note">円形立坑（ライナー内側径${(linerD||0).toFixed(2)}m、中心厚さ${sagitta.toFixed(3)}m）における各段の据付位置での厚さです。ジャッキ幅0のままだと中心厚さと同じ値になります。</p>`
       : '<p class="report-note">矩形・小判型等では据付位置による厚さの変化はありません（局所厚さの計算は円形立坑のみ）。</p>'}
   `;
 }
@@ -4177,7 +4217,8 @@ function getProjectData() {
       jackPlateW: n('jackPlateW'), jackPlateH: n('jackPlateH'), fc: n('wallFc'),
       levelMode: wallLevelMode, elBase: n('wallElBase'), elPipeInvert: n('wallElPipeInvert'),
       elWallTop: n('wallElWallTop'), centerOffset: n('wallCenterOffset'),
-      thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice()
+      thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice(),
+      railDrop: n('railDrop'), railWidth: n('railWidth')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -4338,6 +4379,7 @@ function setProjectData(d) {
     setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
     setV('wallElWallTop', wl.elWallTop||2.5); setV('wallCenterOffset', wl.centerOffset||0);
     setV('wallThickness', wl.thickness||0.8);
+    setV('railDrop', wl.railDrop||50); setV('railWidth', wl.railWidth||200);
     jackStageWidths = Array.isArray(wl.jackStageWidths) ? wl.jackStageWidths.slice() : [];
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
