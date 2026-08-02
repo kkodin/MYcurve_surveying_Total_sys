@@ -136,19 +136,34 @@ tr.row-selected{background:#eff6ff}
 .report-note{font-size:11.5px;color:var(--sub);margin:6px 0 0;line-height:1.6}
 .report-formula{font-size:12px;color:var(--navy);background:var(--bg);border-radius:6px;padding:8px 10px;margin:8px 0 0;white-space:normal;overflow-wrap:break-word}
 .report-svg{width:100%;height:auto;display:block;margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:8px}
+.calc-steps{background:var(--bg);border-radius:8px;padding:6px 12px;margin-top:8px}
+.calc-step{display:grid;grid-template-columns:9em 1fr auto;gap:10px;padding:5px 0;font-size:12px;align-items:baseline;border-bottom:1px dashed var(--line)}
+.calc-step:last-child{border-bottom:0}
+.cs-label{color:var(--sub);white-space:nowrap}
+.cs-expr{color:var(--ink);overflow-wrap:break-word}
+.cs-result{font-weight:700;color:var(--navy);white-space:nowrap;text-align:right}
+.verdict-table td.pass{color:var(--ok);font-weight:800}
+.verdict-table td.fail{color:var(--ng);font-weight:800}
 
 @media print{
+  /* このアプリはPWA用に html/body を画面高さ固定(overflow:hidden)にし、#pageAreaだけを
+     内部スクロールさせるレイアウトになっている。印刷時にこれを解除しないと、印刷エンジンが
+     ビューポート1画面分（スクロールで隠れている続き）しか用紙に流し込めず「1ページしか
+     出ない」原因になる。印刷時は高さ制約・overflowをすべて外し、内容を自然に流す。 */
+  html.printing-report, body.printing-report{height:auto !important;overflow:visible !important}
+  body.printing-report{display:block !important}
+  body.printing-report #pageArea{flex:none !important;overflow:visible !important;height:auto !important;padding:0 !important}
   body.printing-report #tabBar,
   body.printing-report .big-btn,
   body.printing-report .card:not(#reportCard){display:none !important}
   body.printing-report #reportCard{display:block !important;box-shadow:none;border:0}
   body.printing-report #reportCard > *{display:block !important}
   body.printing-report .card.accordion:not(.open) > .card-title ~ *{display:block !important}
-  body.printing-report .page{max-width:none !important;padding:0 !important}
-  body.printing-report #pageArea{padding:0 !important}
+  body.printing-report .page{max-width:none !important;padding:0 !important;display:block !important;height:auto !important;overflow:visible !important}
   body.printing-report .report-section{break-inside:avoid}
   body.printing-report table.report-table{break-inside:avoid}
   body.printing-report{background:#fff;color:#000}
+  @page{margin:14mm 12mm}
 }
 </style>
 </head>
@@ -2481,7 +2496,8 @@ function calcTerzaghi(gamma, phi_deg, C, H, D) {
   const impactI = Math.min(0.5, Math.max(0, 0.65 - 0.1 * H));
   const p_live = (2 * P * (1 + impactI) * betaLive) / (c * (a + 2 * H));
   const q_total = q + p_live;
-  return { Be, k0, Ce, q, p_live, q_total, Bt };
+  // 計算書の途中式表示用に中間値も返す（値自体は変えない）
+  return { Be, k0, Ce, q, p_live, q_total, Bt, mu, kmu, slipHalfDeg: slipHalf * 180 / Math.PI, impactI, P, a, c, betaLive };
 }
 
 // ══════════════════════════════════════
@@ -2918,11 +2934,17 @@ const METHOD_LABEL = { blade:'刃口推進工法', slurry:'泥水推進工法', 
 
 function fmt(x, d) { return (x == null || isNaN(x)) ? '—' : Number(x).toFixed(d ?? 2); }
 
+// 計算書の「途中式」1行分（項目名・数値を代入した式・結果）を組み立てるヘルパー
+function stepRow(label, expr, result) {
+  return `<div class="calc-step"><span class="cs-label">${label}</span><span class="cs-expr mono">${expr}</span><span class="cs-result mono">${result}</span></div>`;
+}
+function calcSteps(rows) { return `<div class="calc-steps">${rows.join('')}</div>`; }
+
 function renderReport(res) {
   const el = document.getElementById('reportBody');
   if (!el) return;
   const {
-    F_total, Fo, fo, Fa, segments, q_total, foDetail, tz, Hmax,
+    F_total, Fo, fo, Fa, segments, q_total, foDetail, tz, Hmax, extCheck,
     stdSpec, dia, Bs, gamma, phi_soil, C, N, Nprime, adh, alpha_coef, beta_coef, method,
     curList, realStraightLengths, groundLen, launchDist, arrivalDist, total
   } = res;
@@ -2985,19 +3007,35 @@ function renderReport(res) {
       <tr><th>鉛直土圧 w</th><td class="mono">${fmt(tz.q,2)}</td><td>kN/m²</td><th>活荷重 p（T-25）</th><td class="mono">${fmt(tz.p_live,2)}</td><td>kN/m²</td></tr>
       <tr><th colspan="2">等分布荷重 q = w + p</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(q_total,2)} kN/m²</td></tr>
     </tbody></table>
-    <p class="report-formula mono">Be = (Bc+0.1)・(1+sin(45°-φ/2))/cos(45°-φ/2)　　w = (γ-2C/Be)・Ce　　Ce = (1-e<sup>-2Kμ H/Be</sup>)/(2Kμ)</p>
-    ${svgLoadCrossSection(stdSpec.D, tz, phi_soil)}
+    ${svgLoadCrossSection(stdSpec.D, tz, phi_soil, Hmax)}
+    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程</p>
+    ${calcSteps([
+      stepRow('Bt = Bc+0.1', `${fmt(stdSpec.D,3)}+0.1`, `${fmt(tz.Bt,3)} m`),
+      stepRow('すべり角 45°-φ/2', `45-${fmt(phi_soil,1)}/2`, `${fmt(tz.slipHalfDeg,3)} °`),
+      stepRow('Be = Bt(1+sin(45°-φ/2))/cos(45°-φ/2)', `${fmt(tz.Bt,3)}×(1+sin${fmt(tz.slipHalfDeg,2)}°)/cos${fmt(tz.slipHalfDeg,2)}°`, `${fmt(tz.Be,3)} m`),
+      stepRow('μ = tanφ', `tan${fmt(phi_soil,1)}°`, fmt(tz.mu,4)),
+      stepRow('Ce = (Be/2Kμ)(1-e<sup>-2KμH/Be</sup>)', `(${fmt(tz.Be,3)}/(2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}))×(1-e<sup>-2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}×${fmt(Hmax,2)}/${fmt(tz.Be,3)}</sup>)`, fmt(tz.Ce,3)),
+      stepRow('w = (γ-2C/Be)Ce', `(${fmt(gamma,1)}-2×${fmt(C,1)}/${fmt(tz.Be,3)})×${fmt(tz.Ce,3)}`, `${fmt(tz.q,2)} kN/m²`),
+      stepRow('衝撃係数 i = 0.65-0.1H（0≤i≤0.5）', `0.65-0.1×${fmt(Hmax,2)}`, fmt(tz.impactI,3)),
+      stepRow('活荷重 p = 2P(1+i)β/(c(a+2H))', `2×${tz.P}×(1+${fmt(tz.impactI,3)})×${tz.betaLive}/(${tz.c}×(${tz.a}+2×${fmt(Hmax,2)}))`, `${fmt(tz.p_live,2)} kN/m²`),
+      stepRow('q = w + p', `${fmt(tz.q,2)}+${fmt(tz.p_live,2)}`, `<b>${fmt(q_total,2)} kN/m²</b>`),
+    ])}
   `;
 
   // ── 5. 推進力の計算 ──
   const s5 = `
     <table class="report-table"><tbody>
-      <tr><th colspan="2">先端抵抗 F0 = 10×1.32π×Bs×N′</th><td colspan="4" class="mono" style="font-weight:800">${fmt(Fo,1)} kN</td></tr>
-      <tr><td class="left" style="color:var(--sub)" colspan="6">= 10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}</td></tr>
-      <tr><th>せん断抵抗 τa = β・q・μ′+C′</th><td class="mono">${fmt(foDetail.tau_a,2)}</td><td>kN/m²</td><th>μ′=tan(φ/2)</th><td class="mono">${fmt(foDetail.mu,4)}</td><td>—</td></tr>
-      <tr><th colspan="2">推進1m当たり抵抗 f = α・π・Bc・τa + W・μ′</th><td colspan="4" class="mono" style="font-weight:800">${fmt(fo,3)} kN/m</td></tr>
+      <tr><th colspan="2">先端抵抗 F0</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(Fo,1)} kN</td></tr>
+      <tr><th>せん断抵抗 τa</th><td class="mono">${fmt(foDetail.tau_a,2)}</td><td>kN/m²</td><th>μ′=tan(φ/2)</th><td class="mono">${fmt(foDetail.mu,4)}</td><td>—</td></tr>
+      <tr><th colspan="2">推進1m当たり抵抗 f（=fo）</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(fo,3)} kN/m</td></tr>
     </tbody></table>
-    <p class="report-note">α（摩擦範囲係数）=${fmt(alpha_coef,3)}、β（周辺荷重割増）=${fmt(beta_coef,2)} を使用。</p>
+    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程</p>
+    ${calcSteps([
+      stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
+      stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(foDetail.mu,4)),
+      stepRow('τa = β・q・μ′+C′', `${fmt(beta_coef,2)}×${fmt(q_total,2)}×${fmt(foDetail.mu,4)}+${fmt(adh,1)}`, `${fmt(foDetail.tau_a,2)} kN/m²`),
+      stepRow('f = α・π・Bc・τa + W・μ′', `${fmt(alpha_coef,3)}×π×${fmt(stdSpec.D,3)}×${fmt(foDetail.tau_a,2)}+${fmt(stdSpec.W,2)}×${fmt(foDetail.mu,4)}`, `<b>${fmt(fo,3)} kN/m</b>`),
+    ])}
   `;
 
   // ── 6. 区間推進力 ──
@@ -3017,6 +3055,11 @@ function renderReport(res) {
       <thead><tr><th>曲線</th><th>R(m)</th><th>θx(°)</th><th>k</th><th>Kx</th><th>nx(本)</th><th>λx</th></tr></thead>
       <tbody>${curveRows6}</tbody>
     </table></div>
+    ${curveSegs.length ? calcSteps(curveSegs.flatMap(s => [
+      stepRow(`${s.label} k = tan(max(φ,15°)/2)`, `tan(max(${fmt(phi_soil,1)}°,15°)/2)`, fmt(s.kConst,4)),
+      stepRow(`${s.label} Kx = 1/(cosθx−k・sinθx)`, `1/(cos${fmt(s.alpha_deg,3)}°−${fmt(s.kConst,4)}×sin${fmt(s.alpha_deg,3)}°)`, fmt(s.K,4)),
+      stepRow(`${s.label} λx = (Kx<sup>nx+1</sup>−Kx)/(nx(Kx−1))`, `(${fmt(s.K,4)}<sup>${s.n+1}</sup>−${fmt(s.K,4)})/(${s.n}×(${fmt(s.K,4)}−1))`, fmt(s.lambda,4)),
+    ])) : ''}
     <div class="tbl-wrap" style="margin-top:8px"><table class="report-table">
       <thead><tr><th>区間（到達側→発進側の積算順）</th><th>L(m)</th><th>ΔF(kN)</th><th>累計F(kN)</th></tr></thead>
       <tbody>${structuralRows.map(s => `<tr class="${s.type==='curve'?'row-curve':''}"><td class="left">${s.label}</td><td class="mono">${s.L?fmt(s.L,3):'—'}</td><td class="mono">${fmt(s.dF,1)}</td><td class="mono"><b>${fmt(s.F_cum,1)}</b></td></tr>`).join('')}</tbody>
@@ -3065,11 +3108,32 @@ function renderReport(res) {
     </tbody></table>
     <p class="report-note">「🔧 元押ジャッキ仕様」カード（このタブの上部）で、実際に採用する台数・能力に変更できます。</p>`;
 
+  // ── 総合判定（各検討事項の合否を一覧で表示） ──
+  const pipeOk = F_total <= Fa;
+  const verdictItems = [
+    { name:'① 推進力（管の許容耐荷力）', criteria:`F ≤ Fr`, value:`${fmt(F_total,0)} ≤ ${fmt(Fa,0)} kN`, ok: pipeOk },
+    { name:'② 外圧耐荷力', criteria:'Mr/M ≥ 1.2', value:`Mr/M = ${fmt(extCheck.ratio,2)}`, ok: extCheck.ok },
+    { name:'③ 推進設備（元押ジャッキ）', criteria:'F ≤ ジャッキ総能力', value:`${fmt(F_total,0)} ≤ ${fmt(jackTotal,0)} kN`, ok: jackOk },
+  ];
+  const allOk = verdictItems.every(v => v.ok);
+  const s0 = `
+    <div class="report-section" style="border-top:0;padding-top:0">
+      <div class="report-section-title" style="color:${allOk?'var(--ok)':'var(--ng)'}">
+        <span class="report-section-no" style="background:${allOk?'var(--ok)':'var(--ng)'}">${allOk?'✓':'✕'}</span>
+        総合判定　${allOk ? 'すべての検討項目でOK' : '一部の検討項目でNG — 要見直し'}
+      </div>
+      <div class="tbl-wrap"><table class="report-table verdict-table">
+        <thead><tr><th>検討項目</th><th>判定基準</th><th>結果</th><th>判定</th></tr></thead>
+        <tbody>${verdictItems.map(v => `<tr><td class="left">${v.name}</td><td>${v.criteria}</td><td class="mono">${v.value}</td><td class="${v.ok?'pass':'fail'}">${v.ok?'OK':'NG'}</td></tr>`).join('')}</tbody>
+      </table></div>
+    </div>`;
+
   el.innerHTML = `
     <div class="report-head">
       <div class="report-title">推進力の設計計算書</div>
       <div class="report-meta">${siteName}${siteSpan?'　スパン: '+siteSpan:''}　／　φ${dia} ${catLabel}${gradeLabel?' '+gradeLabel:''}　／　${METHOD_LABEL[method]||method}</div>
     </div>
+    ${s0}
     ${reportSection(1,'管の仕様',s1)}
     ${reportSection(2,'土質条件',s2)}
     ${reportSection(3,'施工条件',s3)}
@@ -3086,9 +3150,18 @@ function reportSection(no, title, bodyHtml) {
 }
 
 function printReport() {
+  // html/body両方にクラスを付与する（htmlは元々height:100%;overflow:hiddenの固定レイアウトの
+  // ルートで、bodyだけ解除してもhtmlが制約したままだと印刷が1ページで打ち切られるため）。
+  // 印刷対象カード（reportCard）を含むアコーディオンも強制的に開く。
+  document.documentElement.classList.add('printing-report');
   document.body.classList.add('printing-report');
+  const reportCard = document.getElementById('reportCard');
+  if (reportCard) reportCard.classList.add('open');
   window.print();
-  setTimeout(() => document.body.classList.remove('printing-report'), 300);
+  setTimeout(() => {
+    document.documentElement.classList.remove('printing-report');
+    document.body.classList.remove('printing-report');
+  }, 300);
 }
 
 // 施工概略図: 発進→(直線・曲線を交互に)→到達 の模式図。長さに比例して幅を按分する。
@@ -3133,32 +3206,71 @@ function svgConstructionSchematic(curList, realLens) {
 }
 
 // 管にかかる等分布荷重の断面模式図: 緩み幅Be・トンネル直径Bt・すべり面の概念図（縦方向は模式的表示で実寸比例ではない）
-function svgLoadCrossSection(D, tz, phi) {
+// テルツァーギの緩み土圧・断面模式図。現場で使われている計算書（Excel等）の伝統的な描き方
+// （Be=上端幅・H=右側の高さ・45°+φ/2=左下の角度・すべり面=斜辺・B相当=下端幅、縦横に一点鎖線の
+// 中心線）に合わせている。縦方向の寸法比は模式的なもので、実際のHとは比例しない。
+function svgLoadCrossSection(D, tz, phi, H_actual) {
   const { Be, Bt } = tz;
-  const W = 700, H = 250;
-  const scale = Math.min(70, (W - 100) / Math.max(Be, 1));
-  const cx = W / 2;
-  const baseY = H - 46;
-  const trapH = 110;
-  const topY = baseY - trapH;
+  const W = 760, H = 340;
+  const plotL = 30, plotR = W - 110;
+  const scale = Math.min(66, (plotR - plotL) / Math.max(Be, 1));
+  const cx = (plotL + plotR) / 2;
+  const baseY = H - 60;
+  const topY = 66;
   const btHalf = Bt / 2 * scale, beHalf = Be / 2 * scale;
   const pipeR = Math.max(6, D / 2 * scale);
-  const pipeCy = baseY - pipeR - 6;
+  const pipeCy = baseY - pipeR - 10;
+  const dashdot = '9 4 2 4';
+
+  const blX = cx - btHalf, brX = cx + btHalf, tlX = cx - beHalf, trX = cx + beHalf;
+  const arcR = 22;
+  // 左下角の角度マーク: 水平の基準線上の点Aと、斜辺上の点Bを結ぶ小さな円弧
+  const edgeDx = tlX - blX, edgeDy = topY - baseY;
+  const edgeLen = Math.hypot(edgeDx, edgeDy) || 1;
+  const angleA = { x: blX - arcR, y: baseY };
+  const angleB = { x: blX + arcR * edgeDx / edgeLen, y: baseY + arcR * edgeDy / edgeLen };
 
   return `<svg class="report-svg" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-    <polygon points="${(cx-btHalf).toFixed(1)},${baseY} ${(cx+btHalf).toFixed(1)},${baseY} ${(cx+beHalf).toFixed(1)},${topY} ${(cx-beHalf).toFixed(1)},${topY}" fill="#eef1f5" stroke="#24406b" stroke-width="1.5"/>
+    <!-- 緩み土圧の断面（台形: 下端=Bt、上端=Be） -->
+    <polygon points="${blX.toFixed(1)},${baseY} ${brX.toFixed(1)},${baseY} ${trX.toFixed(1)},${topY} ${tlX.toFixed(1)},${topY}" fill="#eef1f5" stroke="#24406b" stroke-width="1.5"/>
+
+    <!-- 中心線（縦: 対称軸、横: 管中心） -->
+    <line x1="${cx}" y1="${topY-24}" x2="${cx}" y2="${baseY+24}" stroke="#8695a7" stroke-width="1" stroke-dasharray="${dashdot}"/>
+    <line x1="${blX-14}" y1="${pipeCy.toFixed(1)}" x2="${brX+14}" y2="${pipeCy.toFixed(1)}" stroke="#8695a7" stroke-width="1" stroke-dasharray="${dashdot}"/>
+
+    <!-- 推進管 -->
     <circle cx="${cx}" cy="${pipeCy.toFixed(1)}" r="${pipeR.toFixed(1)}" fill="#dbeafe" stroke="#1d6fd8" stroke-width="1.5"/>
     <text x="${cx}" y="${(pipeCy+3).toFixed(1)}" text-anchor="middle" font-size="9" fill="#1d6fd8">管</text>
-    <line x1="${(cx-beHalf).toFixed(1)}" y1="${topY-16}" x2="${(cx+beHalf).toFixed(1)}" y2="${topY-16}" stroke="#55677a" stroke-width="1"/>
-    <line x1="${(cx-beHalf).toFixed(1)}" y1="${topY-22}" x2="${(cx-beHalf).toFixed(1)}" y2="${topY-10}" stroke="#55677a" stroke-width="1"/>
-    <line x1="${(cx+beHalf).toFixed(1)}" y1="${topY-22}" x2="${(cx+beHalf).toFixed(1)}" y2="${topY-10}" stroke="#55677a" stroke-width="1"/>
-    <text x="${cx}" y="${topY-24}" text-anchor="middle" font-size="11" font-weight="700" fill="#24406b">Be = ${Be.toFixed(2)}m</text>
-    <line x1="${(cx-btHalf).toFixed(1)}" y1="${baseY+16}" x2="${(cx+btHalf).toFixed(1)}" y2="${baseY+16}" stroke="#55677a" stroke-width="1"/>
-    <line x1="${(cx-btHalf).toFixed(1)}" y1="${baseY+10}" x2="${(cx-btHalf).toFixed(1)}" y2="${baseY+22}" stroke="#55677a" stroke-width="1"/>
-    <line x1="${(cx+btHalf).toFixed(1)}" y1="${baseY+10}" x2="${(cx+btHalf).toFixed(1)}" y2="${baseY+22}" stroke="#55677a" stroke-width="1"/>
-    <text x="${cx}" y="${baseY+35}" text-anchor="middle" font-size="11" font-weight="700" fill="#24406b">Bt = ${Bt.toFixed(2)}m</text>
-    <text x="${(cx-beHalf+6).toFixed(1)}" y="${topY+18}" font-size="9" fill="#7c4a00">すべり面（すべり角 45°-φ/2、φ=${phi}°）</text>
-    <text x="8" y="${H-8}" font-size="9" fill="#8695a7">※模式図（縦方向は実寸に比例しません）</text>
+
+    <!-- Be寸法線（上端） -->
+    <line x1="${tlX.toFixed(1)}" y1="${topY-22}" x2="${trX.toFixed(1)}" y2="${topY-22}" stroke="#334155" stroke-width="1"/>
+    <line x1="${tlX.toFixed(1)}" y1="${topY-28}" x2="${tlX.toFixed(1)}" y2="${topY-16}" stroke="#334155" stroke-width="1"/>
+    <line x1="${trX.toFixed(1)}" y1="${topY-28}" x2="${trX.toFixed(1)}" y2="${topY-16}" stroke="#334155" stroke-width="1"/>
+    <text x="${cx}" y="${topY-32}" text-anchor="middle" font-size="12" font-weight="700" fill="#24406b">Be = ${Be.toFixed(2)}m</text>
+
+    <!-- Bt寸法線（下端） -->
+    <line x1="${blX.toFixed(1)}" y1="${baseY+20}" x2="${brX.toFixed(1)}" y2="${baseY+20}" stroke="#334155" stroke-width="1"/>
+    <line x1="${blX.toFixed(1)}" y1="${baseY+14}" x2="${blX.toFixed(1)}" y2="${baseY+26}" stroke="#334155" stroke-width="1"/>
+    <line x1="${brX.toFixed(1)}" y1="${baseY+14}" x2="${brX.toFixed(1)}" y2="${baseY+26}" stroke="#334155" stroke-width="1"/>
+    <text x="${cx}" y="${baseY+40}" text-anchor="middle" font-size="12" font-weight="700" fill="#24406b">Bt = ${Bt.toFixed(2)}m</text>
+
+    <!-- H寸法線（右側、台形の高さ＝模式的） -->
+    <line x1="${(plotR+30).toFixed(1)}" y1="${topY}" x2="${(plotR+30).toFixed(1)}" y2="${baseY}" stroke="#334155" stroke-width="1"/>
+    <line x1="${(plotR+24).toFixed(1)}" y1="${topY}" x2="${(plotR+36).toFixed(1)}" y2="${topY}" stroke="#334155" stroke-width="1"/>
+    <line x1="${(plotR+24).toFixed(1)}" y1="${baseY}" x2="${(plotR+36).toFixed(1)}" y2="${baseY}" stroke="#334155" stroke-width="1"/>
+    <text x="${(plotR+46).toFixed(1)}" y="${((topY+baseY)/2+4).toFixed(1)}" font-size="12" font-weight="700" fill="#24406b">H</text>
+    <text x="${(plotR+46).toFixed(1)}" y="${((topY+baseY)/2+18).toFixed(1)}" font-size="9" fill="#55677a">(${H_actual!=null?H_actual.toFixed(2)+'m':'土被り'})</text>
+
+    <!-- 45°+φ/2（左下の角度） -->
+    <line x1="${(blX-arcR-6).toFixed(1)}" y1="${baseY}" x2="${blX.toFixed(1)}" y2="${baseY}" stroke="#7c4a00" stroke-width="1"/>
+    <path d="M ${angleA.x.toFixed(1)},${angleA.y.toFixed(1)} A ${arcR},${arcR} 0 0 1 ${angleB.x.toFixed(1)},${angleB.y.toFixed(1)}" fill="none" stroke="#7c4a00" stroke-width="1"/>
+    <text x="${(blX-arcR-8).toFixed(1)}" y="${baseY+14}" text-anchor="end" font-size="10.5" fill="#7c4a00">45°+φ/2</text>
+
+    <!-- すべり面（右斜辺を指す引き出し線） -->
+    <line x1="${(brX+26).toFixed(1)}" y1="${((topY+baseY)/2-10).toFixed(1)}" x2="${((brX+trX)/2).toFixed(1)}" y2="${((topY+baseY)/2-10).toFixed(1)}" stroke="#7c4a00" stroke-width="1"/>
+    <text x="${(brX+30).toFixed(1)}" y="${((topY+baseY)/2-14).toFixed(1)}" font-size="10.5" fill="#7c4a00">すべり面</text>
+
+    <text x="8" y="${H-10}" font-size="9" fill="#8695a7">※模式図（縦方向は実寸に比例しません。φ=${phi}°、すべり角の算定式は45°-φ/2）</text>
   </svg>`;
 }
 
