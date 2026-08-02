@@ -556,7 +556,7 @@ tr.row-selected{background:#eff6ff}
     <div class="ok-box" style="font-size:11px">現在採用している（または採用予定の）元押し設備を入力してください。総能力と計算上の最大推進力を比較し、設備が足りているかを判定します（計算書「8. 推進設備の検討」に反映）。</div>
     <div class="two-col">
       <div class="field-row"><label>ジャッキ1本の能力 [kN]</label><input id="jackCapUnit" class="mono" type="number" step="10" value="1500" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN</span></div>
-      <div class="field-row"><label>使用台数 [本]</label><input id="jackCount" class="mono" type="number" step="1" min="1" value="4" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">本</span></div>
+      <div class="field-row"><label>使用台数 [本]</label><input id="jackCount" class="mono" type="number" step="1" min="1" value="4" oninput="autoSave();refreshForceIfCalculated();renderJackStages(computeWallBeff())"><span class="unit">本</span></div>
     </div>
   </div>
 
@@ -641,15 +641,45 @@ tr.row-selected{background:#eff6ff}
   <div class="card accordion">
     <div class="card-title" onclick="toggleAccordion(this)">🧱 支圧壁の諸元</div>
     <div class="ok-box" style="font-size:11px">基礎コンクリート上面（y=0）を基準とします。支圧壁の下端は基礎コンクリート上面。</div>
+
+    <div class="field-row full">
+      <label>支圧壁 高さ H_w・管中心高さ h_c の指定方法</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="wallLevelModeBtn_direct" class="mode-btn active" onclick="setWallLevelMode('direct')">直接指定</button>
+        <button type="button" id="wallLevelModeBtn_level" class="mode-btn" onclick="setWallLevelMode('level')">水準高で指定</button>
+      </div>
+    </div>
+
     <div class="two-col">
       <div class="field-row"><label>支圧壁 幅 B_w [m]</label><input id="wallBw" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>支圧壁 高さ H_w [m]</label><input id="wallHw" class="mono" type="number" step="0.1" value="2.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>管中心高さ h_c [m]</label><input id="wallHc" class="mono" type="number" step="0.05" value="0.8" oninput="calcBacklock()"><span class="unit">m</span></div>
-      <div class="field-row"><label>許容支圧応力度 f_a [kN/m²]</label><input id="wallFa" class="mono" type="number" step="10" value="3000" oninput="calcBacklock()"><span class="unit">kN/m²</span></div>
+      <div class="field-row"><label>許容支圧応力度 f_a [N/mm²]</label><input id="wallFa" class="mono" type="number" step="1" value="24" oninput="calcBacklock()"><span class="unit">N/mm²</span></div>
     </div>
+
+    <div id="wallLevelInputs" style="display:none;margin-top:4px">
+      <div class="note-box" style="font-size:11px">
+        図面に水準高（標高）が記載されている場合はこちらを使うと、H_w・h_cを自動計算します（基礎コンクリート天端を基準に換算）。管中心高さは「管底水準高＋管外径/2」から求めます。
+      </div>
+      <div class="two-col">
+        <div class="field-row"><label>基礎コンクリート天端 水準高 [m]</label><input id="wallElBase" class="mono" type="number" step="0.001" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
+        <div class="field-row"><label>管底 水準高 [m]</label><input id="wallElPipeInvert" class="mono" type="number" step="0.001" value="0.5" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
+        <div class="field-row"><label>支圧壁天端 水準高 [m]</label><input id="wallElWallTop" class="mono" type="number" step="0.001" value="2.5" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
+        <div class="field-row"><label>立坑中心と推進中心のオフセット [m]</label><input id="wallCenterOffset" class="mono" type="number" step="0.01" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
+      </div>
+      <p class="report-note" style="margin:4px 2px 0">オフセットは立坑の幾何中心から見た推進管中心のずれ（通常0）。円形立坑の多段ジャッキ配置の局所厚さ計算にも反映されます。</p>
+    </div>
+
+    <div class="field-row" style="margin-top:8px">
+      <label>支圧壁 厚さ（平面から見て最も厚い箇所）[m]</label>
+      <input id="wallThickness" class="mono" type="number" step="0.01" value="0.8" oninput="calcBacklock()">
+      <span class="unit">m</span>
+    </div>
+    <p class="report-note" id="wallThicknessNote" style="margin:2px 2px 0"></p>
+
     <div class="note-box" style="font-size:11px">
-      ⚠️ この値は自動計算されていません。初期値3000kN/m²は根拠のないプレースホルダーです。現場で採用するコンクリート仕様（設計基準強度F_c等）に基づき、適用する基準（道路橋示方書等）に従って手動で設定してください。<br>
-      ※下の「🔨 ジャッキ当たり部の局所支圧照査」カードの採用コンクリート強度F_cとは別の値です。局所支圧照査ではF_cから式で自動算出していますが、こちらの基礎反力照査・偏心曲げ照査では同様の自動算出は行っていません。
+      ⚠️ f_aは自動計算されていません。初期値24N/mm²は、コンクリートの設計基準強度F_cとよく使われる値をそのまま仮置きしたものに過ぎず、根拠のある許容応力度ではありません。現場で採用するコンクリート仕様・適用する基準（道路橋示方書等）に基づき、必ず実際の許容支圧応力度に書き換えてください。<br>
+      ※下の「🔨 ジャッキ当たり部の局所支圧照査」カードの採用コンクリート強度F_cとは別の値です。局所支圧照査ではF_cから式で自動算出していますが、こちらの基礎反力照査・偏心曲げ照査では同様の自動算出は行っていません。①②いずれかがNGの場合は照査結果カードに警告が表示されます。
     </div>
     <div class="field-row">
       <label>推進力 F [kN]（Tab2計算結果を自動反映 or 手動入力）</label>
@@ -657,6 +687,14 @@ tr.row-selected{background:#eff6ff}
       <span class="unit">kN</span>
     </div>
     <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">Tab2の計算結果を読込</button>
+  </div>
+
+  <div class="card accordion" id="jackStagesCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🔩 多段ジャッキ配置（曲線造成用）</div>
+    <div class="ok-box" style="font-size:11px">
+      曲線造成用の油圧ジャッキは複数段に分けて据え付けます（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します。各段の据付幅（その段のジャッキ間の中心対称スパン）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。
+    </div>
+    <div id="jackStagesTable"><div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div></div>
   </div>
 
   <div class="card accordion" id="localBearingCard">
@@ -3494,6 +3532,39 @@ function drawForceGraph(segments, Fa, Fo) {
 //  支圧壁・バックロック計算
 // ══════════════════════════════════════
 let wallShaftType = 'rect';
+let wallLevelMode = 'direct'; // 'direct'=Hw/hc直接入力、'level'=水準高から自動計算
+let jackStageWidths = []; // 段ごとの据付幅[m]（インデックス0=1段目）
+
+// ══════════════════════════════════════
+//  支圧壁 高さ/管中心高さ ― 水準高（標高）モード
+// ══════════════════════════════════════
+function setWallLevelMode(mode) {
+  wallLevelMode = mode;
+  document.getElementById('wallLevelModeBtn_direct').classList.toggle('active', mode === 'direct');
+  document.getElementById('wallLevelModeBtn_level').classList.toggle('active', mode === 'level');
+  document.getElementById('wallLevelInputs').style.display = mode === 'level' ? '' : 'none';
+  document.getElementById('wallHw').readOnly = (mode === 'level');
+  document.getElementById('wallHc').readOnly = (mode === 'level');
+  if (mode === 'level') updateWallLevelDerived();
+  else calcBacklock();
+  autoSave();
+}
+
+// 水準高（基礎コンクリート天端・管底・支圧壁天端）からH_w・h_cを逆算する。
+// 基礎コンクリート上面がy=0基準（既存のH_w/h_cの定義そのまま）なので、各水準高から
+// 基礎コンクリート天端水準高を引くだけでよい。管中心は管底＋管外径/2。
+function updateWallLevelDerived() {
+  const elBase = n('wallElBase');
+  const elInvert = n('wallElPipeInvert');
+  const elTop = n('wallElWallTop');
+  const D = n('pipeOuter') || 0;
+  const Hw = elTop - elBase;
+  const hc = (elInvert - elBase) + D / 2;
+  setV('wallHw', Math.max(0, Hw).toFixed(3));
+  setV('wallHc', Math.max(0, hc).toFixed(3));
+  calcBacklock();
+  autoSave();
+}
 
 function setWallShaft(type, el) {
   wallShaftType = type;
@@ -3797,6 +3868,68 @@ function computeWallBeff() {
 }
 
 // ══════════════════════════════════════
+//  多段ジャッキ配置（曲線造成用）― 段数は推進力タブの元押ジャッキ使用台数÷2で決まる
+//  （1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置が前提）。
+//  円形立坑の場合、各段のジャッキ据付幅（中心対称スパン）から、その位置での支圧壁の
+//  局所厚さを幾何学的に求める：中心厚さ（サジッタ）は弦幅Beffの中央で最大になり、
+//  中心から離れるほど薄くなって弦の端でゼロになる（実際にコンクリートが円弧に沿って
+//  先細りになるため）。局所厚さ(x) = √(R²-x²) − √(R²-(Beff/2)²)
+//  = √(R²-x²) − (R − sagitta)。構造照査は行わず、参考表示のみ（ユーザー確認済み方針）。
+// ══════════════════════════════════════
+function renderJackStages(wallBeffInfo) {
+  const el = document.getElementById('jackStagesTable');
+  if (!el) return;
+  const jackCount = n('jackCount') || 0;
+  const stageCount = Math.max(0, Math.floor(jackCount / 2));
+
+  if (stageCount === 0) {
+    el.innerHTML = '<div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div>';
+    return;
+  }
+
+  // 段数に合わせてjackStageWidthsを伸縮（既存の入力値は保持する）
+  while (jackStageWidths.length < stageCount) jackStageWidths.push(0);
+  jackStageWidths.length = stageCount;
+
+  const { Beff, linerD, sagitta } = wallBeffInfo;
+  const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
+  const offset = n('wallCenterOffset') || 0;
+  const R = linerD != null ? linerD / 2 : null;
+  const hCenter = R != null ? R - sagitta : null; // 弦（支圧壁前面）から円中心までの距離
+
+  const rows = jackStageWidths.map((w, i) => {
+    const stageNo = i + 1;
+    const jacks = stageNo * 2;
+    let thicknessCell = '<td class="mono" style="color:var(--sub)">—</td>';
+    if (isCircleShaft && R != null) {
+      const x = Math.abs(w / 2 + offset);
+      if (x > R) {
+        thicknessCell = '<td class="mono" style="color:var(--ng)">立坑径超過</td>';
+      } else {
+        const localT = Math.max(0, Math.sqrt(R * R - x * x) - hCenter);
+        thicknessCell = `<td class="mono">${localT.toFixed(3)} m</td>`;
+      }
+    }
+    return `<tr>
+      <td>${stageNo}段目</td>
+      <td class="mono">${jacks}基</td>
+      <td><input class="mono" type="number" step="0.01" min="0" value="${w}" style="width:90px"
+        onchange="jackStageWidths[${i}]=parseFloat(this.value)||0;calcBacklock()"> m</td>
+      ${thicknessCell}
+    </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="tbl-wrap"><table class="report-table">
+      <thead><tr><th>段</th><th>基数</th><th>据付幅[m]（中心対称スパン）</th><th>局所支圧壁厚さ</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+    ${isCircleShaft ? `<p class="report-note">円形立坑（ライナー内側径${(linerD||0).toFixed(2)}m、中心厚さ${sagitta.toFixed(3)}m）における各段の据付位置での厚さです。据付幅0のままだと中心厚さと同じ値になります。</p>`
+      : '<p class="report-note">矩形・小判型等では据付位置による厚さの変化はありません（局所厚さの計算は円形立坑のみ）。</p>'}
+  `;
+}
+
+// ══════════════════════════════════════
 //  ジャッキ当たり部の局所支圧照査
 //  元押ジャッキの推力は支圧壁全面ではなく、間に挟む鉄板の当たり面積(A1)にだけ
 //  集中して伝わる。コンクリートは載荷面より広い断面(A2)に囲まれていると、その分
@@ -3857,7 +3990,8 @@ function calcBacklock() {
   const Bw = n('wallBw');
   const Hw = n('wallHw');
   const hc = n('wallHc');
-  const fa = n('wallFa');
+  const faInput = n('wallFa'); // N/mm²（コンクリートの許容支圧応力度、ユーザー入力）
+  const fa = faInput * 1000; // f・σmaxと同じkN/m²に換算して比較する（1 N/mm² = 1000 kN/m²）
   const F = n('wallForce');
   const gamma = n('soilGamma');
   const phi_deg = n('soilPhi');
@@ -3867,13 +4001,32 @@ function calcBacklock() {
   drawWallSectionView();
   calcLocalBearing();
 
+  // 有効幅（立坑制約）― F・Hw未入力でも表示できるよう、早期returnより前で計算する
+  const wallBeffInfo = computeWallBeff();
+  const { maxBw, Beff, linerD, sagitta } = wallBeffInfo;
+
+  // 支圧壁厚さ: 円形立坑は幾何学的に決まる（サジッタ）ため自動計算・読取専用にする。
+  // それ以外（矩形・小判型・オープン・ケーシング）は厚さが幾何学的に一意に決まらないため、
+  // 現場の設計値を手入力する。
+  const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
+  const thicknessEl = document.getElementById('wallThickness');
+  const thicknessNoteEl = document.getElementById('wallThicknessNote');
+  if (thicknessEl) {
+    thicknessEl.readOnly = isCircleShaft;
+    if (isCircleShaft) {
+      thicknessEl.value = sagitta.toFixed(3);
+      if (thicknessNoteEl) thicknessNoteEl.textContent = `円形立坑のため、弦幅Beff=${Beff.toFixed(2)}mから幾何学的に自動計算（中心厚さ／サジッタ）。手入力はできません。`;
+    } else {
+      if (thicknessNoteEl) thicknessNoteEl.textContent = '矩形・小判型等では厚さは幾何学的に一意に決まらないため、設計値を入力してください。';
+    }
+  }
+
+  renderJackStages(wallBeffInfo);
+
   if (!Bw || !Hw || !F) {
     document.getElementById('backlockResult').innerHTML = '<div class="note-box">支圧壁諸元と推進力を入力してください。</div>';
     return;
   }
-
-  // 有効幅（立坑制約）
-  const { maxBw, Beff } = computeWallBeff();
 
   // ① 基礎反力照査
   const f = F / (Beff * Hw);
@@ -3918,8 +4071,8 @@ function calcBacklock() {
   const blSelected = selected.length ? selected[0] : BL_TABLE[BL_TABLE.length - 1];
 
   const checks = [
-    { no:'①', name:'基礎反力照査', formula:`f = F/(Bw×Hw) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${f.toFixed(1)} kN/m²`, limit:`≤ f_a=${fa} kN/m²`, ok: check1_ok },
-    { no:'②', name:'偏心曲げ照査', formula:`e=${e.toFixed(3)}m, σmax=${sigma_max.toFixed(1)} kN/m²`, limit:`≤ f_a=${fa} kN/m²`, ok: check2_ok },
+    { no:'①', name:'基礎反力照査', formula:`f = F/(Bw×Hw) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${f.toFixed(1)} kN/m²（=${(f/1000).toFixed(3)} N/mm²）`, limit:`≤ f_a=${faInput} N/mm²（=${fa.toFixed(0)} kN/m²）`, ok: check1_ok },
+    { no:'②', name:'偏心曲げ照査', formula:`e=${e.toFixed(3)}m, σmax=${sigma_max.toFixed(1)} kN/m²（=${(sigma_max/1000).toFixed(3)} N/mm²）`, limit:`≤ f_a=${faInput} N/mm²（=${fa.toFixed(0)} kN/m²）`, ok: check2_ok },
     { no:'③', name:'受働土圧安定照査', formula:`
       Kp = tan²(45°+φ/2) = tan²(45°+${phi_deg}°/2) = ${Kp.toFixed(3)}<br>
       支圧壁天端の土被り = H最大 − (Hw−hc) = ${Hmax_soil.toFixed(2)} − (${Hw.toFixed(2)}−${hc.toFixed(2)}) = ${depthToWallTop.toFixed(2)} m<br>
@@ -3940,6 +4093,7 @@ function calcBacklock() {
   backlockEl.innerHTML = `
     <div class="card accordion" id="wallCheckCard">
       <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 3段階照査結果</div>
+      ${(!check1_ok || !check2_ok) ? `<div class="ng-box" style="font-size:12px">⚠️ ${!check1_ok && !check2_ok ? '①基礎反力照査・②偏心曲げ照査がともにNGです' : !check1_ok ? '①基礎反力照査がNGです' : '②偏心曲げ照査がNGです'}。許容支圧応力度 f_a（現在 ${faInput} N/mm²）が実際の値より大きすぎないか確認するか、支圧壁の幅Bw・高さHwを見直してください。</div>` : ''}
       <div class="note-box" style="font-size:11px">有効幅 Beff=${Beff.toFixed(2)} m（立坑制約: maxBw=${maxBw.toFixed(2)}m）</div>
       ${checks.map(c=>`
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
@@ -4020,7 +4174,10 @@ function getProjectData() {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
       circleD: n('wallCircleD'), Bw: n('wallBw'), Hw: n('wallHw'),
       hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce'),
-      jackPlateW: n('jackPlateW'), jackPlateH: n('jackPlateH'), fc: n('wallFc')
+      jackPlateW: n('jackPlateW'), jackPlateH: n('jackPlateH'), fc: n('wallFc'),
+      levelMode: wallLevelMode, elBase: n('wallElBase'), elPipeInvert: n('wallElPipeInvert'),
+      elWallTop: n('wallElWallTop'), centerOffset: n('wallCenterOffset'),
+      thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice()
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -4169,14 +4326,25 @@ function setProjectData(d) {
     setV('wallPitW', wl.pitW||3); setV('wallPitL', wl.pitL||4);
     setV('wallCircleD', wl.circleD||3.5);
     setV('wallBw', wl.Bw||3); setV('wallHw', wl.Hw||2);
-    setV('wallHc', wl.hc||0.8); setV('wallFa', wl.fa||3000);
+    setV('wallHc', wl.hc||0.8);
+    // wallFaは旧バージョンではkN/m²単位で保存されていた（既定値3000など）。コンクリートの
+    // 許容支圧応力度はどんな基準でもN/mm²で数百に達することはないため、200を超える値は
+    // 旧kN/m²形式とみなして÷1000で変換する（後方互換）。新形式（N/mm²、既定24）はそのまま使う。
+    const faSaved = wl.fa;
+    setV('wallFa', faSaved == null ? 24 : (faSaved > 200 ? faSaved / 1000 : faSaved));
     setV('wallForce', wl.force||0);
     setV('jackPlateW', wl.jackPlateW||0.5); setV('jackPlateH', wl.jackPlateH||0.5);
     setV('wallFc', wl.fc||24);
+    setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
+    setV('wallElWallTop', wl.elWallTop||2.5); setV('wallCenterOffset', wl.centerOffset||0);
+    setV('wallThickness', wl.thickness||0.8);
+    jackStageWidths = Array.isArray(wl.jackStageWidths) ? wl.jackStageWidths.slice() : [];
     if (wl.shaftType) {
       const el = document.querySelector(`#wallShaftChips [data-val="${wl.shaftType}"]`);
       if (el) setWallShaft(wl.shaftType, el);
     }
+    // levelModeの復元は最後（内部でHw/hcを上書きしてcalcBacklock()を呼ぶため）
+    setWallLevelMode(wl.levelMode === 'level' ? 'level' : 'direct');
   }
   updateGroundLen();
   updatePipeLenOpt();
