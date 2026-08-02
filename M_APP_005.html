@@ -707,6 +707,7 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>受働土圧 割増し係数 α（③照査用）</label><input id="wallEpAlpha" class="mono" type="number" step="0.1" min="1.5" max="2.5" value="2.5" oninput="calcBacklock()"><span class="unit">—</span></div>
     </div>
     <p class="report-note" style="margin:0 2px 8px">αは支圧壁幅の範囲だけでなく側方に広がる土のくさびの抵抗を考慮した割増し係数（実務では1.5〜2.5の範囲で選定。実例の計算書ではα=2.5を採用）。</p>
+    <p class="report-note" id="wallHwNote" style="margin:0 2px 8px"></p>
 
     <div id="wallLevelInputs" style="display:none;margin-top:4px">
       <div class="note-box" style="font-size:11px">
@@ -719,6 +720,7 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>立坑中心と推進中心のオフセット [m]</label><input id="wallCenterOffset" class="mono" type="number" step="0.01" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
       </div>
       <p class="report-note" style="margin:4px 2px 0">オフセットは立坑の幾何中心から見た推進管中心のずれ（通常0）。円形立坑のジャッキ配置（推力分散用）の局所厚さ計算にも反映されます。</p>
+      <p class="report-note" id="wallLevelTopActualNote" style="margin:4px 2px 0"></p>
     </div>
 
     <div class="field-row" style="margin-top:8px">
@@ -4163,7 +4165,7 @@ function drawWallSectionView() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
 
-  const Bw = n('wallBw'), Hw = n('wallHw'), hc = n('wallHc');
+  const Bw = n('wallBw'), HwDesign = n('wallHw'), Hw = effectiveWallHw(), hc = n('wallHc');
   if (!Bw || !Hw) {
     ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
@@ -4245,6 +4247,28 @@ function drawWallSectionView() {
   drawDim(dimGutter * 0.35, ty(Hw), ty(0), `Hw=${Hw.toFixed(2)}m`);
   drawDim(dimGutter * 0.65, ty(Hw), ty(hc), `天端まで ${(Hw - hc).toFixed(2)}m`);
   drawDim(dimGutter * 0.65, ty(hc), ty(0), `下端まで ${hc.toFixed(2)}m`);
+
+  if (backrockUse && Math.abs(Hw - HwDesign) > 1e-6) {
+    ctx.fillStyle = '#b45309';
+    ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`設計高さ${HwDesign.toFixed(2)}m→プレキャストは0.5m単位のため施工高さHw=${Hw.toFixed(2)}mに切り上げ`, tx(Beff / 2), ty(Hw) - (computeWallBeff().sagitta > 0 ? 26 : 8));
+  }
+}
+
+// 支圧壁の「施工高さ」の算出（39章）。バックロック使用時、支圧壁はプレキャストブロックを
+// 積み上げて構築するため、実際に作れる高さはブロック1ピースの高さ（model.H、現状全型番
+// 0.5m）の倍数に限られる。設計上必要な高さ（直接入力、または水準高モードでの
+// 天端水準高−基礎天端水準高）をそのまま使うと、半端な高さの壁を指定してしまうことになるため、
+// 0.5mピッチに切り上げた「施工高さ」を実際の構造計算・断面図・水準高表示すべてに使う
+// （バックロックの選定.xlsxの「バックロック使用時の補正高さ」= ROUNDUP(設計高さ/0.5)×0.5 と
+// 同じ考え方。現場打ち(backrockUse=false)の場合はこの丸めは行わず設計高さをそのまま使う）。
+function effectiveWallHw() {
+  const HwDesign = n('wallHw') || 0;
+  if (!backrockUse || !HwDesign) return HwDesign;
+  const pieceH = (backrockCurrentModel && backrockCurrentModel.H) || 0.5;
+  if (!pieceH) return HwDesign;
+  return Math.ceil(HwDesign / pieceH - 1e-9) * pieceH;
 }
 
 // 有効幅（立坑制約）の算出。calcBacklock()と寸法図（平面・断面）の両方から参照する共通ロジック
@@ -4556,7 +4580,7 @@ function calcLocalBearing() {
   if (!el) return;
   const bp = n('jackPlateW'), hp = n('jackPlateH'), Fc = n('wallFc'), F = n('wallForce');
   const { Beff } = computeWallBeff();
-  const Hw = n('wallHw');
+  const Hw = effectiveWallHw();
   if (!bp || !hp || !Fc || !F || !Beff || !Hw) {
     el.innerHTML = '<div class="note-box">鉄板寸法・コンクリート強度・支圧壁諸元・推進力を入力してください。</div>';
     return;
@@ -4601,7 +4625,6 @@ function calcLocalBearing() {
 }
 
 function calcBacklock() {
-  const Hw = n('wallHw');
   const hc = n('wallHc');
   const faInput = n('wallFa'); // N/mm²（コンクリートの許容支圧応力度、ユーザー入力）
   const fa = faInput * 1000; // f・σmaxと同じkN/m²に換算して比較する（1 N/mm² = 1000 kN/m²）
@@ -4610,13 +4633,32 @@ function calcBacklock() {
   const phi_deg = n('soilPhi');
   const phi = phi_deg * Math.PI / 180;
 
+  // バックロック選定（使用する場合、wallThickness・wallBw・backrockCurrentModelをここで
+  // 書き換える）。以降のBw・有効幅・施工高さの計算はこの書き換え後の値を使う必要があるため、
+  // 描画・他の計算より先に行う。
+  const backrockModel = applyBackrockSelection();
+  // 支圧壁の施工高さ（39章）。バックロック使用時は0.5mピッチに切り上げた実際に作れる高さを使う。
+  const HwDesign = n('wallHw') || 0;
+  const Hw = effectiveWallHw();
+
+  const hwNoteEl = document.getElementById('wallHwNote');
+  if (hwNoteEl) {
+    hwNoteEl.textContent = backrockUse
+      ? (Math.abs(Hw - HwDesign) > 1e-6
+        ? `バックロックはプレキャストのため高さは0.5m単位（${backrockModel ? backrockModel.name + 'の' : ''}1ピース${(backrockModel ? backrockModel.H : 0.5).toFixed(1)}m）でしか作れません。入力高さ${HwDesign.toFixed(2)}mを施工高さHw=${Hw.toFixed(2)}m（${Math.ceil(HwDesign / ((backrockModel && backrockModel.H) || 0.5) - 1e-9)}段）に切り上げて以降の計算に使用しています。`
+        : `バックロック${Math.ceil(HwDesign / ((backrockModel && backrockModel.H) || 0.5) - 1e-9)}段でちょうどHw=${Hw.toFixed(2)}mになります（0.5m単位で過不足なし）。`)
+      : '';
+  }
+  const levelTopNoteEl = document.getElementById('wallLevelTopActualNote');
+  if (levelTopNoteEl) {
+    levelTopNoteEl.textContent = (backrockUse && wallLevelMode === 'level' && Math.abs(Hw - HwDesign) > 1e-6)
+      ? `設計天端水準高${n('wallElWallTop').toFixed(3)}mに対し、0.5m単位への切り上げにより実際の支圧壁天端水準高は${(n('wallElBase') + Hw).toFixed(3)}mになります。`
+      : '';
+  }
+
   drawWallPlanView();
   drawWallSectionView();
   calcLocalBearing();
-
-  // バックロック選定（使用する場合、wallThickness・wallBwをここで書き換える）。
-  // 以降のBw・有効幅計算は、この書き換え後の値を使う必要があるため、Bwはこの後で読み直す。
-  const backrockModel = applyBackrockSelection();
 
   // 有効幅（立坑制約）― F・Hw未入力でも表示できるよう、早期returnより前で計算する
   const wallBeffInfo = computeWallBeff();
