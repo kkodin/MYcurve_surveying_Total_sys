@@ -114,6 +114,30 @@ tr.row-ng td{color:var(--ng)}
 .kpcard.ok{background:#f0fdf4;border-color:#86efac}
 .kpcard.warn{background:#fffbeb;border-color:#fcd34d}
 .kpcard.ng{background:#fef2f2;border-color:#fecaca}
+.history-row{display:flex;gap:8px;align-items:center;margin:8px 0}
+.history-row select{flex:1;min-height:44px;border:1.5px solid var(--line);border-radius:8px;padding:8px 10px;font-size:15px;background:var(--card);color:var(--text)}
+#surveyProtectBar{display:none;align-items:center;gap:10px;padding:8px 10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;margin-bottom:10px;font-size:13px;font-weight:bold;color:#92400e}
+#surveyProtectBar button{margin-left:auto;background:#d97706;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:bold;cursor:pointer;font-size:13px}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper .step-btn{width:42px;height:42px;flex-shrink:0;border:1.5px solid var(--line);border-radius:8px;background:var(--card);font-size:20px;font-weight:bold;cursor:pointer;color:var(--blue2)}
+.stepper .step-btn:disabled{opacity:.4;cursor:not-allowed}
+.stepper input{flex:1;text-align:center;min-height:42px;border:1.5px solid var(--line);border-radius:8px;font-size:16px;background:var(--card);color:var(--text)}
+tr.tp-row td{background:#eff6ff}
+tr.kp-row td{background:#fdf2f8}
+td.survey-cell{cursor:pointer;font-weight:bold}
+td.survey-cell:active{background:#bfdbfe}
+td.survey-cell.locked{cursor:default;opacity:.7}
+.role-input{width:64px;min-height:32px;border:1.5px solid var(--line);border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;background:var(--card);color:var(--text)}
+#surveyKeypad{position:fixed;left:0;right:0;bottom:calc(var(--tab-h) + var(--safe-b));background:var(--card);border-top:2px solid var(--blue2);box-shadow:0 -4px 16px rgba(0,0,0,.15);padding:10px 12px calc(10px + var(--safe-b));z-index:300;display:none}
+#surveyKeypad.visible{display:block}
+.keypad-display{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.keypad-display .keypad-cell{background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:6px 10px;font-weight:bold;font-family:Consolas,monospace;font-size:14px;flex:1;min-width:56px;text-align:center}
+.keypad-display .keypad-cell.keypad-active{border-color:var(--blue2);background:#dbeafe;color:var(--blue2)}
+.keypad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.keypad-grid button{min-height:50px;border:0;border-radius:8px;font-size:19px;font-weight:bold;background:#e2e8f0;color:var(--text);cursor:pointer}
+.keypad-grid button:active{opacity:.7}
+.keypad-grid button.command{background:#94a3b8;color:#fff;font-size:14px}
+.keypad-grid button.ok{background:var(--blue2);color:#fff}
 @media(min-width:640px){
   #pageArea{padding:14px 20px calc(var(--tab-h) + var(--safe-b) + 12px)}
   .page{max-width:720px;margin:0 auto}
@@ -798,6 +822,16 @@ tr.row-selected{background:#eff6ff}
 <!-- ═══ TAB 5: 測量（実測値と設計値の誤差判定） ═══ -->
 <section class="page" id="p5">
 
+  <div class="card accordion open">
+    <div class="card-title" onclick="toggleAccordion(this)">📖 測量履歴</div>
+    <button class="big-btn ok" onclick="newSurveyMeasurement()">新しい測量を入力</button>
+    <div class="history-row">
+      <select id="surveyHistorySelect" onchange="onSurveyHistorySelectChange(this.value)">
+        <option value="new">新規入力</option>
+      </select>
+    </div>
+  </div>
+
   <div class="card accordion">
     <div class="card-title" onclick="toggleAccordion(this)">📐 測量基準設定</div>
     <div class="note-box">「基本情報」タブで入力した曲線・線形（BP〜EP）を設計値として、器械点からの実測（距離・角度）が設計線からどれだけずれているかを判定します。</div>
@@ -826,18 +860,35 @@ tr.row-selected{background:#eff6ff}
     </div>
   </div>
 
-  <div class="card accordion">
-    <div class="card-title" onclick="toggleAccordion(this)">🧭 TP（多角点）</div>
-    <div class="note-box">器械点を移動させた場合の中継点です。前の点からの距離・角度を入力してください（不要なら追加しなくて構いません）。</div>
-    <div id="tpList"></div>
-    <button class="big-btn secondary" onclick="addTpRow()">＋ TPを追加</button>
-  </div>
-
-  <div class="card accordion">
-    <div class="card-title" onclick="toggleAccordion(this)">📌 KP（測定点）</div>
-    <div class="note-box">実際に測定した管内の点です。基準点（最後のTP、無ければ器械点）からの距離・角度を入力してください。</div>
-    <div id="kpList"></div>
-    <button class="big-btn secondary" onclick="addKpRow()">＋ KPを追加</button>
+  <div class="card accordion" id="acc_surveyInput">
+    <div class="card-title" onclick="toggleAccordion(this)">📝 測定数値入力</div>
+    <div id="surveyProtectBar"><span id="surveyProtectLabel">🔒 保護中（読込済み）</span><button type="button" id="surveyUnlockBtn" onclick="toggleSurveyProtect()">🔓 解除して編集</button></div>
+    <div class="note-box">TPとKPを同じ表で入力します。TP行は青、KP行は桃色で表示します。表の数値セルをタップするとテンキーが開きます。</div>
+    <div class="two-col">
+      <div class="field-row"><label>本数</label><input id="surveyPipeCount" class="mono" type="number" inputmode="numeric" min="1" step="1" oninput="autoSave()"></div>
+      <div class="field-row"><label>測定日</label><input id="surveyMeasureDate" type="date" oninput="autoSave()"></div>
+    </div>
+    <div class="two-col">
+      <div class="field-row"><label>TP数</label>
+        <div class="stepper">
+          <button type="button" class="step-btn" onclick="stepSurveyCount('surveyTpCount',-1)">−</button>
+          <input id="surveyTpCount" class="mono" type="number" inputmode="numeric" min="0" step="1" value="0" onchange="onSurveyCountChange()">
+          <button type="button" class="step-btn" onclick="stepSurveyCount('surveyTpCount',1)">＋</button>
+        </div>
+      </div>
+      <div class="field-row"><label>KP数</label>
+        <div class="stepper">
+          <button type="button" class="step-btn" onclick="stepSurveyCount('surveyKpCount',-1)">−</button>
+          <input id="surveyKpCount" class="mono" type="number" inputmode="numeric" min="1" step="1" value="1" onchange="onSurveyCountChange()">
+          <button type="button" class="step-btn" onclick="stepSurveyCount('surveyKpCount',1)">＋</button>
+        </div>
+      </div>
+    </div>
+    <div id="surveyMeasureTable"></div>
+    <div class="two-col">
+      <button class="big-btn secondary" onclick="saveSurveyMeasurement()">保存</button>
+      <button class="big-btn ok" onclick="calcSurvey()">計算結果を表示</button>
+    </div>
   </div>
 
   <div class="card accordion">
@@ -870,6 +921,37 @@ tr.row-selected{background:#eff6ff}
 </nav>
 
 <div id="toast"></div>
+
+<div id="surveyKeypad">
+  <div class="keypad-display">
+    <div id="surveyKeypadName" class="keypad-cell">TP1</div>
+    <div id="surveyKeypadDistance" class="keypad-cell">0.000m</div>
+    <div id="surveyKeypadRole" class="keypad-cell"></div>
+    <div id="surveyKeypadDeg" class="keypad-cell">0°</div>
+    <div id="surveyKeypadMin" class="keypad-cell">00′</div>
+    <div id="surveyKeypadSec" class="keypad-cell">00″</div>
+  </div>
+  <div class="keypad-grid">
+    <button type="button" onclick="surveyKeypadPress('1')">1</button>
+    <button type="button" onclick="surveyKeypadPress('2')">2</button>
+    <button type="button" onclick="surveyKeypadPress('3')">3</button>
+    <button type="button" onclick="surveyKeypadPress('4')">4</button>
+    <button type="button" onclick="surveyKeypadPress('5')">5</button>
+    <button type="button" onclick="surveyKeypadPress('6')">6</button>
+    <button type="button" onclick="surveyKeypadPress('7')">7</button>
+    <button type="button" onclick="surveyKeypadPress('8')">8</button>
+    <button type="button" onclick="surveyKeypadPress('9')">9</button>
+    <button type="button" onclick="surveyKeypadPress('.')">.</button>
+    <button type="button" onclick="surveyKeypadPress('0')">0</button>
+    <button type="button" class="command" onclick="surveyKeypadUndo()">元に戻す</button>
+    <button type="button" class="command" onclick="surveyKeypadBackspace()">BS</button>
+    <button type="button" class="command" onclick="surveyKeypadVert(-1)">↑</button>
+    <button type="button" class="command" onclick="surveyKeypadVert(1)">↓</button>
+    <button type="button" class="command" onclick="surveyKeypadNav(1)">次へ</button>
+    <button type="button" class="ok" onclick="closeSurveyKeypad()">閉じる</button>
+    <button type="button" class="command" onclick="surveyKeypadNav(-1)">前へ</button>
+  </div>
+</div>
 
 <script>
 // ══════════════════════════════════════
@@ -2007,70 +2089,6 @@ function radToDeg(r) { let d = r*180/Math.PI; while(d<0) d+=360; while(d>=360) d
 function azBetween(a, b) { return Math.atan2(b.y-a.y, b.x-a.x); }
 function ptFrom(a, az, d) { return {x:a.x+d*Math.cos(az), y:a.y+d*Math.sin(az)}; }
 
-function addTpRow() {
-  const id = ++surveyRowCounter;
-  tpRows.push({id, dist:0, deg:0, min:0, sec:0, memo:''});
-  renderSurveyRows();
-  calcSurvey();
-  autoSave();
-}
-function removeTpRow(id) {
-  tpRows = tpRows.filter(r => r.id !== id);
-  renderSurveyRows();
-  calcSurvey();
-  autoSave();
-}
-function addKpRow() {
-  const id = ++surveyRowCounter;
-  kpRows.push({id, role:'', dist:0, deg:0, min:0, sec:0, memo:''});
-  renderSurveyRows();
-  calcSurvey();
-  autoSave();
-}
-function removeKpRow(id) {
-  kpRows = kpRows.filter(r => r.id !== id);
-  renderSurveyRows();
-  calcSurvey();
-  autoSave();
-}
-
-function renderSurveyRows() {
-  const tpEl = document.getElementById('tpList');
-  tpEl.innerHTML = tpRows.length ? tpRows.map((r,i) => `
-    <div class="curve-block">
-      <div class="curve-block-title">
-        <span>TP${i+1}</span>
-        <button class="del-btn" onclick="removeTpRow(${r.id})">削除</button>
-      </div>
-      <div class="field-row"><label>距離 [m]</label><input id="tpDist_${r.id}" class="mono" type="number" step="0.001" value="${r.dist}" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
-      <div class="three-col">
-        <div class="field-row"><label>度</label><input id="tpDeg_${r.id}" class="mono" type="number" step="1" value="${r.deg}" oninput="onSurveyRowChange()"><span class="unit">°</span></div>
-        <div class="field-row"><label>分</label><input id="tpMin_${r.id}" class="mono" type="number" step="1" value="${r.min}" oninput="onSurveyRowChange()"><span class="unit">′</span></div>
-        <div class="field-row"><label>秒</label><input id="tpSec_${r.id}" class="mono" type="number" step="1" value="${r.sec}" oninput="onSurveyRowChange()"><span class="unit">″</span></div>
-      </div>
-      <div class="field-row"><label>メモ（任意）</label><input id="tpMemo_${r.id}" type="text" value="${esc(r.memo||'')}" oninput="onSurveyRowChange()"></div>
-    </div>
-  `).join('') : '<div class="note-box" style="margin:6px 0">TP（多角点）はありません</div>';
-
-  const kpEl = document.getElementById('kpList');
-  kpEl.innerHTML = kpRows.length ? kpRows.map((r,i) => `
-    <div class="curve-block">
-      <div class="curve-block-title">
-        <span>KP${i+1}</span>
-        <button class="del-btn" onclick="removeKpRow(${r.id})">削除</button>
-      </div>
-      <div class="field-row"><label>役割（任意）</label><input id="kpRole_${r.id}" type="text" placeholder="例: 管底" value="${esc(r.role||'')}" oninput="onSurveyRowChange()"></div>
-      <div class="field-row"><label>距離 [m]</label><input id="kpDist_${r.id}" class="mono" type="number" step="0.001" value="${r.dist}" oninput="onSurveyRowChange()"><span class="unit">m</span></div>
-      <div class="three-col">
-        <div class="field-row"><label>度</label><input id="kpDeg_${r.id}" class="mono" type="number" step="1" value="${r.deg}" oninput="onSurveyRowChange()"><span class="unit">°</span></div>
-        <div class="field-row"><label>分</label><input id="kpMin_${r.id}" class="mono" type="number" step="1" value="${r.min}" oninput="onSurveyRowChange()"><span class="unit">′</span></div>
-        <div class="field-row"><label>秒</label><input id="kpSec_${r.id}" class="mono" type="number" step="1" value="${r.sec}" oninput="onSurveyRowChange()"><span class="unit">″</span></div>
-      </div>
-      <div class="field-row"><label>メモ（任意）</label><input id="kpMemo_${r.id}" type="text" value="${esc(r.memo||'')}" oninput="onSurveyRowChange()"></div>
-    </div>
-  `).join('') : '<div class="note-box" style="margin:6px 0">KP（測定点）はありません</div>';
-}
-
 // 器械点・後視点の座標から基準方位角を自動計算（00系 calcBaseAz() を移植）
 function calcSurveyBaseAz() {
   const ox = n('surveyInstX'), oy = n('surveyInstY');
@@ -2089,25 +2107,354 @@ function calcSurveyBaseAz() {
   if (el) el.textContent = `${fmt(deg, 3)}°`;
 }
 
+// 器械点・後視点座標が変わった時（📍カード）のハンドラ。TP/KPの数値自体は表・テンキー側で直接管理する。
 function onSurveyRowChange() {
   calcSurveyBaseAz();
-  tpRows.forEach(r => {
-    r.dist = parseFloat(document.getElementById('tpDist_'+r.id).value) || 0;
-    r.deg  = parseFloat(document.getElementById('tpDeg_'+r.id).value)  || 0;
-    r.min  = parseFloat(document.getElementById('tpMin_'+r.id).value)  || 0;
-    r.sec  = parseFloat(document.getElementById('tpSec_'+r.id).value)  || 0;
-    r.memo = document.getElementById('tpMemo_'+r.id).value || '';
-  });
-  kpRows.forEach(r => {
-    r.role = document.getElementById('kpRole_'+r.id).value || '';
-    r.dist = parseFloat(document.getElementById('kpDist_'+r.id).value) || 0;
-    r.deg  = parseFloat(document.getElementById('kpDeg_'+r.id).value)  || 0;
-    r.min  = parseFloat(document.getElementById('kpMin_'+r.id).value)  || 0;
-    r.sec  = parseFloat(document.getElementById('kpSec_'+r.id).value)  || 0;
-    r.memo = document.getElementById('kpMemo_'+r.id).value || '';
-  });
   calcSurvey();
   autoSave();
+}
+
+// ── 測量履歴（measurements[]）とその読込・保護 ──
+let measurementHistory = [];
+let surveyLoadedIndex = -1;   // measurementHistory 内の読込中インデックス（-1=新規/未保存）
+let surveyProtected = false;  // true=保護中（誤上書き防止で編集不可）
+
+function newTpRow() { return {id: ++surveyRowCounter, dist:0, deg:0, min:0, sec:0, memo:''}; }
+function newKpRow() { return {id: ++surveyRowCounter, role:'', dist:0, deg:0, min:0, sec:0, memo:''}; }
+
+function newSurveyMeasurement() {
+  const last = measurementHistory[measurementHistory.length-1];
+  const tpN = last ? Math.max(0, +last.tpCount||0) : 1;
+  const kpN = last ? Math.max(1, +last.kpCount||1) : 4;
+  setV('surveyPipeCount', '');
+  setV('surveyMeasureDate', new Date().toISOString().slice(0,10));
+  setV('surveyTpCount', tpN);
+  setV('surveyKpCount', kpN);
+  tpRows = []; kpRows = [];
+  for (let i=0;i<tpN;i++) tpRows.push(newTpRow());
+  for (let i=0;i<kpN;i++) kpRows.push(newKpRow());
+  surveyLoadedIndex = -1;
+  surveyProtected = false;
+  const sel = document.getElementById('surveyHistorySelect');
+  if (sel) sel.value = 'new';
+  renderSurveyMeasureTable();
+  calcSurvey();
+  autoSave();
+}
+
+function historyEntryLabel(m, i) {
+  return `${m.measureDate||'-'} / 測定No.${m.pipeCount||'-'}`;
+}
+function sortedHistoryIndexes() {
+  return measurementHistory.map((m,i)=>i).sort((a,b) => {
+    const ma = measurementHistory[a], mb = measurementHistory[b];
+    const ka = String(ma.measureDate||'') + String(ma.pipeCount||'').padStart(6,'0');
+    const kb = String(mb.measureDate||'') + String(mb.pipeCount||'').padStart(6,'0');
+    return ka < kb ? -1 : ka > kb ? 1 : 0;
+  });
+}
+function renderSurveyHistorySelect() {
+  const sel = document.getElementById('surveyHistorySelect');
+  if (!sel) return;
+  const order = sortedHistoryIndexes();
+  sel.innerHTML = order.map(i => `<option value="${i}">${esc(historyEntryLabel(measurementHistory[i], i))}</option>`).join('')
+    + '<option value="new">新規入力</option>';
+  sel.value = surveyLoadedIndex >= 0 ? String(surveyLoadedIndex) : 'new';
+}
+function onSurveyHistorySelectChange(val) {
+  if (val === 'new') newSurveyMeasurement();
+  else loadSurveyHistory(+val);
+}
+
+function loadSurveyHistory(idx) {
+  const data = measurementHistory[idx];
+  if (!data) { showToast('履歴データを読み込めませんでした'); return; }
+  setV('surveyPipeCount', data.pipeCount || '');
+  setV('surveyMeasureDate', data.measureDate || '');
+  if (data.instX != null) setV('surveyInstX', data.instX);
+  if (data.instY != null) setV('surveyInstY', data.instY);
+  if (data.bsX != null) setV('surveyBsX', data.bsX);
+  if (data.bsY != null) setV('surveyBsY', data.bsY);
+  if (data.internalPct != null) setV('internalPct', data.internalPct);
+  tpRows = (data.tpRows||[]).map(r => ({id: ++surveyRowCounter, dist:+r.dist||0, deg:+r.deg||0, min:+r.min||0, sec:+r.sec||0, memo:r.memo||''}));
+  kpRows = (data.kpRows||[]).map(r => ({id: ++surveyRowCounter, role:r.role||'', dist:+r.dist||0, deg:+r.deg||0, min:+r.min||0, sec:+r.sec||0, memo:r.memo||''}));
+  setV('surveyTpCount', tpRows.length);
+  setV('surveyKpCount', kpRows.length || 1);
+  surveyLoadedIndex = idx;
+  surveyProtected = true;
+  calcSurveyBaseAz();
+  renderSurveyHistorySelect();
+  renderSurveyMeasureTable();
+  calcSurvey();
+  autoSave();
+}
+
+function collectSurveyMeasurementData() {
+  return {
+    version: 'v24-history-measurement',
+    measureDate: v('surveyMeasureDate'),
+    pipeCount: v('surveyPipeCount'),
+    tpCount: String(tpRows.length),
+    kpCount: String(kpRows.length),
+    instX: n('surveyInstX'), instY: n('surveyInstY'),
+    bsX: n('surveyBsX'), bsY: n('surveyBsY'),
+    pipeDiaMm: v('pipeDia') || '', internalPct: n('internalPct'),
+    tolOk: n('tolOk'), tolWarn: n('tolWarn'),
+    tpRows: tpRows.map((r,i) => ({name:`TP${i+1}`, dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo||''})),
+    kpRows: kpRows.map((r,i) => ({name:`KP${i+1}`, role:r.role||'', dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo||''})),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function saveSurveyMeasurement() {
+  const pipeCount = v('surveyPipeCount').trim();
+  if (!pipeCount) { showToast('本数を入力してください'); return; }
+  if (!v('surveyMeasureDate')) { showToast('測定日を入力してください'); return; }
+  const data = collectSurveyMeasurementData();
+  const key = pipeCount;
+  const idx = measurementHistory.findIndex(m => String(m.pipeCount).trim() === key);
+  if (idx >= 0 && idx !== surveyLoadedIndex) {
+    if (!confirm(`${key}本目の測量データが既にあります。上書きしますか？`)) return;
+  }
+  if (idx >= 0) measurementHistory[idx] = data; else measurementHistory.push(data);
+  surveyLoadedIndex = idx >= 0 ? idx : measurementHistory.length - 1;
+  surveyProtected = true;
+  renderSurveyHistorySelect();
+  renderSurveyMeasureTable();
+  autoSave();
+  showToast('測量データを保存しました');
+}
+
+function toggleSurveyProtect() {
+  surveyProtected = !surveyProtected;
+  applySurveyProtectionUI();
+  autoSave();
+}
+
+function applySurveyProtectionUI() {
+  const bar = document.getElementById('surveyProtectBar');
+  if (bar) bar.style.display = surveyProtected ? 'flex' : 'none';
+  const label = document.getElementById('surveyProtectLabel');
+  if (label) label.textContent = surveyProtected ? '🔒 保護中（読込済み）' : '✏️ 編集中（未保護）';
+  const btn = document.getElementById('surveyUnlockBtn');
+  if (btn) btn.textContent = surveyProtected ? '🔓 解除して編集' : '🔒 保護する';
+  ['surveyPipeCount','surveyMeasureDate','surveyTpCount','surveyKpCount','surveyInstX','surveyInstY','surveyBsX','surveyBsY'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = surveyProtected;
+  });
+  document.querySelectorAll('#surveyMeasureTable .step-btn').forEach(b => b.disabled = surveyProtected);
+  document.querySelectorAll('#surveyMeasureTable .survey-cell').forEach(c => c.classList.toggle('locked', surveyProtected));
+  document.querySelectorAll('#surveyMeasureTable .role-input').forEach(inp => inp.readOnly = surveyProtected);
+  if (surveyProtected) closeSurveyKeypad();
+}
+
+// ── TP数・KP数から表を生成 ──
+function stepSurveyCount(id, delta) {
+  if (surveyProtected) return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const min = id === 'surveyKpCount' ? 1 : 0;
+  el.value = Math.max(min, (parseInt(el.value)||0) + delta);
+  onSurveyCountChange();
+}
+function onSurveyCountChange() {
+  if (surveyProtected) return;
+  const tpN = Math.max(0, Math.round(n('surveyTpCount')));
+  const kpN = Math.max(1, Math.round(n('surveyKpCount')));
+  setV('surveyTpCount', tpN); setV('surveyKpCount', kpN);
+  while (tpRows.length < tpN) tpRows.push(newTpRow());
+  tpRows.length = tpN;
+  while (kpRows.length < kpN) kpRows.push(newKpRow());
+  kpRows.length = kpN;
+  renderSurveyMeasureTable();
+  calcSurvey();
+  autoSave();
+}
+function onSurveyRoleInput(i, val) {
+  if (kpRows[i]) kpRows[i].role = val;
+  autoSave();
+}
+
+function renderSurveyMeasureTable() {
+  const el = document.getElementById('surveyMeasureTable');
+  if (!el) return;
+  const dms2 = x => String(Math.round(x||0)).padStart(2,'0');
+  let rows = '';
+  tpRows.forEach((r,i) => {
+    rows += `<tr class="tp-row">
+      <td><b>TP${i+1}</b></td>
+      <td></td>
+      <td id="cell_tp_${i}_dist" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'dist')">${fmt(r.dist,3)}</td>
+      <td id="cell_tp_${i}_deg" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'deg')">${Math.round(r.deg||0)}</td>
+      <td id="cell_tp_${i}_min" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'min')">${dms2(r.min)}</td>
+      <td id="cell_tp_${i}_sec" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'sec')">${dms2(r.sec)}</td>
+    </tr>`;
+  });
+  kpRows.forEach((r,i) => {
+    rows += `<tr class="kp-row">
+      <td><b>KP${i+1}</b></td>
+      <td><input type="text" class="role-input" value="${esc(r.role||'')}" ${surveyProtected?'readonly':''} oninput="onSurveyRoleInput(${i},this.value)"></td>
+      <td id="cell_kp_${i}_dist" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'dist')">${fmt(r.dist,3)}</td>
+      <td id="cell_kp_${i}_deg" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'deg')">${Math.round(r.deg||0)}</td>
+      <td id="cell_kp_${i}_min" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'min')">${dms2(r.min)}</td>
+      <td id="cell_kp_${i}_sec" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'sec')">${dms2(r.sec)}</td>
+    </tr>`;
+  });
+  el.innerHTML = (tpRows.length || kpRows.length)
+    ? `<div class="tbl-wrap"><table><tr><th>名称</th><th>測点名</th><th>距離</th><th>度</th><th>分</th><th>秒</th></tr>${rows}</table></div>`
+    : '<div class="note-box" style="margin:6px 0">TP数・KP数を指定すると表が生成されます。</div>';
+  applySurveyProtectionUI();
+}
+
+// ── 数値入力用テンキー（タップで音声読み上げ） ──
+let surveyKeypadTarget = null;   // {kind:'tp'|'kp', idx, field:'dist'|'deg'|'min'|'sec'}
+let surveyKeypadFirstPress = true;
+let surveyKeypadUndoValue = null;
+const SURVEY_DIGIT_WORDS = {'0':'ぜろ','1':'いち','2':'に','3':'さん','4':'よん','5':'ご','6':'ろく','7':'なな','8':'はち','9':'きゅう','.':'てん'};
+
+function surveyRowsFor(kind) { return kind === 'tp' ? tpRows : kpRows; }
+function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+function speakSurveyKey(ch) {
+  if (!window.speechSynthesis || !SURVEY_DIGIT_WORDS[ch]) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(SURVEY_DIGIT_WORDS[ch]);
+    u.lang = 'ja-JP'; u.rate = 1.05;
+    window.speechSynthesis.speak(u);
+  } catch(e) {}
+}
+function formatSurveyFieldForDisplay(field, val) {
+  if (field === 'dist') return fmt(val, 3);
+  if (field === 'deg') return String(Math.round(val||0));
+  return String(Math.round(val||0)).padStart(2,'0');
+}
+function openSurveyKeypad(kind, idx, field) {
+  if (surveyProtected) return;
+  surveyKeypadTarget = {kind, idx, field};
+  surveyKeypadFirstPress = true;
+  const r = surveyRowsFor(kind)[idx];
+  surveyKeypadUndoValue = r ? r[field] : 0;
+  updateSurveyKeypadDisplay();
+  const box = document.getElementById('surveyKeypad');
+  if (box) box.classList.add('visible');
+}
+function updateSurveyKeypadDisplay() {
+  if (!surveyKeypadTarget) return;
+  const {kind, idx, field} = surveyKeypadTarget;
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  setText('surveyKeypadName', (kind==='tp'?'TP':'KP') + (idx+1));
+  setText('surveyKeypadDistance', formatSurveyFieldForDisplay('dist', r.dist) + 'm');
+  setText('surveyKeypadRole', kind === 'kp' ? (r.role||'') : '');
+  setText('surveyKeypadDeg', formatSurveyFieldForDisplay('deg', r.deg) + '°');
+  setText('surveyKeypadMin', formatSurveyFieldForDisplay('min', r.min) + '′');
+  setText('surveyKeypadSec', formatSurveyFieldForDisplay('sec', r.sec) + '″');
+  [['surveyKeypadDistance','dist'],['surveyKeypadDeg','deg'],['surveyKeypadMin','min'],['surveyKeypadSec','sec']].forEach(([id,f]) => {
+    const el = document.getElementById(id);
+    if (el) el.classList.toggle('keypad-active', field===f);
+  });
+}
+function surveyAllowedValue(field, candidate) {
+  if (field === 'dist') {
+    if (!/^\d*(?:\.\d*)?$/.test(candidate)) return false;
+    const parts = candidate.split('.');
+    return !parts[1] || parts[1].length <= 3;
+  }
+  if (field === 'deg') {
+    if (!/^\d{0,3}$/.test(candidate)) return false;
+    if (candidate === '') return true;
+    return Number(candidate) <= 359;
+  }
+  if (!/^\d{0,2}$/.test(candidate)) return false;
+  if (candidate === '') return true;
+  return Number(candidate) <= 59;
+}
+function refreshSurveyCell(kind, idx, field, text) {
+  const el = document.getElementById(`cell_${kind}_${idx}_${field}`);
+  if (el) el.textContent = text;
+}
+function surveyKeypadPress(ch) {
+  if (!surveyKeypadTarget) return;
+  const {kind, idx, field} = surveyKeypadTarget;
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  if (ch === '.' && field !== 'dist') return;
+  let cur = surveyKeypadFirstPress ? '' : String(r[field] ?? '');
+  if (ch === '.' && cur.includes('.')) return;
+  const candidate = cur + ch;
+  if (!surveyAllowedValue(field, candidate)) return;
+  speakSurveyKey(ch);
+  surveyKeypadFirstPress = false;
+  r[field] = candidate;
+  refreshSurveyCell(kind, idx, field, candidate);
+  updateSurveyKeypadDisplay();
+  autoSave();
+}
+function surveyKeypadBackspace() {
+  if (!surveyKeypadTarget) return;
+  const {kind, idx, field} = surveyKeypadTarget;
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  const next = String(r[field] ?? '').slice(0, -1);
+  surveyKeypadFirstPress = false;
+  r[field] = next;
+  refreshSurveyCell(kind, idx, field, next);
+  updateSurveyKeypadDisplay();
+  autoSave();
+}
+function surveyKeypadUndo() {
+  if (!surveyKeypadTarget) return;
+  const {kind, idx, field} = surveyKeypadTarget;
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  r[field] = surveyKeypadUndoValue;
+  surveyKeypadFirstPress = true;
+  refreshSurveyCell(kind, idx, field, formatSurveyFieldForDisplay(field, r[field]));
+  updateSurveyKeypadDisplay();
+  autoSave();
+}
+function commitSurveyField() {
+  if (!surveyKeypadTarget) return;
+  const {kind, idx, field} = surveyKeypadTarget;
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  const num = parseFloat(r[field]) || 0;
+  r[field] = num;
+  refreshSurveyCell(kind, idx, field, formatSurveyFieldForDisplay(field, num));
+}
+function surveyKeypadFieldList() {
+  const list = [];
+  tpRows.forEach((_,i) => ['dist','deg','min','sec'].forEach(f => list.push({kind:'tp', idx:i, field:f})));
+  kpRows.forEach((_,i) => ['dist','deg','min','sec'].forEach(f => list.push({kind:'kp', idx:i, field:f})));
+  return list;
+}
+function surveyKeypadNav(step) {
+  if (!surveyKeypadTarget) return;
+  commitSurveyField();
+  const list = surveyKeypadFieldList();
+  const curKey = `${surveyKeypadTarget.kind}_${surveyKeypadTarget.idx}_${surveyKeypadTarget.field}`;
+  const idx = list.findIndex(x => `${x.kind}_${x.idx}_${x.field}` === curKey);
+  if (idx < 0) return;
+  const next = list[Math.max(0, Math.min(list.length-1, idx+step))];
+  openSurveyKeypad(next.kind, next.idx, next.field);
+}
+function surveyKeypadVert(step) {
+  if (!surveyKeypadTarget) return;
+  commitSurveyField();
+  const {kind, idx, field} = surveyKeypadTarget;
+  const rows = surveyRowsFor(kind);
+  const nextIdx = idx + step;
+  if (nextIdx >= 0 && nextIdx < rows.length) openSurveyKeypad(kind, nextIdx, field);
+  else if (step > 0 && kind === 'tp' && kpRows.length) openSurveyKeypad('kp', 0, field);
+  else if (step < 0 && kind === 'kp' && tpRows.length) openSurveyKeypad('tp', tpRows.length-1, field);
+}
+function closeSurveyKeypad() {
+  commitSurveyField();
+  calcSurvey();
+  autoSave();
+  const box = document.getElementById('surveyKeypad');
+  if (box) box.classList.remove('visible');
+  surveyKeypadTarget = null;
 }
 
 // 設計側（基本情報タブの曲線・線形データ）から座標geometryを構築
@@ -4907,9 +5254,12 @@ function getProjectData() {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
       instX: n('surveyInstX'), instY: n('surveyInstY'),
       bsX: n('surveyBsX'), bsY: n('surveyBsY'),
+      pipeCount: v('surveyPipeCount'), measureDate: v('surveyMeasureDate'),
+      loadedIndex: surveyLoadedIndex, protected: surveyProtected,
       tpRows: tpRows.map(r => ({dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo})),
       kpRows: kpRows.map(r => ({role:r.role, dist:r.dist, deg:r.deg, min:r.min, sec:r.sec, memo:r.memo}))
-    }
+    },
+    measurements: measurementHistory
   };
 }
 
@@ -5006,17 +5356,34 @@ function setProjectData(d) {
     setV('jackCapUnit', d.jack.capUnit || 1500);
     setV('jackCount', d.jack.count || 4);
   }
+  measurementHistory = Array.isArray(d.measurements) ? d.measurements.slice() : [];
+  surveyLoadedIndex = -1;
+  surveyProtected = false;
   if (d.survey) {
     const sv = d.survey;
     setV('surveyBaseAz', sv.baseAz || 0);
     setV('internalPct', sv.internalPct || 80);
-    setV('surveyInstX', sv.instX || 0); setV('surveyInstY', sv.instY || 0);
-    setV('surveyBsX', sv.bsX ?? 10); setV('surveyBsY', sv.bsY || 0);
+    // instX/instY/bsX/bsY: 旧フォーマット(split-*)では survey.ox/oy/bx/by に相当
+    setV('surveyInstX', sv.instX ?? sv.ox ?? 0); setV('surveyInstY', sv.instY ?? sv.oy ?? 0);
+    setV('surveyBsX', sv.bsX ?? sv.bx ?? 10); setV('surveyBsY', sv.bsY ?? sv.by ?? 0);
     calcSurveyBaseAz(); // 保存されたbaseAz値ではなく、復元した座標から再計算する
+    setV('surveyPipeCount', sv.pipeCount || '');
+    setV('surveyMeasureDate', sv.measureDate || '');
     tpRows = []; kpRows = []; surveyRowCounter = 0;
     (sv.tpRows||[]).forEach(r => { const id = ++surveyRowCounter; tpRows.push({id, dist:r.dist||0, deg:r.deg||0, min:r.min||0, sec:r.sec||0, memo:r.memo||''}); });
     (sv.kpRows||[]).forEach(r => { const id = ++surveyRowCounter; kpRows.push({id, role:r.role||'', dist:r.dist||0, deg:r.deg||0, min:r.min||0, sec:r.sec||0, memo:r.memo||''}); });
-    renderSurveyRows();
+    setV('surveyTpCount', tpRows.length);
+    setV('surveyKpCount', kpRows.length || 1);
+    if (sv.loadedIndex != null && sv.loadedIndex >= 0 && measurementHistory[sv.loadedIndex]) surveyLoadedIndex = sv.loadedIndex;
+    surveyProtected = !!sv.protected;
+  }
+  if (!tpRows.length && !kpRows.length && measurementHistory.length) {
+    // 現在の作業セットが空で履歴があれば、最新の測定を自動的に開く
+    const order = sortedHistoryIndexes();
+    loadSurveyHistory(order[order.length-1]);
+  } else {
+    renderSurveyHistorySelect();
+    renderSurveyMeasureTable();
     calcSurvey();
   }
   if (d.shaft) {
@@ -5182,9 +5549,8 @@ function updateProjectSummary() {
     renderCurves();
     calcAlignment(); // 線形計算結果（区間ごとの個別仕様パネルを含む）を初期表示する
     updateGroundLen();
-    renderSurveyRows();
     calcSurveyBaseAz();
-    calcSurvey();
+    newSurveyMeasurement();
   }
   updateProjectSummary();
   setupAlignmentVisualInteraction();
