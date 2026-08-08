@@ -484,7 +484,8 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>発進フレーム前端オフセット [m]</label><input id="launchOffset" class="mono" type="number" step="0.1" value="0.3" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div id="launchCircleIn" style="display:none">
-        <div class="field-row"><label>立坑内径 φ [m]</label><input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="autoSave()"><span class="unit">m</span></div>
+        <div class="field-row"><label>立坑内径 φ [m]</label><input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="onLaunchCircleDChange()"><span class="unit">m</span></div>
+        <p class="report-note" style="margin:2px 2px 8px">「支圧壁」タブの立坑内径と連動しています。どちらで編集しても両方に反映されます。</p>
         <div class="field-row full"><label>土留め工法</label>
           <select id="launchCircleCasing" onchange="autoSave()">
             <option value="steel">鋼製ケーシング</option>
@@ -659,7 +660,8 @@ tr.row-selected{background:#eff6ff}
       </div>
     </div>
     <div id="wallCircleInputs" style="display:none;margin-top:8px">
-      <div class="field-row"><label>立坑内径 φ [m]</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="calcBacklock()"><span class="unit">m</span></div>
+      <div class="field-row"><label>立坑内径 φ [m]</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="onWallCircleDChange()"><span class="unit">m</span></div>
+      <p class="report-note" style="margin:2px 2px 8px">「基本情報」タブの発進立坑（円形立坑）の立坑内径と連動しています。どちらで編集しても両方に反映されます。</p>
       <div class="field-row full">
         <label>ライナープレート補強リング</label>
         <div style="display:flex;gap:8px">
@@ -668,11 +670,11 @@ tr.row-selected{background:#eff6ff}
         </div>
       </div>
       <div id="wallRingHRow" class="field-row" style="display:none">
-        <label>補強リング H鋼サイズ（せい）[mm]</label>
+        <label>補強リング H鋼 [mm]</label>
         <input id="wallRingH" class="mono" type="number" step="5" value="100" oninput="calcBacklock()">
         <span class="unit">mm</span>
       </div>
-      <p class="report-note" id="wallRingNote" style="display:none;margin:2px 2px 0">補強リングがある場合、バックロック幅短辺の角が当たる半径を「ライナープレート内側半径 − H鋼せい/2」まで減じて計算します。</p>
+      <p class="report-note" id="wallRingNote" style="display:none;margin:2px 2px 0">補強リングがある場合、H鋼がライナープレートの波形部分（呼び径−50mm）より大きく内側に突出するため、有効半径を「（ライナープレート呼び径 − H鋼）/ 2」として計算します（通常の呼び径−50mm換算は使いません）。</p>
     </div>
   </div>
 
@@ -753,6 +755,15 @@ tr.row-selected{background:#eff6ff}
       <span class="unit">m</span>
     </div>
     <p class="report-note" id="wallThicknessNote" style="margin:2px 2px 0"></p>
+
+    <div class="two-col">
+      <div class="field-row"><label>残り管長 [mm]（前回推進終了時に坑内に残る管端部長さ）</label><input id="wallRemainingStub" class="mono" type="number" step="10" value="300" oninput="calcBacklock()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>カラー呑み込み代 Lc2 [mm]（呼び径から自動参照）</label><input id="wallCollarAllowance" class="mono" type="number" step="5" value="130" readonly><span class="unit">mm</span></div>
+      <div class="field-row"><label>押輪長さ [mm]</label><input id="wallPressRingLen" class="mono" type="number" step="10" value="300" oninput="calcBacklock()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>ストラット1本長さ [mm]</label><input id="wallStrutUnitLen" class="mono" type="number" step="10" value="400" oninput="calcBacklock()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>ストラット本数 [本]</label><input id="wallStrutCount" class="mono" type="number" step="1" min="0" value="4" oninput="calcBacklock()"><span class="unit">本</span></div>
+    </div>
+    <p class="report-note" style="margin:2px 2px 8px">円形立坑では支圧壁幅Bwを広げるほど厚さ（サジッタ）が増し、支圧壁前面〜反対側ライナー内面（発進側）までの残りスペースを圧迫します。必要スペース＝残り管長＋カラー呑み込み代Lc2＋推進管 有効長l′＋カラー呑み込み代Lc2＋押輪長さ＋ストラット1本長さ×本数（管を1本押し切り、次の管を据え付けるのに最低限必要な区間。ジャッキ本体の長さは別途、ジャッキストロークの検討で扱うためここには含めません）とし、⑤照査で確認します。カラー呑み込み代Lc2は「基本情報」タブの呼び径から自動参照します（φ800〜2200mm=130mm、φ2400mm以上=150mm、推進管詳細.xlsx「目地詳細」準拠。φ800mm未満は資料が無く130mmを暫定値としているため要現場確認）。残り管長・押輪長さ・ストラット本数は現場条件に応じて調整してください。</p>
 
     <div class="note-box" style="font-size:11px">
       ⚠️ f_aは自動計算されていません。初期値24N/mm²は、コンクリートの設計基準強度F_cとよく使われる値をそのまま仮置きしたものに過ぎず、根拠のある許容応力度ではありません。現場で採用するコンクリート仕様・適用する基準（道路橋示方書等）に基づき、必ず実際の許容支圧応力度に書き換えてください。<br>
@@ -2854,6 +2865,20 @@ function setShaftType(side, type, el) {
   autoSave();
 }
 
+// 「基本情報」タブの発進立坑（円形立坑内径 launchCircleD）と「支圧壁」タブの立坑内径
+// （wallCircleD）は同じ立坑を指すため、どちらかを編集したらもう片方にも反映する
+// （ユーザー指摘: 別々に入力すると立坑径がタブ間で食い違ってしまう）。
+function onLaunchCircleDChange() {
+  setV('wallCircleD', v('launchCircleD'));
+  autoSave();
+  calcBacklock();
+}
+function onWallCircleDChange() {
+  setV('launchCircleD', v('wallCircleD'));
+  calcBacklock();
+  autoSave();
+}
+
 // 組立マンホール壁厚[mm]（JSWASA-11 I種・II種登録品）
 const MANHOLE_WALL_T = {
   0.9:  {1:75,  2:100},
@@ -3964,10 +3989,11 @@ const BACKROCK_TAPER = [
 const BACKROCK_TAPER_LIP_H = 0.09;
 
 // ══════════════════════════════════════
-//  ライナープレート補強リング・バックロック設置位置（38章）
-//  補強リング（H鋼）がある場合、リングの分だけライナー内側の有効半径が減る。
-//  「呼び径から半径を求めた上で、H鋼せいの半分を差し引いた位置にバックロック幅短辺の
-//  角が当たる」というユーザー指定の考え方に基づき、半径ベースで R_eff = R − H/2 とする。
+//  ライナープレート補強リング・バックロック設置位置（38章、47.12/47.13章で算出式・表記を修正）
+//  補強リング（H鋼）がある場合、H鋼がライナープレートの波形部分（25mm×2辺＝50mm）より
+//  大きく内側に突出するため、通常の「呼び径−50mm」計算は使わない。ユーザー指定の通り、
+//  ライナープレート呼び径からH鋼を直接差し引いた値を有効内径とする：
+//    R_eff = (呼び径 − H鋼) / 2　（リングなしの場合は通常通り R_eff = (呼び径−50mm)/2）
 // ══════════════════════════════════════
 let wallRingUse = false; // ライナープレートに補強リング(H鋼)がある場合はtrue
 function setWallRingUse(use) {
@@ -3981,10 +4007,10 @@ function setWallRingUse(use) {
   calcBacklock();
   autoSave();
 }
-function effectiveLinerRadius(R) {
+function effectiveLinerRadius(pitD, R) {
   if (!wallRingUse) return R;
   const H = (n('wallRingH') || 0) / 1000; // mm→m
-  return Math.max(0, R - H / 2);
+  return Math.max(0, (pitD - H) / 2);
 }
 
 // バックロック（テーパー形）の実際の据付位置の計算。
@@ -4073,20 +4099,20 @@ function applyBackrockSelection() {
   const table = type === 'square' ? BACKROCK_SQUARE : BACKROCK_TAPER;
   const manualModel = backrockModelOverride ? table.find(b => b.name === backrockModelOverride) : null;
   const model = manualModel || selectBackrock(dia, type);
-  backrockCurrentModel = model; // computeWallBeff()の据付位置計算（38章）から参照する
+  const modelChanged = !backrockCurrentModel || backrockCurrentModel.name !== model.name;
+  backrockCurrentModel = model; // computeWallBeff()・check④（曲げ照査）から参照する
   const outOfRange = dia < table[0].diaMin || dia > table[table.length - 1].diaMax;
   const outsideOwnRange = manualModel && (dia < manualModel.diaMin || dia > manualModel.diaMax);
 
-  // Bw・厚さは、円形・矩形いずれの立坑でもカタログ値をそのまま採用する（実際の計算書
-  // 「BR-SST４台1350計算書.pdf」で確認した実務の方式。円形立坑でもBeffを幾何学的に逆算せず、
-  // 型番の幅をそのまま使っている。ライナーとの隙間は間詰めコンクリートの数量計算で別途扱う）。
-  // テーパー形はW1(下端の広い方の幅)を代表幅として使う（計算書の「幅：2.0m」がBR-SSTのW1と一致）。
   const isCircleShaftNow = (wallShaftType === 'circle' || wallShaftType === 'casing');
-  setV('wallThickness', model.T);
-  setV('wallBw', type === 'square' ? model.W : model.W1);
-
   const bwEl = document.getElementById('wallBw');
   const thicknessEl = document.getElementById('wallThickness');
+  // 47.11章: バックロックは既製品で寸法（幅短辺Ls・厚さ）が決まっているため、円形立坑・
+  // テーパー形でも支圧壁厚さ(wallThickness)を自由入力にはしない。角当たり計算（下の
+  // computeWallBeff()、Ls=W2と立坑内径R_effから幾何学的に一意に決まる）の結果を
+  // calcBacklock()側でwallThickness・wallBwの両方に反映する（どちらも表示専用）。
+  setV('wallThickness', model.T); // 型番切替直後の暫定表示。実際の値はcalcBacklock()で角当たり計算結果に上書きされる
+  setV('wallBw', type === 'square' ? model.W : model.W1); // 同上
   if (bwEl) bwEl.readOnly = true;
   if (thicknessEl) thicknessEl.readOnly = true;
 
@@ -4119,13 +4145,16 @@ function applyBackrockSelection() {
   return model;
 }
 
-// 間詰めコンクリート数量計算（反力面積.xlsx準拠、38章で角当たり位置・オフセット・補強リング対応に修正）。
+// 間詰めコンクリート数量計算（反力面積.xlsx準拠、38章で角当たり位置・オフセット・補強リング対応、
+// 47.11章で角当たり計算ベースに再統一）。
 // 支圧壁（バックロック台形ブロック）の前面(W1側)がライナー中心からhCenterの位置にあるとして、
 // その前面を弦とする弓形断面全体（=間詰めコンクリートが必要になりうる範囲。ハッチング部分）から、
-// バックロック台形ブロック自体の断面積を差し引いた残りが、実際に間詰めコンクリートで埋める
-// 必要のある断面積になる。
+// バックロック台形ブロック自体（カタログのW1・W2・T）の断面積を差し引いた残りが、実際に
+// 間詰めコンクリートで埋める必要のある断面積になる。
 //   R_eff = 角当たり計算に使った有効半径（補強リングがあれば R − H/2）
-//   sagitta = R_eff − hCenter　… 弓形の矢高（角当たり位置から求めた、前面の弦の深さ）
+//   sagitta = R_eff − hCenter　… 弓形の矢高（角当たり位置から求めた、前面の弦の深さ。
+//     computeWallBeff()側でcomputeBackrockPlacement()により算出）
+//   hCenter = R_eff − sagitta　… 弓形の矢高（前面の弦の深さ）
 //   θ = 2×acos((R_eff-sagitta)/R_eff) = 2×acos(hCenter/R_eff)　[deg]　… 支圧壁前面の弦が占める中心角
 //   A1 = R_eff²×π×(θ/360) − W×hCenter/2　… 弓形断面積（W=前面の弦幅）
 //   A2 = (W1+W2)/2×(T-lip) + lip×W1　… バックロック台形ブロックの断面積（T=カタログの厚さ、lip=底部の鋼材リップ高さ）
@@ -4161,7 +4190,7 @@ function renderBackrockGapConcrete(model, wallBeffInfo) {
   return `
     ${fitNote}
     <div class="calc-steps" style="margin-top:6px">
-      ${stepRow('角当たり位置(円中心から前面まで) hCenter', `√(R_eff²-yFar²)-T　（R_eff=${R_eff.toFixed(3)}, T=${model.T}）`, `${hCenter.toFixed(3)} m`)}
+      ${stepRow('角当たり位置(円中心から前面まで) hCenter', `√(R_eff²-yFar²)-T　（R_eff=${R_eff.toFixed(3)}, yFar=|オフセット|+Ls/2, T=バックロック本体の厚さ${model.T}m）`, `${hCenter.toFixed(3)} m`)}
       ${stepRow('前面の矢高 sagitta=R_eff-hCenter', `${R_eff.toFixed(3)}-${hCenter.toFixed(3)}`, `${sagitta.toFixed(3)} m`)}
       ${stepRow('中心角 θ=2×acos((R-T)/R)', `2×acos((${R.toFixed(3)}-${T.toFixed(3)})/${R.toFixed(3)})`, `${thetaDeg.toFixed(2)} °`)}
       ${stepRow('弦幅 W', `2√(${T.toFixed(3)}×(2×${R.toFixed(3)}-${T.toFixed(3)}))`, `${W.toFixed(3)} m`)}
@@ -4309,12 +4338,12 @@ function drawWallPlanView() {
     ctx.stroke();
     caption.push(`<span style="color:#dc2626">━</span> ライナープレート径 φ${pitW.toFixed(2)}m`);
 
-    // ライナープレート内側（板厚25mm×2＝50mm低減、青）
+    // ライナープレート内側（ボルト孔芯〜波形内側25mm×2辺＝50mm低減、青。板厚2.7〜7.0mm自体とは無関係）
     ctx.strokeStyle = '#1d6fd8';
     ctx.beginPath();
     ctx.ellipse(tx(0), ty(cy), R_liner * scale, R_liner * scale, 0, 0, Math.PI * 2);
     ctx.stroke();
-    caption.push(`<span style="color:#1d6fd8">━</span> ライナー内側(有効径) φ${linerD.toFixed(2)}m（板厚25mm×2辺）`);
+    caption.push(`<span style="color:#1d6fd8">━</span> ライナー内側(有効径) φ${linerD.toFixed(2)}m（ボルト孔芯から波形内側まで25mm×2辺）`);
 
     const wbi = computeWallBeff();
     const offset = wbi.offset || 0;
@@ -4616,10 +4645,47 @@ function effectiveWallHw() {
   return Math.ceil(HwDesign / pieceH - 1e-9) * pieceH;
 }
 
+// 支圧壁前面〜推進管カラー端部間に必要な最小の作業スペース（ユーザー実務ヒアリングに基づく）。
+// 前回推進終了時点から次の管を据え付け終えるまでに坑内に必要な区間として、
+//   ・残り管長（前回推進終了時に坑内に残っている、既設管の端部長さ。現場条件により変わるため
+//     入力項目。既定300mm）
+//   ・カラー呑み込み代 Lc2（既設管側のカラー。管の種類・継手仕様で決まる固定値のため
+//     自由入力ではなく呼び径から参照する。下のPIPE_LC2参照）
+//   ・推進管 有効長l′（今回据え付ける新管本体の長さ）
+//   ・カラー呑み込み代 Lc2（新管側のカラー。次の管を接続する際に重なり込む分）
+//   ・押輪長さ（既定300mm）
+//   ・ストラット1本長さ×本数（既定400mm×4本）
+// の合計。ジャッキ本体の長さはこの区間には含めない（ジャッキは支圧壁に対して別枠で検討する）。
+// 円形立坑では支圧壁幅Bwを広げるほど厚さ（サジッタ）が増してこのスペースを圧迫するため、
+// ⑤作業スペース照査で使用する。
+// カラー呑み込み代Lc2（m）。目地部詳細図（埋め込みカラー〜シール材間の長さ）の実測値で、
+// 呼び径φ800〜2200mmは130mm、φ2400mm以上は150mmとほぼ一定（推進管詳細.xlsx「目地詳細」
+// シート準拠）。φ800mm未満はこのシートに掲載が無いため、φ800mmと同じ130mmを暫定値として使う
+// （要現場確認。継手メーカー・型式により変わりうる）。
+const PIPE_LC2 = {
+  800: 0.130, 900: 0.130, 1000: 0.130, 1100: 0.130, 1200: 0.130, 1350: 0.130, 1500: 0.130,
+  1650: 0.130, 1800: 0.130, 2000: 0.130, 2200: 0.130, 2400: 0.150, 2600: 0.150, 2800: 0.150, 3000: 0.150,
+};
+function collarLc2() {
+  const dia = parseInt(v('pipeDia')) || 0;
+  return PIPE_LC2[dia] != null ? PIPE_LC2[dia] : 0.130;
+}
+function requiredWorkDepth() {
+  const stub = (n('wallRemainingStub') || 0) / 1000;
+  const pipeLen = n('pipeLen') || 0;
+  const collarAllowance = collarLc2();
+  const pressRing = (n('wallPressRingLen') || 0) / 1000;
+  const strutTotal = ((n('wallStrutUnitLen') || 0) * (n('wallStrutCount') || 0)) / 1000;
+  return stub + collarAllowance + pipeLen + collarAllowance + pressRing + strutTotal;
+}
+
 // 有効幅（立坑制約）の算出。calcBacklock()と寸法図（平面・断面）の両方から参照する共通ロジック
 // 円形立坑（circle/casing）の場合、支圧壁は矩形ではなく「ライナープレート内側の円」を
 // 弦（Beff）で切り取った円弓形（弓形）になる（ユーザー提供の参考図で確認済み）。
-// ライナープレート内側径 = 立坑径（呼び径）− 50mm（プレート厚み相当）。
+// ライナープレート内側径 = 立坑径（呼び径＝ボルト孔芯径）− 50mm。
+// 50mmは板厚（2.7〜7.0mmの数種類あり）とは無関係の固定値で、ボルト孔芯から波形（コルゲート）
+// 内側までの離れ25mm×2辺分。波形加工で強度を持たせる構造のため、有効内径は波形の内側同士の
+// 対面距離で決まる（第一産商カタログ準拠）。
 // 弦Beffに対する弓形の最大厚み（矢高、サジッタ）= R − √(R² − (Beff/2)²)。
 function computeWallBeff() {
   const Bw = n('wallBw');
@@ -4628,33 +4694,38 @@ function computeWallBeff() {
     const linerD = Math.max(0, pitD - 0.05);
     const maxBw = linerD;
     const R = linerD / 2;
-    const R_eff = effectiveLinerRadius(R); // 補強リング分を差し引いた有効半径（38章）
+    const R_eff = effectiveLinerRadius(pitD, R); // 補強リング分を差し引いた有効半径（38章／47.12章）
     const offset = n('wallCenterOffset') || 0;
+    const type = effectiveBackrockType();
     if (!backrockUse) {
-      // 現場打ちの円形立坑: 支圧壁厚さ(wallThickness)を入力し、その厚さになる弦幅(Beff)を
-      // サジッタの逆算で求める（35章、ユーザー確認済み方針）。
+      // 現場打ちの円形立坑: 支圧壁厚さ(wallThickness)は自由入力の設計変数。その厚さになる
+      // 弦幅(Beff)をサジッタの逆算で求める（35章）。
       // ライナープレート内側径 = 立坑呼び径(wallCircleD) − 50mm という前提は従来通り維持する。
       //   t = R − √(R²−(Beff/2)²)　⇔　Beff = 2√(t(2R−t))　（0≤t≤Rの範囲でのみ実数解を持つ）
       const t = Math.min(Math.max(0, n('wallThickness') || 0), R_eff);
       const Beff = Math.min(linerD, 2 * Math.sqrt(Math.max(0, t * (2 * R_eff - t))));
       return { Bw, maxBw, Beff, linerD, sagitta: t, R_eff, offset, hCenter: R_eff - t, placementOk: true };
     }
-    // バックロック使用時: 実際の計算書（BR-SST４台1350計算書.pdf）に倣い、幅(Bw)はカタログの
-    // 型番の幅をそのまま使う（幾何学的な逆算はしない）。厚さ（sagitta/hCenter）は、テーパー形
-    // であれば幅短辺(W2)の角が有効半径R_effに接する位置から求める（38章、computeBackrockPlacement）。
-    // それ以外（型番未選定・スクウェア形を円形立坑に強制適用等）はwallThicknessをそのまま使う。
-    const Beff = Math.min(Bw, maxBw);
-    const type = effectiveBackrockType();
-    let sagitta = n('wallThickness') || 0;
-    let hCenter = R_eff - sagitta;
-    let placementOk = true;
     if (type === 'taper' && backrockCurrentModel) {
+      // バックロック使用時・テーパー形（47.11章）: バックロックは既製品で寸法（幅短辺Ls=W2・
+      // 厚さT）が決まっているため、支圧壁厚さを自由入力にはしない。ユーザー指摘の通り、
+      // 「短辺Lsと立坑内径(R_eff)がわかれば、短辺の面がライナー内面からどれだけ離れた位置に
+      // 来るか」は幾何学的に一意に決まる＝角当たり計算（38章、computeBackrockPlacement）。
+      // 支圧壁厚さ(sagitta)はこの角当たり計算で求め、有効幅(Beff)は、間詰めコンクリートを
+      // 含めた全体の弦幅として、そのsagittaに対応する弦幅を通常の弦・サジッタ式で逆算する
+      // （バックロック本体の幅W1だけに限定しない。ユーザー指摘: 間詰めコンクリートまで
+      // 含めて計算してよい）。
       const placement = computeBackrockPlacement(backrockCurrentModel, R_eff, offset);
-      hCenter = placement.hCenter;
-      sagitta = Math.max(0, R_eff - hCenter);
-      placementOk = placement.ok;
+      const sagitta = Math.max(0, R_eff - placement.hCenter);
+      const Beff = Math.min(linerD, 2 * Math.sqrt(Math.max(0, sagitta * (2 * R_eff - sagitta))));
+      return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter: placement.hCenter, placementOk: placement.ok };
     }
-    return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter, placementOk };
+    // バックロック使用時・スクウェア形（矩形立坑向けブロックを円形立坑に強制適用する例外ケース、
+    // または型番未選定）: 幅(Bw)はカタログの型番幅をそのまま使う（幾何学的な逆算はしない）。
+    const Beff = Math.min(Bw, maxBw);
+    const sagitta = n('wallThickness') || 0;
+    const hCenter = R_eff - sagitta;
+    return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter, placementOk: true };
   }
   let maxBw = Bw;
   if (wallShaftType === 'rect' || wallShaftType === 'open' || wallShaftType === 'oval') {
@@ -5056,10 +5127,14 @@ function wallShapeProposalHTML(proposal, Beff, Hw, isCircleShaft, backrockUseFla
   const dHwTxt = proposal.dHw > 0 ? `(+${fmt(proposal.dHw, 2)}m)` : '(変更なし)';
   const dBeffTxt = proposal.dBeff > 0 ? `(+${fmt(proposal.dBeff, 2)}m)` : '(変更なし)';
   let extra;
-  if (isCircleShaft && !backrockUseFlag && R_eff) {
+  // 47.11章: バックロック・テーパー形は幅短辺Ls・立坑内径から角当たり計算で一意に決まるため
+  // （自由入力ではないため）、幾何学的な厚さ換算の提案対象からは除外し、下の「より大きい型番を
+  // 選定してください」案内に戻す。
+  const usesGeometricBeffForProposal = isCircleShaft && !backrockUseFlag;
+  if (usesGeometricBeffForProposal && R_eff) {
     const half = proposal.newBeff / 2;
     const newT = Math.max(0, R_eff - Math.sqrt(Math.max(0, R_eff * R_eff - half * half)));
-    extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">円形立坑のため、この有効幅は支圧壁厚さ t=${fmt(newT, 3)}m に相当します（現在の入力 t=${fmt(n('wallThickness'), 3)}m）。「支圧壁の諸元」カードの厚さを増やしてください。</div>`;
+    extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">円形立坑のため、この有効幅は支圧壁厚さ t=${fmt(newT, 3)}m に相当します（現在の入力 t=${fmt(n('wallThickness'), 3)}m）。「支圧壁の諸元」カードの厚さ（バックロック使用時は間詰めコンクリートを含めた全体厚さ）を増やしてください。</div>`;
   } else if (backrockUseFlag) {
     extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">バックロック使用時は幅がカタログ型番で決まります。この有効幅Beffを満たす、より大きい型番を選定してください（上の「🧱 バックロック」カードで型番一覧を確認）。</div>`;
   } else {
@@ -5125,28 +5200,45 @@ function calcBacklock() {
 
   // 有効幅（立坑制約）― F・Hw未入力でも表示できるよう、早期returnより前で計算する
   const wallBeffInfo = computeWallBeff();
-  const { maxBw, Beff, linerD, sagitta, R_eff } = wallBeffInfo;
+  const { maxBw, Beff, linerD, sagitta, R_eff, hCenter } = wallBeffInfo;
 
-  // 円形立坑・現場打ち(backrockUse=false)のときだけ、支圧壁厚さ(wallThickness)から
-  // その厚さになる弦幅(Beff)を幾何学的に逆算し、wallBwを自動計算（読取専用）にする（35章）。
-  // それ以外（矩形等、またはバックロック使用時）はwallBwが直接の入力値（バックロック使用時は
-  // カタログの幅をそのまま採用する実務に合わせている。36章参照）。
+  // 円形立坑では、現場打ち(backrockUse=false)のときは支圧壁厚さ(wallThickness、自由入力の
+  // 設計変数)からその厚さになる弦幅(Beff)を幾何学的に逆算し、wallBwを自動計算（読取専用）に
+  // する（35章）。バックロック使用時・テーパー形のときは、バックロックが既製品で寸法
+  // （幅短辺Ls・厚さ）が決まっているため、逆に厚さ・幅の両方とも角当たり計算（38章／47.11章、
+  // Ls=W2と立坑内径R_effから幾何学的に一意に決まる）の結果を表示専用で反映する
+  // （ユーザー指摘: バックロックは製品なので寸法から一意に決まるはずで、自由入力にすべきでない）。
+  // それ以外（矩形等、またはスクウェア形をバックロック使用中に円形立坑へ強制適用等）は
+  // wallBwが直接の入力値（カタログの幅をそのまま採用する。36章参照）。
   const isCircleShaft = (wallShaftType === 'circle' || wallShaftType === 'casing');
   const thicknessEl = document.getElementById('wallThickness');
   const thicknessNoteEl = document.getElementById('wallThicknessNote');
   const bwEl = document.getElementById('wallBw');
-  if (isCircleShaft && !backrockUse && bwEl) bwEl.value = Beff.toFixed(3);
+  const isBackrockTaperCircle = isCircleShaft && backrockUse && effectiveBackrockType() === 'taper' && backrockCurrentModel;
+  const usesGeometricBeff = isCircleShaft && (!backrockUse || isBackrockTaperCircle);
+  if (usesGeometricBeff && bwEl) bwEl.value = Beff.toFixed(3);
+  if (isBackrockTaperCircle && thicknessEl) thicknessEl.value = wallBeffInfo.sagitta.toFixed(3);
 
-  if (!backrockUse) {
-    if (thicknessEl) thicknessEl.readOnly = false;
-    if (bwEl) bwEl.readOnly = isCircleShaft;
-    if (isCircleShaft) {
+  if (isBackrockTaperCircle) {
+    if (thicknessEl) thicknessEl.readOnly = true;
+    if (bwEl) bwEl.readOnly = true;
+    if (thicknessNoteEl) {
+      thicknessNoteEl.innerHTML = wallBeffInfo.placementOk
+        ? `バックロックは既製品のため、幅短辺Ls=${backrockCurrentModel.W2}mと立坑内径（有効半径R_eff=${R_eff.toFixed(3)}m）から、短辺の面がライナー内面から離れる位置（角当たり計算）を幾何学的に求め、支圧壁厚さ＝${wallBeffInfo.sagitta.toFixed(3)}m・有効幅Beff＝${Beff.toFixed(2)}m（間詰めコンクリートを含めた弦幅）として自動算出しています。編集はできません。`
+        : `<span style="color:var(--ng);font-weight:700">⚠ この型番の幅短辺Ls=${backrockCurrentModel.W2}mが、有効半径R_eff=${R_eff.toFixed(3)}mに収まりません（立坑が小さすぎます）。立坑径を大きくするか、より小さい型番を選んでください。</span>`;
+    }
+  } else if (!backrockUse) {
+    if (usesGeometricBeff) {
+      if (thicknessEl) thicknessEl.readOnly = false;
+      if (bwEl) bwEl.readOnly = true;
       if (thicknessNoteEl) thicknessNoteEl.textContent = `円形立坑のため、この厚さになる弦幅Beffを幾何学的に自動計算し、支圧壁幅B_wに反映しています（ライナープレート内側径=呼び径−50mm、Beff=${Beff.toFixed(2)}m）。幅を直接指定したい場合は矩形等に変更してください。`;
     } else {
+      if (thicknessEl) thicknessEl.readOnly = false;
+      if (bwEl) bwEl.readOnly = false;
       if (thicknessNoteEl) thicknessNoteEl.textContent = '矩形・小判型等では厚さは幾何学的に一意に決まらないため、設計値を入力してください（幅B_wは直接指定します）。';
     }
   } else if (thicknessNoteEl) {
-    thicknessNoteEl.textContent = `バックロック使用のため、選定型番（${backrockModel ? backrockModel.name : '—'}）の幅・厚さをそのまま反映しています（上の「バックロック」カード参照。実際の計算書に倣い、円形立坑でも幅を幾何学的に逆算せずカタログ値を直接使用）。`;
+    thicknessNoteEl.textContent = `バックロック使用のため、選定型番（${backrockModel ? backrockModel.name : '—'}）の幅・厚さをそのまま反映しています（上の「バックロック」カード参照）。`;
   }
   const Bw = n('wallBw');
 
@@ -5199,19 +5291,26 @@ function calcBacklock() {
   // （BR-SST４台1350計算書.pdf）の式・数値と完全一致することを検算済み。
   let check4 = null;
   if (backrockUse) {
-    const q4 = f; // ①のfと同一式（q=F/(Bo×H0)）
-    const jackHalfWidth = (jackStageWidths.length && jackStageWidths[0] > 0) ? jackStageWidths[0] : Beff / 4;
+    // 47.7章: ①③⑤の支圧壁幅Beffは間詰めコンクリートまで含めた全体の弦幅に変更したが、
+    // ④（プレキャスト支圧壁バックロック自体の曲げ照査）は、ジャッキがバックロック本体
+    // （カタログのW1、間詰め部分を含まない実際の梁スパン）に直接反力を伝える前提のため、
+    // Beffではなくバックロック自体の幅W1をBoとして使う（他案件の検討書「バックロック検討.xls」
+    // でも、周辺の間詰め・立坑寸法から逆算した幅ではなく、型番自体の幅を使っていた）。
+    const Bo4 = (backrockCurrentModel && backrockCurrentModel.W1) || Beff;
+    const q4 = F / (Bo4 * Hw); // q=F/(Bo×H0)。①のf（Beff基準）とは分母のBoが異なることに注意
+    const jackHalfWidth = (jackStageWidths.length && jackStageWidths[0] > 0) ? jackStageWidths[0] : Bo4 / 4;
     const L = 2 * jackHalfWidth; // ジャッキ2点の間隔（対称配置と仮定）
-    const L1 = Math.max(0, (Beff - L) / 2), L2 = L1;
+    const L1 = Math.max(0, (Bo4 - L) / 2), L2 = L1;
     const Ra4 = L > 0 ? (q4 / (2 * L)) * (L1 + L + L2) * (L1 + L - L2) : 0;
     const Mc4 = L > 0 ? (Ra4 * Ra4) / (2 * q4) - L1 * Ra4 : 0;
     const Ma4 = -q4 / 2 * L1 * L1;
     const Mb4 = -q4 / 2 * L2 * L2;
     const Mapplied = Math.max(Math.abs(Mc4), Math.abs(Ma4), Math.abs(Mb4));
 
-    // 断面（単位高さb=1000mm、厚さH=wallThickness）
+    // 断面（単位高さb=1000mm、厚さH=バックロック本体の厚さ。間詰め部分は鋼材と一体化した
+    // 複合断面ではないため、④の抵抗モーメントには含めない＝wallThicknessではなくmodel.Tを使う）
     const bMM = 1000;
-    const HMM = (n('wallThickness') || 0) * 1000;
+    const HMM = ((backrockCurrentModel && backrockCurrentModel.T) || n('wallThickness') || 0) * 1000;
     const tSteel = n('wallSteelT') || 11;
     const coverMM = 5.5; // カタログ実例の圧縮鉄筋位置(=かぶり)を固定値として採用
     const dMM = Math.max(1, HMM - coverMM);
@@ -5236,7 +5335,7 @@ function calcBacklock() {
     check4 = {
       no: '④', name: 'プレキャスト支圧壁の曲げ照査', ok: check4_ok,
       formula: `
-        等分布荷重 q = F/(Bo×H0) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${q4.toFixed(1)} kN/m²<br><br>
+        等分布荷重 q = F/(Bo×H0) = ${F.toFixed(0)}/(${Bo4.toFixed(2)}×${Hw.toFixed(2)}) = ${q4.toFixed(1)} kN/m²（Bo=バックロック本体幅W1、間詰め含む全体幅Beff=${Beff.toFixed(2)}mとは別）<br><br>
         ジャッキ作用位置 L=2×片側幅 = ${L.toFixed(3)}m、L1=L2=(Bo-L)/2 = ${L1.toFixed(3)}m<br>
         Ra = q/(2L)×(L1+L+L2)×(L1+L-L2) = ${Ra4.toFixed(1)} kN<br>
         Mc(中央) = Ra²/(2q)-L1×Ra = ${Mc4.toFixed(1)} kN・m<br>
@@ -5274,9 +5373,54 @@ function calcBacklock() {
   ];
   if (check4) checks.push(check4);
 
-  const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok);
+  // ⑤ 推進作業スペース照査（円形立坑のみ）: 支圧壁幅Bwを広げるほど厚さ（サジッタ）が増し、
+  // 支圧壁前面〜反対側ライナー内面（発進側）までの残りスペース(availDepth = hCenter + R_eff)を
+  // 圧迫する。この残りスペースが「前回推進終了時点から次の管を据え付け終えるまで」に最低限
+  // 必要な区間（残り管長＋Lc2＋管有効長l′＋Lc2＋押輪長さ＋ストラット×本数。ジャッキ本体の
+  // 長さは含まない）を下回ると、推進作業自体ができなくなる（ユーザー実例: 円形立坑での
+  // 推進管カラー端部〜支圧壁前面間の実測寸法を提示いただき、単なるhCenterではなく発進側
+  // ライナー内面までの全長で比較すべきと確認した）。
+  const collarLc2Val = collarLc2();
+  setV('wallCollarAllowance', (collarLc2Val * 1000).toFixed(0));
+  const reqDepth = requiredWorkDepth();
+  let check5 = null;
+  if (isCircleShaft && hCenter != null && R_eff != null) {
+    const availDepth = hCenter + R_eff;
+    const check5_ok = availDepth >= reqDepth - 1e-9;
+    const stub_m = (n('wallRemainingStub') || 0) / 1000;
+    const pipeLen_m = n('pipeLen') || 0;
+    const collar_m = collarLc2Val;
+    const pressRing_m = (n('wallPressRingLen') || 0) / 1000;
+    const strutTotal_m = ((n('wallStrutUnitLen') || 0) * (n('wallStrutCount') || 0)) / 1000;
+    check5 = {
+      no: '⑤', name: '推進作業スペース照査', ok: check5_ok,
+      formula: `
+        残りスペース = 支圧壁前面〜発進側ライナー内面 = hCenter + R_eff = ${hCenter.toFixed(3)} + ${R_eff.toFixed(3)} = ${availDepth.toFixed(3)} m<br>
+        必要スペース = 残り管長 + Lc2 + 管有効長l′ + Lc2 + 押輪長さ + ストラット計 = ${stub_m.toFixed(3)} + ${collar_m.toFixed(3)} + ${pipeLen_m.toFixed(2)} + ${collar_m.toFixed(3)} + ${pressRing_m.toFixed(3)} + ${strutTotal_m.toFixed(3)} = ${reqDepth.toFixed(3)} m
+      `,
+      compare: { calc: availDepth, calcLabel: '残りスペース（支圧壁前面〜発進側ライナー内面）', limit: reqDepth, limitLabel: '必要スペース', cmp: '≥', unit: 'm' },
+    };
+    checks.push(check5);
+  }
+
+  const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok) && (!check5 || check5.ok);
+  // 形状拡大の提案（①②③のNG解消用）は、円形立坑の場合はさらに⑤の必要スペースを
+  // 侵食しない範囲までしかBeffを広げない（そうでないと結局作業スペースが取れない提案になる）。
+  // バックロック使用時（プレキャスト・カタログ型番、47.11章）も対象に含める。実際のサジッタは
+  // 型番ごとの角当たり計算（computeBackrockPlacement）で決まり理想的な円弓形の式とは厳密には
+  // 一致しないが、この式は幾何学的に達成可能な最小サジッタ（＝弓形の理論値）を使っているため、
+  // 実物のサジッタはこれ以上になることはあっても下回ることはなく、安全側（Beffを広げすぎない側）
+  // の上限として機能する（提案自体は「より大きい型番を選定してください」という案内になる）。
+  // availDepth = hCenter+R_eff = (R_eff−サジッタ)+R_eff = 2R_eff−サジッタ ≥ reqDepth
+  //   ⇔ サジッタ ≤ 2R_eff−reqDepth（ただしサジッタは最大でもR_effを超えない）
+  let maxBwForProposal = maxBw;
+  if (isCircleShaft && R_eff) {
+    const sagittaMax = Math.max(0, Math.min(R_eff, 2 * R_eff - reqDepth));
+    const clearanceMaxBeff = 2 * Math.sqrt(Math.max(0, sagittaMax * (2 * R_eff - sagittaMax)));
+    maxBwForProposal = Math.min(maxBw, clearanceMaxBeff);
+  }
   const shapeProposal = (!(check1_ok && check2_ok && check3_ok))
-    ? computeWallShapeProposal(Beff, Hw, F, gamma, phi, C_coh, Hmax_soil, hc, fa, alphaEp, maxBw)
+    ? computeWallShapeProposal(Beff, Hw, F, gamma, phi, C_coh, Hmax_soil, hc, fa, alphaEp, maxBwForProposal)
     : null;
 
   // このブロックは毎回innerHTMLごと再生成されるため、アコーディオンの開閉状態を
@@ -5285,9 +5429,10 @@ function calcBacklock() {
   const prevOpenId = backlockEl.querySelector('.card.accordion.open')?.id || null;
   backlockEl.innerHTML = `
     <div class="card accordion" id="wallCheckCard">
-      <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 ${check4 ? '4' : '3'}段階照査結果</div>
+      <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 ${checks.length}段階照査結果</div>
       ${(!check1_ok || !check2_ok) ? `<div class="ng-box" style="font-size:12px">⚠️ ${!check1_ok && !check2_ok ? '①基礎反力照査・②偏心曲げ照査がともにNGです' : !check1_ok ? '①基礎反力照査がNGです' : '②偏心曲げ照査がNGです'}。許容支圧応力度 f_a（現在 ${faInput} N/mm²）が実際の値より大きすぎないか確認するか、支圧壁の幅Bw・高さHwを見直してください。</div>` : ''}
       ${check4 && !check4.ok ? `<div class="ng-box" style="font-size:12px">⚠️ ④プレキャスト支圧壁の曲げ照査がNGです。ジャッキの据付位置（片側幅）を支圧壁の端に寄せて曲げを小さくするか、鋼材部厚さt・支圧壁厚さを見直してください。</div>` : ''}
+      ${check5 && !check5.ok ? `<div class="ng-box" style="font-size:12px">⚠️ ⑤推進作業スペース照査がNGです。支圧壁幅Bw（現在${Beff.toFixed(2)}m）が広すぎて、支圧壁前面〜発進側ライナー内面までの残りスペースが、管1本を押し切り次の管を据え付けるのに必要な${reqDepth.toFixed(2)}mを下回っています。支圧壁幅Bwを縮小するか、立坑径を大きくしてください。</div>` : ''}
       <div class="note-box" style="font-size:11px">有効幅 Beff=${Beff.toFixed(2)} m（立坑制約: maxBw=${maxBw.toFixed(2)}m）</div>
       ${checks.map(c=>`
         <div style="border:1px solid var(--line);border-radius:8px;padding:10px;margin:6px 0">
@@ -5306,6 +5451,7 @@ function calcBacklock() {
       <div class="${allOk?'ok-box':'ng-box'}" style="font-size:12px">
         ${allOk ? '全照査 OK — 現在の設定で施工可能です。' : '一部照査 NG — 支圧壁の寸法や土質条件を見直してください。'}${backrockUse ? '（バックロック使用時の寸法は上の「🧱 バックロック」カードを参照）' : ''}
       </div>
+      ${(!check1_ok || !check2_ok || !check3_ok) && !backrockUse ? `<div class="note-box" style="font-size:12px;margin-top:6px">現場打ち（無筋コンクリート）でNGの場合、鉄筋補強より先に<b>バックロックへの変更</b>を検討するのが実務的です（表面が鋼材で覆われ剛性・安全率が高く、現場打ちより薄く立坑内を広く使える）。上の「支圧壁の構築方法」で「バックロックを使用」に切り替えて再照査してください。</div>` : ''}
     </div>
   `;
   if (prevOpenId) { const el = document.getElementById(prevOpenId); if (el) el.classList.add('open'); }
@@ -5371,7 +5517,9 @@ function getProjectData() {
       railDrop: n('railDrop'), railSize: v('railSize'),
       backrockUse, backrockType, backrockModelOverride, epAlpha: n('wallEpAlpha'),
       steelT: n('wallSteelT'), steelSa: n('wallSteelSa'),
-      ringUse: wallRingUse, ringH: n('wallRingH')
+      ringUse: wallRingUse, ringH: n('wallRingH'),
+      remainingStub: n('wallRemainingStub'), pressRingLen: n('wallPressRingLen'),
+      strutUnitLen: n('wallStrutUnitLen'), strutCount: n('wallStrutCount')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -5552,6 +5700,11 @@ function setProjectData(d) {
     setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
     setV('wallElWallTop', wl.elWallTop||2.5); setV('wallCenterOffset', wl.centerOffset||0);
     setV('wallThickness', wl.thickness||0.8);
+    setV('wallRemainingStub', wl.remainingStub!=null ? wl.remainingStub : 300);
+    setV('wallPressRingLen', wl.pressRingLen!=null ? wl.pressRingLen : 300);
+    setV('wallStrutUnitLen', wl.strutUnitLen!=null ? wl.strutUnitLen : 400);
+    setV('wallStrutCount', wl.strutCount!=null ? wl.strutCount : 4);
+    // wallCollarAllowanceは呼び径から自動参照する値になったため、保存/復元は行わない（calcBacklock()で同期）
     setV('railDrop', wl.railDrop||50);
     // railSizeは新形式（H形鋼規格の選択）。旧形式はrailWidth（幅の実測値[mm]）を直接保存していたため、
     // 最も近い規格に丸めて後方互換をとる。
