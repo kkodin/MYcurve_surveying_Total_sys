@@ -768,10 +768,6 @@ tr.row-selected{background:#eff6ff}
 
   <div class="card accordion" id="jackStagesCard">
     <div class="card-title" onclick="toggleAccordion(this)">🔩 ジャッキ配置（推力分散用）</div>
-    <div class="ok-box" style="font-size:11px">
-      最下段のジャッキ1段だけで管を押すと、押輪（プレスリング）を介して推力が管の下部に偏って伝わってしまいます。これを避けるため、通常は複数段のジャッキを据え付け、押輪・ストラットを通してなるべく均一に推力が伝わるようにします（曲線とは関係ありません。曲線を作るための装置ではなく、直進時も含め常時使う推力分散のための配置です）。段数は「⚡推進力」タブの元押ジャッキ使用台数÷2で自動決定します（1段目2基・2段目4基…と段が進むごとに2基ずつ増える配置を想定）。ジャッキ能力は全段共通（「⚡推進力」タブの「ジャッキ1本の能力」を使用）です。各段のジャッキ幅（推進中央線からの片側幅）を入力すると、円形立坑の場合は据付位置での支圧壁の局所厚さを計算します（前面に応力分散用の鉄板が入っている前提。構造照査は行わず参考表示のみ）。実際の段数・配置ルール（例: 3段目は2段目と同じ幅で2段目の上に乗る、2段目はストラットの内側とジャッキ内側が合う幅にする、等）は現場・機種ごとに異なるため自動計算はせず、すべて数値を確認しながら入力する形にしています。<br><br>
-      ※刃口推進はズリ（掘削土砂）をバケットでウインチ・クレーン揚重するため、押輪・ストラットは上部が開いた馬蹄形になります（バケットを真上に引き上げるため）。泥濃推進等バケット出し入れが不要な工法では押輪が円形になり、ジャッキは管高さ中心の左右に据え付けられることが多いです。
-    </div>
     <div class="two-col">
       <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="drawJackPositionDiagram()" onchange="calcBacklock()"><span class="unit">mm</span></div>
       <div class="field-row full">
@@ -793,9 +789,6 @@ tr.row-selected{background:#eff6ff}
 
   <div class="card accordion" id="localBearingCard">
     <div class="card-title" onclick="toggleAccordion(this)">🔨 ジャッキ当たり部の局所支圧照査</div>
-    <div class="ok-box" style="font-size:11px">
-      元押ジャッキの推力は、支圧壁との間に鉄板を挟んで面的に伝えます（実際に力が集中するのは支圧壁全体ではなく、この鉄板が当たる面積だけ）。ここでは鉄板の当たり面積から必要な支圧応力度を求め、それを満たすために必要なコンクリート圧縮強度・支圧壁厚さを算出します。
-    </div>
     <div class="two-col">
       <div class="field-row"><label>ジャッキ受圧鉄板 幅 b_p [m]</label><input id="jackPlateW" class="mono" type="number" step="0.05" value="0.5" oninput="calcBacklock()"><span class="unit">m</span></div>
       <div class="field-row"><label>ジャッキ受圧鉄板 高さ h_p [m]</label><input id="jackPlateH" class="mono" type="number" step="0.05" value="0.5" oninput="calcBacklock()"><span class="unit">m</span></div>
