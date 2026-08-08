@@ -4969,6 +4969,124 @@ function calcLocalBearing() {
   `;
 }
 
+// ══════════════════════════════════════
+//  支圧壁4段階照査 ― 計算結果と判定条件の比較表示・NG時の形状変更提案
+// ══════════════════════════════════════
+
+// ①②③④共通の「計算結果 vs 判定条件」比較行。数値を並べて直接比較できるようにし、
+// バーの塗り具合（計算結果／判定値の比率）で余裕度も一目でわかるようにする。
+function compareBarHTML(calcVal, calcLabel, limitVal, limitLabel, cmp, unit, ok) {
+  const pct = limitVal > 0 ? Math.max(0, Math.min(140, (calcVal / limitVal) * 100)) : 0;
+  const barColor = ok ? 'var(--ok)' : 'var(--ng)';
+  return `
+    <div style="margin-top:8px;padding:8px 10px;background:${ok ? '#f0fdf4' : '#fef2f2'};border-radius:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px">
+        <span>計算結果（${calcLabel}）</span>
+        <b style="font-size:15px;color:${barColor}">${fmt(calcVal, 1)} ${unit}</b>
+      </div>
+      <div style="height:6px;background:#e5e7eb;border-radius:3px;margin:4px 0;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${barColor}"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--sub)">
+        <span>判定条件（${limitLabel}）</span>
+        <span>${cmp} ${fmt(limitVal, 1)} ${unit}</span>
+      </div>
+    </div>
+  `;
+}
+
+// ①②③がNGのとき、Hw（高さ）・Beff（有効幅）をどれだけ拡大すればOKになるかを総当たりで探索する。
+// ④（バックロックの曲げ照査）はカタログ製品ベースで連続的に寸法変更できないため対象外
+// （そちらは既存のNG注記＝ジャッキ位置・鋼材厚の見直しを案内する）。
+// 探索は0.1m刻み、Hwは+3.0mまで、Beffは+2.0mまたは立坑制約(maxBeff)までの小さい方。
+// 見つかった候補のうち「Hw増分+Beff増分」が最小のものを提案する（きりのいい最小変更を優先）。
+function computeWallShapeProposal(Beff, Hw, F, gamma, phi, C_coh, Hmax_soil, hc, fa, alphaEp, maxBeff) {
+  function passAt(HwT, BeffT) {
+    const f = F / (BeffT * HwT);
+    const e = Math.abs(HwT / 2 - hc);
+    const A = BeffT * HwT, Z = BeffT * HwT * HwT / 6;
+    const sigma = F / A + (F * e) / Z;
+    const Kp = Math.pow(Math.tan(Math.PI / 4 + phi / 2), 2);
+    const depth = Math.max(0, Hmax_soil - (HwT - hc));
+    const q = gamma * depth;
+    const Ep = alphaEp * (0.5 * gamma * HwT * HwT * Kp * BeffT + q * HwT * Kp * BeffT + 2 * C_coh * Math.sqrt(Kp) * HwT * BeffT);
+    return f <= fa && sigma <= fa && Ep >= F;
+  }
+  if (passAt(Hw, Beff)) return null;
+  const step = 0.1;
+  const maxStepsHw = 30; // +3.0m
+  const cappedBeff = (maxBeff - Beff) < 2.0 - 1e-9;
+  const maxStepsBeff = Math.max(0, Math.min(20, Math.round((maxBeff - Beff) / step))); // +2.0m or 立坑制約まで
+  for (let total = 0; total <= maxStepsHw + maxStepsBeff; total++) {
+    for (let sh = Math.max(0, total - maxStepsBeff); sh <= Math.min(total, maxStepsHw); sh++) {
+      const sb = total - sh;
+      const HwT = Hw + sh * step, BeffT = Beff + sb * step;
+      if (passAt(HwT, BeffT)) {
+        return { achievable: true, newHw: HwT, newBeff: BeffT, dHw: sh * step, dBeff: sb * step, cappedBeff, maxBeff };
+      }
+    }
+  }
+  return { achievable: false, cappedBeff, maxBeff };
+}
+
+// 現在の形状と提案形状を重ねた簡易模式図（Beff×Hwの寸法比較のみ。立坑・支圧壁の実断面形状の
+// 正確な図面ではなく、あくまで「どれだけ拡大するか」を視覚的に伝えるための簡略図）。
+function wallShapeCompareSVG(beff1, hw1, beff2, hw2) {
+  const maxDim = Math.max(beff1, beff2, hw1, hw2, 0.5);
+  const s = 130 / maxDim;
+  const w1 = beff1 * s, h1 = hw1 * s, w2 = beff2 * s, h2 = hw2 * s;
+  const baseY = 150, cx = 180;
+  return `<svg viewBox="0 0 360 170" style="max-width:320px;width:100%">
+    <line x1="20" y1="${baseY}" x2="340" y2="${baseY}" stroke="var(--line)" stroke-width="1"/>
+    <rect x="${(cx - w2 / 2).toFixed(1)}" y="${(baseY - h2).toFixed(1)}" width="${w2.toFixed(1)}" height="${h2.toFixed(1)}" fill="#dcfce7" stroke="var(--ok)" stroke-width="2" stroke-dasharray="4,3"/>
+    <rect x="${(cx - w1 / 2).toFixed(1)}" y="${(baseY - h1).toFixed(1)}" width="${w1.toFixed(1)}" height="${h1.toFixed(1)}" fill="none" stroke="var(--sub)" stroke-width="2"/>
+    <text x="${cx}" y="${baseY + 16}" text-anchor="middle" font-size="11" fill="var(--sub)">実線=現在の形状　破線=提案形状（模式図・Beff×Hwの寸法比較）</text>
+  </svg>`;
+}
+
+function wallShapeProposalHTML(proposal, Beff, Hw, isCircleShaft, backrockUseFlag, R_eff) {
+  if (!proposal) return '';
+  if (!proposal.achievable) {
+    return `
+      <div class="card accordion open" id="wallShapeProposalCard">
+        <div class="card-title warn" onclick="toggleAccordion(this)">🛠 形状変更の提案</div>
+        <div class="ng-box" style="font-size:12px">高さ+3.0m・有効幅+2.0m${proposal.cappedBeff ? `（立坑制約により有効幅は最大${fmt(proposal.maxBeff, 2)}mまで）` : ''}の範囲内では、この形状変更だけで①②③をすべてOKにはできませんでした。許容支圧応力度f_aや土質条件（γ・φ・C・土被り）を見直すか、立坑自体の拡幅を検討してください。</div>
+      </div>`;
+  }
+  const dHwTxt = proposal.dHw > 0 ? `(+${fmt(proposal.dHw, 2)}m)` : '(変更なし)';
+  const dBeffTxt = proposal.dBeff > 0 ? `(+${fmt(proposal.dBeff, 2)}m)` : '(変更なし)';
+  let extra;
+  if (isCircleShaft && !backrockUseFlag && R_eff) {
+    const half = proposal.newBeff / 2;
+    const newT = Math.max(0, R_eff - Math.sqrt(Math.max(0, R_eff * R_eff - half * half)));
+    extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">円形立坑のため、この有効幅は支圧壁厚さ t=${fmt(newT, 3)}m に相当します（現在の入力 t=${fmt(n('wallThickness'), 3)}m）。「支圧壁の諸元」カードの厚さを増やしてください。</div>`;
+  } else if (backrockUseFlag) {
+    extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">バックロック使用時は幅がカタログ型番で決まります。この有効幅Beffを満たす、より大きい型番を選定してください（上の「🧱 バックロック」カードで型番一覧を確認）。</div>`;
+  } else {
+    extra = `<div style="font-size:12px;color:var(--sub);margin-top:6px">支圧壁幅 B_w を ${fmt(proposal.newBeff, 2)}m 以上に変更してください${proposal.cappedBeff ? `（立坑内法幅の制約 maxBw=${fmt(proposal.maxBeff, 2)}m以内）` : ''}。</div>`;
+  }
+  return `
+    <div class="card accordion open" id="wallShapeProposalCard">
+      <div class="card-title warn" onclick="toggleAccordion(this)">🛠 形状変更の提案（NG解消の目安）</div>
+      <div class="note-box" style="font-size:12px">現在の形状では①〜③のいずれかがNGです。以下のように支圧壁を拡大すると①②③がすべてOKになる見込みです（④のNGは別途、上の注記を参照）。</div>
+      <div style="display:flex;gap:10px;margin-top:6px">
+        <div style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:11px;color:var(--sub)">支圧壁高さ Hw</div>
+          <div style="font-size:13px">${fmt(Hw, 2)}m → <b style="color:var(--ok)">${fmt(proposal.newHw, 2)}m</b></div>
+          <div style="font-size:11px;color:var(--sub)">${dHwTxt}</div>
+        </div>
+        <div style="flex:1;border:1px solid var(--line);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:11px;color:var(--sub)">有効幅 Beff</div>
+          <div style="font-size:13px">${fmt(Beff, 2)}m → <b style="color:var(--ok)">${fmt(proposal.newBeff, 2)}m</b></div>
+          <div style="font-size:11px;color:var(--sub)">${dBeffTxt}</div>
+        </div>
+      </div>
+      ${extra}
+      <div style="margin-top:8px;text-align:center">${wallShapeCompareSVG(Beff, Hw, proposal.newBeff, proposal.newHw)}</div>
+    </div>
+  `;
+}
+
 function calcBacklock() {
   const hc = n('wallHc');
   const faInput = n('wallFa'); // N/mm²（コンクリートの許容支圧応力度、ユーザー入力）
@@ -5007,7 +5125,7 @@ function calcBacklock() {
 
   // 有効幅（立坑制約）― F・Hw未入力でも表示できるよう、早期returnより前で計算する
   const wallBeffInfo = computeWallBeff();
-  const { maxBw, Beff, linerD, sagitta } = wallBeffInfo;
+  const { maxBw, Beff, linerD, sagitta, R_eff } = wallBeffInfo;
 
   // 円形立坑・現場打ち(backrockUse=false)のときだけ、支圧壁厚さ(wallThickness)から
   // その厚さになる弦幅(Beff)を幾何学的に逆算し、wallBwを自動計算（読取専用）にする（35章）。
@@ -5118,37 +5236,48 @@ function calcBacklock() {
     check4 = {
       no: '④', name: 'プレキャスト支圧壁の曲げ照査', ok: check4_ok,
       formula: `
-        等分布荷重 q = F/(Bo×H0) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${q4.toFixed(1)} kN/m²<br>
+        等分布荷重 q = F/(Bo×H0) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${q4.toFixed(1)} kN/m²<br><br>
         ジャッキ作用位置 L=2×片側幅 = ${L.toFixed(3)}m、L1=L2=(Bo-L)/2 = ${L1.toFixed(3)}m<br>
         Ra = q/(2L)×(L1+L+L2)×(L1+L-L2) = ${Ra4.toFixed(1)} kN<br>
-        Mc(中央) = Ra²/(2q)-L1×Ra = ${Mc4.toFixed(1)} kN・m　Ma(ジャッキ位置) = -q/2×L1² = ${Ma4.toFixed(1)} kN・m　Mb = ${Mb4.toFixed(1)} kN・m<br>
+        Mc(中央) = Ra²/(2q)-L1×Ra = ${Mc4.toFixed(1)} kN・m<br>
+        Ma(ジャッキ位置) = -q/2×L1² = ${Ma4.toFixed(1)} kN・m　Mb = ${Mb4.toFixed(1)} kN・m<br><br>
         断面: b=${bMM}mm・H=${HMM.toFixed(0)}mm・鋼材厚t=${tSteel}mm・d=${dMM.toFixed(1)}mm・p=${p4.toFixed(4)}・n=${nRatio}<br>
-        k=${k4.toFixed(4)}　Lc=${Lc4.toFixed(4)}　j=${j4.toFixed(4)}　v=${v4.toFixed(4)}<br>
-        σca=Fc/3=${BACKROCK_FC}/3=${sigmaCa.toFixed(1)}N/mm²（バックロックのコンクリート強度は全型番共通60N/mm²）　σsa=${sigmaSa}N/mm²<br>
-        Mrc=σca・b・d²・Lc=${Mrc4.toFixed(0)} kN・m　Mrs=σsa・b・d²・Lc・v=${Mrs4.toFixed(0)} kN・m<br>
-        <b>抵抗モーメント M=min(Mrc,Mrs)=${Mres.toFixed(0)} kN・m</b>　vs　生じるモーメント最大値=${Mapplied.toFixed(1)} kN・m
+        k=${k4.toFixed(4)}　Lc=${Lc4.toFixed(4)}　j=${j4.toFixed(4)}　v=${v4.toFixed(4)}<br><br>
+        σca=Fc/3=${BACKROCK_FC}/3=${sigmaCa.toFixed(1)}N/mm²（バックロックのコンクリート強度は全型番共通60N/mm²）<br>
+        σsa=${sigmaSa}N/mm²<br>
+        Mrc=σca・b・d²・Lc=${Mrc4.toFixed(0)} kN・m　Mrs=σsa・b・d²・Lc・v=${Mrs4.toFixed(0)} kN・m
       `,
-      limit: 'M ≥ 生じるモーメント最大値(|Mc|,|Ma|,|Mb|)'
+      compare: { calc: Mres, calcLabel: 'M＝min(Mrc,Mrs)（抵抗モーメント）', limit: Mapplied, limitLabel: '生じるモーメント最大値(|Mc|,|Ma|,|Mb|)', cmp: '≥', unit: 'kN・m' },
     };
   }
 
   const checks = [
-    { no:'①', name:'基礎反力照査', formula:`f = F/(Bw×Hw) = ${F.toFixed(0)}/(${Beff.toFixed(2)}×${Hw.toFixed(2)}) = ${f.toFixed(1)} kN/m²（=${(f/1000).toFixed(3)} N/mm²）`, limit:`≤ f_a=${faInput} N/mm²（=${fa.toFixed(0)} kN/m²）`, ok: check1_ok },
-    { no:'②', name:'偏心曲げ照査', formula:`e=${e.toFixed(3)}m, σmax=${sigma_max.toFixed(1)} kN/m²（=${(sigma_max/1000).toFixed(3)} N/mm²）`, limit:`≤ f_a=${faInput} N/mm²（=${fa.toFixed(0)} kN/m²）`, ok: check2_ok },
+    { no:'①', name:'基礎反力照査', formula:`
+      Beff×Hw = ${Beff.toFixed(2)}×${Hw.toFixed(2)} = ${(Beff*Hw).toFixed(2)} m²<br><br>
+      f = F/(Beff×Hw) = ${F.toFixed(0)}/${(Beff*Hw).toFixed(2)} = ${f.toFixed(1)} kN/m²（=${(f/1000).toFixed(3)} N/mm²）
+    `, compare:{calc:f, calcLabel:'f', limit:fa, limitLabel:`f_a（許容支圧応力度）=${faInput}N/mm²`, cmp:'≤', unit:'kN/m²'}, ok: check1_ok },
+    { no:'②', name:'偏心曲げ照査', formula:`
+      偏心量 e = |Hw/2−hc| = |${(Hw/2).toFixed(3)}−${hc.toFixed(3)}| = ${e.toFixed(3)} m<br>
+      A = Beff×Hw = ${A.toFixed(2)} m²　Z = Beff×Hw²/6 = ${Z.toFixed(3)} m³<br><br>
+      M = F×e = ${F.toFixed(0)}×${e.toFixed(3)} = ${M.toFixed(1)} kN・m<br>
+      σmax = F/A + M/Z = ${(F/A).toFixed(1)} + ${(M/Z).toFixed(1)} = ${sigma_max.toFixed(1)} kN/m²（=${(sigma_max/1000).toFixed(3)} N/mm²）
+    `, compare:{calc:sigma_max, calcLabel:'σmax', limit:fa, limitLabel:`f_a（許容支圧応力度）=${faInput}N/mm²`, cmp:'≤', unit:'kN/m²'}, ok: check2_ok },
     { no:'③', name:'受働土圧安定照査', formula:`
       Kp = tan²(45°+φ/2) = tan²(45°+${phi_deg}°/2) = ${Kp.toFixed(3)}<br>
       支圧壁天端の土被り = H最大 − (Hw−hc) = ${Hmax_soil.toFixed(2)} − (${Hw.toFixed(2)}−${hc.toFixed(2)}) = ${depthToWallTop.toFixed(2)} m<br>
-      上載荷重 q = γ×土被り = ${gamma}×${depthToWallTop.toFixed(2)} = ${q_surcharge.toFixed(1)} kN/m²<br>
+      上載荷重 q = γ×土被り = ${gamma}×${depthToWallTop.toFixed(2)} = ${q_surcharge.toFixed(1)} kN/m²<br><br>
       (a)自重項　0.5×γ×Hw²×Kp×Beff = 0.5×${gamma}×${Hw.toFixed(2)}²×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_weight.toFixed(0)} kN<br>
       (b)上載荷重項　q×Hw×Kp×Beff = ${q_surcharge.toFixed(1)}×${Hw.toFixed(2)}×${Kp.toFixed(3)}×${Beff.toFixed(2)} = ${Ep_surcharge.toFixed(0)} kN<br>
-      (c)粘着力項　2×C×√Kp×Hw×Beff = 2×${C_coh}×${Math.sqrt(Kp).toFixed(3)}×${Hw.toFixed(2)}×${Beff.toFixed(2)} = ${Ep_cohesion.toFixed(0)} kN<br>
-      (a)+(b)+(c) = ${Ep_weight.toFixed(0)}+${Ep_surcharge.toFixed(0)}+${Ep_cohesion.toFixed(0)} = ${Ep_sum.toFixed(0)} kN<br>
-      <b>Ep = α×((a)+(b)+(c)) = ${alphaEp.toFixed(2)}×${Ep_sum.toFixed(0)} = ${Ep.toFixed(0)} kN</b>　vs　F = ${F.toFixed(0)} kN
-    `, limit:`Ep ≥ F`, ok: check3_ok },
+      (c)粘着力項　2×C×√Kp×Hw×Beff = 2×${C_coh}×${Math.sqrt(Kp).toFixed(3)}×${Hw.toFixed(2)}×${Beff.toFixed(2)} = ${Ep_cohesion.toFixed(0)} kN<br><br>
+      Ep = α×((a)+(b)+(c)) = ${alphaEp.toFixed(2)}×(${Ep_weight.toFixed(0)}+${Ep_surcharge.toFixed(0)}+${Ep_cohesion.toFixed(0)}) = ${alphaEp.toFixed(2)}×${Ep_sum.toFixed(0)} = ${Ep.toFixed(0)} kN
+    `, compare:{calc:Ep, calcLabel:'Ep（受働土圧抵抗力）', limit:F, limitLabel:'F（推進力計算結果）', cmp:'≥', unit:'kN'}, ok: check3_ok },
   ];
   if (check4) checks.push(check4);
 
   const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok);
+  const shapeProposal = (!(check1_ok && check2_ok && check3_ok))
+    ? computeWallShapeProposal(Beff, Hw, F, gamma, phi, C_coh, Hmax_soil, hc, fa, alphaEp, maxBw)
+    : null;
 
   // このブロックは毎回innerHTMLごと再生成されるため、アコーディオンの開閉状態を
   // 再生成前に読み取り、再生成後に復元する（さもないと入力のたびに閉じてしまう）
@@ -5166,11 +5295,12 @@ function calcBacklock() {
             <b>${c.no} ${c.name}</b>
             <span class="pill ${c.ok?'ok':'ng'}">${c.ok?'OK':'NG'}</span>
           </div>
-          <div style="font-size:12px;margin-top:6px;color:var(--sub)">${c.formula}</div>
-          <div style="font-size:12px;color:var(--sub)">判定条件: ${c.limit}</div>
+          <div style="font-size:12px;margin-top:6px;color:var(--sub);line-height:1.8">${c.formula}</div>
+          ${compareBarHTML(c.compare.calc, c.compare.calcLabel, c.compare.limit, c.compare.limitLabel, c.compare.cmp, c.compare.unit, c.ok)}
         </div>
       `).join('')}
     </div>
+    ${wallShapeProposalHTML(shapeProposal, Beff, Hw, isCircleShaft, backrockUse, R_eff)}
     <div class="card accordion" id="wallBacklockCard">
       <div class="card-title accent" onclick="toggleAccordion(this)">✅ 総合判定</div>
       <div class="${allOk?'ok-box':'ng-box'}" style="font-size:12px">
