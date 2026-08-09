@@ -98,6 +98,11 @@ td.left{text-align:left}
 .ng-box{background:#fef2f2;border:1px solid #fca5a5;border-left:4px solid var(--ng);border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;line-height:1.6;margin:8px 0}
 .mode-btn{flex:1;padding:9px 8px;border:2px solid var(--line);border-radius:9px;background:var(--card);color:var(--sub);font-size:13px;font-weight:bold;cursor:pointer;transition:all .15s}
 .mode-btn.active{border-color:var(--blue2);background:#eff6ff;color:var(--blue2)}
+.jack-choice{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;border:2px solid var(--line);border-radius:9px;padding:8px 12px;background:var(--card);cursor:pointer;transition:all .15s;margin-bottom:6px;font-size:12px}
+.jack-choice:last-child{margin-bottom:0}
+.jack-choice b{font-size:14px}
+.jack-choice.active{border-color:var(--blue2);background:#eff6ff}
+.jack-choice .jc-formula{color:var(--sub);font-size:11px}
 #toast{position:fixed;bottom:calc(var(--tab-h) + var(--safe-b) + 12px);left:50%;transform:translateX(-50%) translateY(20px);background:#1f2937;color:#fff;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:bold;opacity:0;transition:all .3s;z-index:200;pointer-events:none;white-space:nowrap}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 tr.row-curve{background:var(--row-curve-bg)}
@@ -124,9 +129,11 @@ tr.row-ng td{color:var(--ng)}
 .stepper input{flex:1;text-align:center;min-height:42px;border:1.5px solid var(--line);border-radius:8px;font-size:16px;background:var(--card);color:var(--text)}
 tr.tp-row td{background:#eff6ff}
 tr.kp-row td{background:#fdf2f8}
-td.survey-cell{cursor:pointer;font-weight:bold}
-td.survey-cell:active{background:#bfdbfe}
-td.survey-cell.locked{cursor:default;opacity:.7}
+input.survey-cell{cursor:pointer;font-weight:bold;border:0;background:transparent;width:100%;text-align:center;font-size:inherit;font-family:inherit;color:inherit;padding:2px 0}
+input.survey-cell:active{background:#bfdbfe}
+input.survey-cell.locked{cursor:default;opacity:.7}
+input.survey-cell[data-mode="pc"]{cursor:text}
+input.survey-cell[data-mode="pc"]:focus{background:#dbeafe;outline:2px solid var(--blue2);outline-offset:-2px}
 .role-input{width:64px;min-height:32px;border:1.5px solid var(--line);border-radius:6px;padding:4px 6px;font-size:13px;text-align:center;background:var(--card);color:var(--text)}
 #surveyKeypad{position:fixed;left:0;right:0;bottom:calc(var(--tab-h) + var(--safe-b));background:var(--card);border-top:2px solid var(--blue2);box-shadow:0 -4px 16px rgba(0,0,0,.15);padding:10px 12px calc(10px + var(--safe-b));z-index:300;display:none}
 #surveyKeypad.visible{display:block}
@@ -428,9 +435,21 @@ tr.row-selected{background:#eff6ff}
     <div class="ok-box" style="font-size:11px;margin-bottom:8px">
       BP→EPの平面形状を模式的に表示します（直線=緑、曲線=青）。縦軸=X（上+）、横軸=Y（右+）。実際の方位とは対応しません。ピンチ／ホイールで拡大縮小、ドラッグで移動できます。
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:4px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisRO" onchange="toggleAlignmentLabelVis('ro', this.checked)"> RO表示
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisSeg" onchange="toggleAlignmentLabelVis('segLabel', this.checked)"> 区間名ラベル表示
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisAnn" onchange="toggleAlignmentLabelVis('annotation', this.checked)"> 曲線注記（R・IA・CL・SL・TL）表示
+        </label>
+      </div>
       <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView()">表示リセット</button>
     </div>
+    <p class="report-note" style="margin:0 0 6px">既定では点（BP・BC・IP・SP・EC・EP）のみ表示し、重なりやすいRO・区間名・曲線注記は非表示にしています。チェックすると表示され、この設定は計算書「3.施工条件」の図にも反映されます。</p>
     <canvas id="alignmentVisual" style="width:100%;height:320px;margin-top:0;border-radius:8px;display:block;border:1px solid var(--line);background:#fff;touch-action:none"></canvas>
   </div>
 
@@ -577,15 +596,6 @@ tr.row-selected{background:#eff6ff}
 <!-- ═══ TAB 3: 推進力計算 ═══ -->
 <section class="page" id="p2">
 
-  <div class="card accordion">
-    <div class="card-title" onclick="toggleAccordion(this)">🔧 元押ジャッキ仕様</div>
-    <div class="ok-box" style="font-size:11px">現在採用している（または採用予定の）元押し設備を入力してください。総能力と計算上の最大推進力を比較し、設備が足りているかを判定します（計算書「8. 推進設備の検討」に反映）。</div>
-    <div class="two-col">
-      <div class="field-row"><label>ジャッキ1本の能力 [kN]</label><input id="jackCapUnit" class="mono" type="number" step="10" value="1500" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN</span></div>
-      <div class="field-row"><label>使用台数 [本]</label><input id="jackCount" class="mono" type="number" step="1" min="1" value="4" oninput="autoSave();refreshForceIfCalculated();renderJackStages(computeWallBeff())"><span class="unit">本</span></div>
-    </div>
-  </div>
-
   <button class="big-btn ok" onclick="calculate()">
     <span style="font-size:20px">⚡</span>推進力計算を実行
   </button>
@@ -597,6 +607,36 @@ tr.row-selected{background:#eff6ff}
       <div class="card-title" onclick="toggleAccordion(this)">📊 計算結果サマリー</div>
       <div class="metrics-grid" id="summaryMetrics"></div>
       <div id="summaryVerdict" style="margin-top:8px"></div>
+
+      <div class="ok-box" style="font-size:11px;margin-top:10px">🔧 必要ジャッキ本数（最大推進力を基準に算定。行をタップすると、その構成を下の「採用ジャッキ」欄に反映します）</div>
+      <div id="jackChoiceRows" style="margin-top:6px"></div>
+
+      <div class="two-col" style="margin-top:10px">
+        <div class="field-row"><label>採用ジャッキ 1本の能力 [kN]</label><input id="jackCapUnit" class="mono" type="number" step="10" value="1500" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN</span></div>
+        <div class="field-row"><label>使用台数 [本]</label><input id="jackCount" class="mono" type="number" step="1" min="1" value="4" oninput="autoSave();refreshForceIfCalculated();renderJackStages(computeWallBeff())"><span class="unit">本</span></div>
+      </div>
+      <p class="report-note" style="margin:4px 2px 0">総能力と計算上の最大推進力を比較し、設備が足りているかを判定します（計算書「8. 推進設備の検討」に反映）。</p>
+    </div>
+
+    <div class="card accordion" id="jackStagesCard">
+      <div class="card-title" onclick="toggleAccordion(this)">🔩 ジャッキ配置（推力分散用）</div>
+      <div class="two-col">
+        <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="drawJackPositionDiagram()" onchange="calcBacklock()"><span class="unit">mm</span></div>
+        <div class="field-row full">
+          <label>推進定規に使うH形鋼</label>
+          <select id="railSize" onchange="calcBacklock()">
+            <option value="200">H-200（200×200）</option>
+            <option value="250">H-250（250×250）</option>
+            <option value="300">H-300（300×300）</option>
+            <option value="350">H-350（350×350）</option>
+            <option value="400">H-400（400×400）</option>
+          </select>
+        </div>
+      </div>
+      <p class="report-note" style="margin:0 2px 6px">管底から指定した下がり量の位置を定規の下面（基礎側）とし、選んだH形鋼の成（せい）の分だけ上に延ばして、その上面の内側角が管外径に接する位置に左右の定規を描きます（下図参照）。</p>
+      <canvas id="jackPositionDiagram" style="width:100%;height:320px;border:1px solid var(--line);border-radius:8px;display:block;background:#fff;margin:6px 0"></canvas>
+      <div id="jackStagesTable"><div class="note-box">上の「必要ジャッキ本数」で選択するか、使用台数を直接入力すると表示されます。</div></div>
+      <button type="button" class="big-btn secondary" style="min-height:36px;font-size:12px;margin-top:6px" onclick="copyStage2ToUpper()">2段目の値を3段目以降にコピー</button>
     </div>
 
     <div class="card accordion" id="reportCard">
@@ -777,27 +817,6 @@ tr.row-selected{background:#eff6ff}
     <button class="big-btn secondary" onclick="syncForceFromCalc()" style="min-height:42px;font-size:14px;margin-top:4px">推進力計算結果を読み込む</button>
   </div>
 
-  <div class="card accordion" id="jackStagesCard">
-    <div class="card-title" onclick="toggleAccordion(this)">🔩 ジャッキ配置（推力分散用）</div>
-    <div class="two-col">
-      <div class="field-row"><label>推進定規（H鋼）管底からの下がり量 [mm]</label><input id="railDrop" class="mono" type="number" step="1" value="50" oninput="drawJackPositionDiagram()" onchange="calcBacklock()"><span class="unit">mm</span></div>
-      <div class="field-row full">
-        <label>推進定規に使うH形鋼</label>
-        <select id="railSize" onchange="calcBacklock()">
-          <option value="200">H-200（200×200）</option>
-          <option value="250">H-250（250×250）</option>
-          <option value="300">H-300（300×300）</option>
-          <option value="350">H-350（350×350）</option>
-          <option value="400">H-400（400×400）</option>
-        </select>
-      </div>
-    </div>
-    <p class="report-note" style="margin:0 2px 6px">管底から指定した下がり量の位置を定規の下面（基礎側）とし、選んだH形鋼の成（せい）の分だけ上に延ばして、その上面の内側角が管外径に接する位置に左右の定規を描きます（下図参照）。</p>
-    <canvas id="jackPositionDiagram" style="width:100%;height:320px;border:1px solid var(--line);border-radius:8px;display:block;background:#fff;margin:6px 0"></canvas>
-    <div id="jackStagesTable"><div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div></div>
-    <button type="button" class="big-btn secondary" style="min-height:36px;font-size:12px;margin-top:6px" onclick="copyStage2ToUpper()">2段目の値を3段目以降にコピー</button>
-  </div>
-
   <div class="card accordion" id="localBearingCard">
     <div class="card-title" onclick="toggleAccordion(this)">🔨 ジャッキ当たり部の局所支圧照査</div>
     <div class="two-col">
@@ -902,6 +921,7 @@ tr.row-selected{background:#eff6ff}
 
   <div class="card accordion">
     <div class="card-title" onclick="toggleAccordion(this)">📊 計算結果一覧</div>
+    <button class="big-btn secondary" onclick="exportSurveyXLSX()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 Excel出力（基線データ・測量基準・各座標・測定結果＋誤差、4シート・計算式付き）</button>
     <div id="surveyResultTable"></div>
   </div>
 
@@ -1652,6 +1672,15 @@ const ALIGNMENT_MIN_SCALE = 0.1, ALIGNMENT_MAX_SCALE = 200;
 // 曲線ごとの注記円のカスタム位置・サイズ（ユーザーがドラッグ/リサイズした結果を保持）
 let curveAnnotationState = {}; // { [curveNo]: { worldPos: {x,y}|null, scale: number } }
 let lastCurveAnnotationScreens = []; // 直近の描画結果（当たり判定用）: [{no, cx, cy, rx, ry}]
+// BP・BC・IP・SP・EC・EPの点ラベルは常に表示する。それ以外（RO点・区間名ラベル・曲線注記円）は
+// 手動トグルで表示/非表示を切替できる（既定は非表示＝重なりやすいラベルを隠した状態。
+// interactiveな#alignmentVisualと計算書の#reportAlignmentVisualは同じdrawAlignmentVisual()を
+// 共有しているため、この設定は両方に反映される）。
+let alignmentLabelVis = { ro: false, segLabel: false, annotation: false };
+function toggleAlignmentLabelVis(key, checked) {
+  alignmentLabelVis[key] = checked;
+  drawAlignmentVisual();
+}
 
 function resetAlignmentVisualView() {
   alignmentView = { scale: 1, offsetX: 0, offsetY: 0 };
@@ -1805,21 +1834,30 @@ function drawAlignmentVisual(targetId, viewOverride) {
     ctx.beginPath();
     seg.pts.forEach((p, i) => { const px = tx(p), py = ty(p); if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); });
     ctx.stroke();
-    // ラベル（区間の中点付近）
-    const mid = seg.pts[Math.floor(seg.pts.length / 2)];
-    ctx.fillStyle = seg.type === 'curve' ? FORCE_GRAPH_COLOR.curve : FORCE_GRAPH_COLOR.straight;
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(seg.label, tx(mid), ty(mid) - 8);
+    // ラベル位置: 直線は始点・終点ちょうどの中点（2点しかないため中点は平均で求める。
+    // 配列の中央インデックスで代用すると2点の場合は終点そのものになり、BC/EP等の点ラベルと
+    // 完全に重なってしまう）。曲線は中央サンプル点だとSP点ラベルと同じ位置になり重なるため、
+    // あえて中央からずらしたサンプル点（30%位置）を使う。
+    if (alignmentLabelVis.segLabel) {
+      const mid = seg.type === 'straight'
+        ? { x: (seg.pts[0].x + seg.pts[seg.pts.length - 1].x) / 2, y: (seg.pts[0].y + seg.pts[seg.pts.length - 1].y) / 2 }
+        : seg.pts[Math.floor(seg.pts.length * 0.3)];
+      ctx.fillStyle = seg.type === 'curve' ? FORCE_GRAPH_COLOR.curve : FORCE_GRAPH_COLOR.straight;
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(seg.label, tx(mid), ty(mid) - 8);
+    }
   });
 
-  // 作図補助の破線（BC-RO・RO-EC・BC-IP・IP-EC）
+  // 作図補助の破線（BC-IP・IP-ECは常時、BC-RO・RO-ECはRO表示時のみ）
   curveInfos.forEach(ci => {
     ctx.save();
     ctx.strokeStyle = '#94a3b8';
     ctx.setLineDash([3, 3]);
     ctx.lineWidth = 1;
-    [[ci.BC, ci.RO], [ci.RO, ci.EC], [ci.BC, ci.IP], [ci.IP, ci.EC]].forEach(([a, b]) => {
+    const pairs = [[ci.BC, ci.IP], [ci.IP, ci.EC]];
+    if (alignmentLabelVis.ro) pairs.push([ci.BC, ci.RO], [ci.RO, ci.EC]);
+    pairs.forEach(([a, b]) => {
       ctx.beginPath(); ctx.moveTo(tx(a), ty(a)); ctx.lineTo(tx(b), ty(b)); ctx.stroke();
     });
     ctx.restore();
@@ -1843,11 +1881,13 @@ function drawAlignmentVisual(targetId, viewOverride) {
     drawPoint(ci.IP, `IP${n}`, '#64748b');
     drawPoint(ci.SP, `SP${n}`, FORCE_GRAPH_COLOR.curve);
     drawPoint(ci.EC, `EC${n}`, FORCE_GRAPH_COLOR.curve);
-    ctx.fillStyle = '#64748b';
-    ctx.fillRect(tx(ci.RO) - 3, ty(ci.RO) - 3, 6, 6);
-    ctx.font = 'bold 11px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`RO${n}`, tx(ci.RO), ty(ci.RO) - 8);
+    if (alignmentLabelVis.ro) {
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(tx(ci.RO) - 3, ty(ci.RO) - 3, 6, 6);
+      ctx.font = 'bold 11px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`RO${n}`, tx(ci.RO), ty(ci.RO) - 8);
+    }
   });
   drawPoint(ep, 'EP', '#0f172a');
 
@@ -1877,7 +1917,9 @@ function drawAlignmentVisual(targetId, viewOverride) {
 
   // 曲線要素の注記（円で囲んで表示）。ドラッグで移動・右下ハンドルで拡大縮小できる
   // （インタラクティブな#alignmentVisualのみ。静的表示では位置だけ再利用し当たり判定は更新しない）。
+  // alignmentLabelVis.annotationがfalseの間は描画・当たり判定登録とも行わない（非表示時はドラッグ対象も無し）。
   if (isInteractive) lastCurveAnnotationScreens = [];
+  if (!alignmentLabelVis.annotation) return;
   curveInfos.forEach(ci => {
     const state = curveAnnotationState[ci.no] || (curveAnnotationState[ci.no] = { worldPos: null, scale: 1 });
     const lines = [
@@ -2084,6 +2126,9 @@ let kpRows = [];
 let surveyRowCounter = 0;
 let surveyGeom = null;
 let surveyResults = [];
+// タッチ主体端末（ホバー無し or ポインタが粗い）ではテンキー入力、PC（マウス等）では
+// 表のセルに直接キーボード入力する方式に分岐する（ユーザー確認済み方針）。
+const IS_TOUCH_DEVICE = !!(window.matchMedia && window.matchMedia('(hover: none), (pointer: coarse)').matches);
 
 function fmt(x, d=3) { return (Number.isFinite(+x) ? +x : 0).toFixed(d); }
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -2247,7 +2292,11 @@ function applySurveyProtectionUI() {
     if (el) el.disabled = surveyProtected;
   });
   document.querySelectorAll('#surveyMeasureTable .step-btn').forEach(b => b.disabled = surveyProtected);
-  document.querySelectorAll('#surveyMeasureTable .survey-cell').forEach(c => c.classList.toggle('locked', surveyProtected));
+  document.querySelectorAll('#surveyMeasureTable .survey-cell').forEach(c => {
+    c.classList.toggle('locked', surveyProtected);
+    // PC直接入力セルのみ保護状態に応じてreadonlyを切替（タッチ端末セルは常時readonly＝テンキー経由のため対象外）
+    if (c.dataset.mode === 'pc') c.readOnly = surveyProtected;
+  });
   document.querySelectorAll('#surveyMeasureTable .role-input').forEach(inp => inp.readOnly = surveyProtected);
   if (surveyProtected) closeSurveyKeypad();
 }
@@ -2279,29 +2328,53 @@ function onSurveyRoleInput(i, val) {
   autoSave();
 }
 
+// タッチ端末: readonly + タップでテンキーを開く。PC: 直接キーボード編集（onchangeで確定）。
+// どちらもonfocusで選択状態にし、次の入力欄にフォーカスが移ったら前の値を打ち消しで上書きできるようにする。
+function surveyCellHTML(kind, idx, field, val) {
+  const id = `cell_${kind}_${idx}_${field}`;
+  const text = formatSurveyFieldForDisplay(field, val);
+  if (IS_TOUCH_DEVICE) {
+    return `<input type="text" inputmode="none" id="${id}" class="mono survey-cell" data-mode="touch" value="${esc(text)}" readonly
+      onfocus="this.select()" onclick="openSurveyKeypad('${kind}',${idx},'${field}')">`;
+  }
+  return `<input type="text" inputmode="decimal" id="${id}" class="mono survey-cell" data-mode="pc" value="${esc(text)}"
+    onfocus="this.select()" onchange="onSurveyCellCommit('${kind}',${idx},'${field}',this)">`;
+}
+function onSurveyCellCommit(kind, idx, field, el) {
+  const r = surveyRowsFor(kind)[idx];
+  if (!r) return;
+  let num = parseFloat(el.value);
+  if (!Number.isFinite(num)) num = 0;
+  if (field === 'deg') num = Math.min(359, Math.max(0, Math.round(num)));
+  else if (field === 'min' || field === 'sec') num = Math.min(59, Math.max(0, Math.round(num)));
+  else if (field === 'dist') num = Math.max(0, num);
+  r[field] = num;
+  el.value = formatSurveyFieldForDisplay(field, num);
+  autoSave();
+  calcSurvey();
+}
 function renderSurveyMeasureTable() {
   const el = document.getElementById('surveyMeasureTable');
   if (!el) return;
-  const dms2 = x => String(Math.round(x||0)).padStart(2,'0');
   let rows = '';
   tpRows.forEach((r,i) => {
     rows += `<tr class="tp-row">
       <td><b>TP${i+1}</b></td>
       <td></td>
-      <td id="cell_tp_${i}_dist" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'dist')">${fmt(r.dist,3)}</td>
-      <td id="cell_tp_${i}_deg" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'deg')">${Math.round(r.deg||0)}</td>
-      <td id="cell_tp_${i}_min" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'min')">${dms2(r.min)}</td>
-      <td id="cell_tp_${i}_sec" class="mono survey-cell" onclick="openSurveyKeypad('tp',${i},'sec')">${dms2(r.sec)}</td>
+      <td>${surveyCellHTML('tp',i,'dist',r.dist)}</td>
+      <td>${surveyCellHTML('tp',i,'deg',r.deg)}</td>
+      <td>${surveyCellHTML('tp',i,'min',r.min)}</td>
+      <td>${surveyCellHTML('tp',i,'sec',r.sec)}</td>
     </tr>`;
   });
   kpRows.forEach((r,i) => {
     rows += `<tr class="kp-row">
       <td><b>KP${i+1}</b></td>
-      <td><input type="text" class="role-input" value="${esc(r.role||'')}" ${surveyProtected?'readonly':''} oninput="onSurveyRoleInput(${i},this.value)"></td>
-      <td id="cell_kp_${i}_dist" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'dist')">${fmt(r.dist,3)}</td>
-      <td id="cell_kp_${i}_deg" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'deg')">${Math.round(r.deg||0)}</td>
-      <td id="cell_kp_${i}_min" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'min')">${dms2(r.min)}</td>
-      <td id="cell_kp_${i}_sec" class="mono survey-cell" onclick="openSurveyKeypad('kp',${i},'sec')">${dms2(r.sec)}</td>
+      <td><input type="text" class="role-input" value="${esc(r.role||'')}" ${surveyProtected?'readonly':''} onfocus="this.select()" oninput="onSurveyRoleInput(${i},this.value)"></td>
+      <td>${surveyCellHTML('kp',i,'dist',r.dist)}</td>
+      <td>${surveyCellHTML('kp',i,'deg',r.deg)}</td>
+      <td>${surveyCellHTML('kp',i,'min',r.min)}</td>
+      <td>${surveyCellHTML('kp',i,'sec',r.sec)}</td>
     </tr>`;
   });
   el.innerHTML = (tpRows.length || kpRows.length)
@@ -2341,6 +2414,9 @@ function openSurveyKeypad(kind, idx, field) {
   updateSurveyKeypadDisplay();
   const box = document.getElementById('surveyKeypad');
   if (box) box.classList.add('visible');
+  // 対象セルを選択状態で見せる（readonlyでもfocus/selectは可能。次/前ボタンでの遷移時も同様に見せる）
+  const cellEl = document.getElementById(`cell_${kind}_${idx}_${field}`);
+  if (cellEl) { try { cellEl.focus({preventScroll:true}); cellEl.select(); } catch(e) {} }
 }
 function updateSurveyKeypadDisplay() {
   if (!surveyKeypadTarget) return;
@@ -2375,7 +2451,7 @@ function surveyAllowedValue(field, candidate) {
 }
 function refreshSurveyCell(kind, idx, field, text) {
   const el = document.getElementById(`cell_${kind}_${idx}_${field}`);
-  if (el) el.textContent = text;
+  if (el) el.value = text;
 }
 function surveyKeypadPress(ch) {
   if (!surveyKeypadTarget) return;
@@ -3296,6 +3372,15 @@ function calculate() {
   showToast('計算完了 F=' + F_total.toFixed(0) + ' kN');
 }
 
+// 「必要ジャッキ本数」の候補行タップで、採用ジャッキ（jackCapUnit/jackCount）にその構成を反映する
+function selectJackConfig(cap, count) {
+  setV('jackCapUnit', cap);
+  setV('jackCount', count);
+  autoSave();
+  refreshForceIfCalculated();
+  renderJackStages(computeWallBeff());
+}
+
 function renderResults(res) {
   const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
   const okForce = F_total <= Fa;
@@ -3318,16 +3403,22 @@ function renderResults(res) {
   verdicts.push(`<span class="pill ${okForce?'ok':'ng'}">最大推進力 ${F_total.toFixed(0)}kN ${okForce?'＜':'>'} 許容耐力 ${Fa.toFixed(0)}kN ${okForce?'OK':'NG'}</span>`);
   verdicts.push(`<span class="pill ${extCheck.ok?'ok':'ng'}">外圧耐荷力 Mr/M=${extCheck.ratio.toFixed(2)} ${extCheck.ok?'OK':'NG'}</span>`);
 
+  document.getElementById('summaryVerdict').innerHTML = verdicts.join(' ');
+
   // 必要ジャッキ本数（1500kN・1000kN機種の目安、左右対称配置のため常に偶数本に切上げ）
+  // 行をタップするとselectJackConfig()でジャッキ1本の能力・使用台数に反映される（採用構成の選択UI）
   const jackCaps = [1500, 1000];
-  const jackRows = jackCaps.map(cap => {
+  const curCap = n('jackCapUnit') || 0, curCnt = n('jackCount') || 0;
+  const jackChoiceRows = jackCaps.map(cap => {
     const raw = Math.ceil(F_total / cap);
     const num = Math.max(2, raw % 2 === 0 ? raw : raw + 1);
-    return `<div>${cap}kNジャッキ：<b>${num}本</b>必要　（${F_total.toFixed(0)}kN ÷ ${cap}kN = ${(F_total/cap).toFixed(2)} → 切上げ${raw}本 → 偶数化${num}本）</div>`;
+    const active = (curCap === cap && curCnt === num);
+    return `<div class="jack-choice${active?' active':''}" onclick="selectJackConfig(${cap},${num})">
+      <span>${active?'✅ ':''}${cap}kNジャッキ：<b>${num}本</b>必要</span>
+      <span class="jc-formula">${F_total.toFixed(0)}kN ÷ ${cap}kN = ${(F_total/cap).toFixed(2)} → 切上げ${raw}本 → 偶数化${num}本</span>
+    </div>`;
   }).join('');
-
-  document.getElementById('summaryVerdict').innerHTML = verdicts.join(' ')
-    + `<div class="ok-box" style="margin-top:8px">🔧 必要ジャッキ本数（最大推進力 ${F_total.toFixed(0)}kN 基準、偶数本）${jackRows}</div>`;
+  document.getElementById('jackChoiceRows').innerHTML = jackChoiceRows;
 
   // 計算根拠表
   const { Be, k0, Ce, q, p_live } = tz;
@@ -3597,7 +3688,7 @@ function renderReport(res) {
       <tr><th>総推力 F</th><td class="mono">${fmt(F_total,0)}</td><td>kN</td><th>使用率</th><td class="mono">${fmt(jackRatio,1)}</td><td>%</td></tr>
       <tr><th colspan="2">判定 F ≤ ジャッキ総能力</th><td colspan="4"><span class="pill ${jackOk?'ok':'ng'}">${jackOk?'OK':'NG'}</span></td></tr>
     </tbody></table>
-    <p class="report-note">「🔧 元押ジャッキ仕様」カード（このタブの上部）で、実際に採用する台数・能力に変更できます。</p>`;
+    <p class="report-note">「📊 計算結果サマリー」カードの「採用ジャッキ」欄で、実際に採用する台数・能力に変更できます。</p>`;
 
   // ── 総合判定（各検討事項の合否を一覧で表示） ──
   const pipeOk = F_total <= Fa;
@@ -3865,6 +3956,727 @@ function exportPipeForceCSV() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSVファイルを保存しました');
+}
+
+// ══════════════════════════════════════
+//  測量タブ: Excel(.xlsx)出力 ― 4シート構成、可能な限り「値」ではなく「計算式」で埋める
+//  （外部ライブラリ不使用。ZIP(STORED=無圧縮)+最小限のOOXMLを自前生成する）
+//  注意: Excelの ATAN2(x_num,y_num) はJSの Math.atan2(y,x) と引数順が逆。
+//  このファイル内でJSの atan2(dy,dx) を再現する式は、常に "ATAN2(dx,dy)" と書く。
+// ══════════════════════════════════════
+
+const XLSX_CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function xlsxCrc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) crc = XLSX_CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// 最小ZIPライター（無圧縮=STORED。日時は固定値でよい）
+function xlsxBuildZip(files) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const central = [];
+  let offset = 0;
+  const dosTime = 0, dosDate = 0x21; // 1980-01-01固定
+  files.forEach(f => {
+    const nameBytes = enc.encode(f.name);
+    const data = f.data;
+    const crc = xlsxCrc32(data);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, dosTime, true);
+    lv.setUint16(12, dosDate, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    chunks.push(local, data);
+
+    const cd = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dosTime, true);
+    cv.setUint16(14, dosDate, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    cd.set(nameBytes, 46);
+    central.push(cd);
+
+    offset += local.length + data.length;
+  });
+  const centralStart = offset;
+  let centralSize = 0;
+  central.forEach(c => { chunks.push(c); centralSize += c.length; });
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, centralStart, true);
+  ev.setUint16(20, 0, true);
+  chunks.push(eocd);
+
+  let total = 0; chunks.forEach(c => total += c.length);
+  const out = new Uint8Array(total);
+  let p = 0; chunks.forEach(c => { out.set(c, p); p += c.length; });
+  return out;
+}
+
+function xlsxEsc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+function xlsxCol(n) {
+  let s = '';
+  while (n > 0) { const rr = (n - 1) % 26; s = String.fromCharCode(65 + rr) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+function xlsxAddr(row, col) { return xlsxCol(col) + row; }
+function xlsxMakeSheet(name) { return { name, cells: {}, maxRow: 0, colWidths: {} }; }
+function xlsxSetColWidths(sheet, widths) { Object.assign(sheet.colWidths, widths); }
+function xlsxSet(sheet, row, col, xml) {
+  sheet.cells[row + '_' + col] = xml;
+  if (row > sheet.maxRow) sheet.maxRow = row;
+  return xlsxAddr(row, col);
+}
+function xlsxNum(sheet, row, col, value) {
+  const val = Number.isFinite(value) ? value : 0;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}"><v>${val}</v></c>`);
+}
+function xlsxStr(sheet, row, col, text) {
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(text)}</t></is></c>`);
+}
+function xlsxFormula(sheet, row, col, formula, cachedValue) {
+  const val = Number.isFinite(cachedValue) ? cachedValue : 0;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}"><f>${xlsxEsc(formula)}</f><v>${val}</v></c>`);
+}
+function xlsxFormulaStr(sheet, row, col, formula, cachedText) {
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" t="str"><f>${xlsxEsc(formula)}</f><v>${xlsxEsc(cachedText)}</v></c>`);
+}
+function xlsxRef(sheet, addr) { return `'${sheet.name}'!${addr}`; }
+function xlsxSheetXml(sheet) {
+  const rowsXml = [];
+  for (let r = 1; r <= sheet.maxRow; r++) {
+    const prefix = r + '_';
+    const cols = [];
+    for (const key in sheet.cells) {
+      if (key.indexOf(prefix) === 0) cols.push(parseInt(key.slice(prefix.length), 10));
+    }
+    if (!cols.length) continue;
+    cols.sort((a, b) => a - b);
+    rowsXml.push(`<row r="${r}">${cols.map(c => sheet.cells[r + '_' + c]).join('')}</row>`);
+  }
+  const colEntries = Object.keys(sheet.colWidths).map(Number).sort((a, b) => a - b);
+  const colsXml = colEntries.length
+    ? `<cols>${colEntries.map(c => `<col min="${c}" max="${c}" width="${sheet.colWidths[c]}" customWidth="1"/>`).join('')}</cols>`
+    : '';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${colsXml}<sheetData>${rowsXml.join('')}</sheetData></worksheet>`;
+}
+
+const XLSX_CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+  + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+  + '<Default Extension="xml" ContentType="application/xml"/>'
+  + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+  + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+  + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '</Types>';
+const XLSX_RELS_ROOT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+  + '</Relationships>';
+const XLSX_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+  + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>'
+  + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>'
+  + '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>'
+  + '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+  + '</Relationships>';
+const XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+  + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
+  + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
+  + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+  + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+  + '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+  + '</styleSheet>';
+function xlsxWorkbookXml(sheetNames) {
+  const sheetsXml = sheetNames.map((nm, i) => `<sheet name="${xlsxEsc(nm)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+    + `<sheets>${sheetsXml}</sheets></workbook>`;
+}
+
+function exportSurveyXLSX() {
+  if (!curves.length && !(n('seg_L0') || n('seg_Lf'))) { showToast('基線データがありません'); return; }
+  const geom = buildSurveyGeometry();
+  const N = geom.curves.length;
+
+  const s1 = xlsxMakeSheet('基線データ');
+  const s2 = xlsxMakeSheet('測量基準データ');
+  const s3 = xlsxMakeSheet('各座標データ');
+  const s4 = xlsxMakeSheet('測定結果＋測定誤差');
+
+  // ══ シート1: 基線データ ══
+  let r = 1;
+  xlsxStr(s1, r, 1, '現場名'); xlsxStr(s1, r, 2, v('siteName') || ''); r++;
+  xlsxStr(s1, r, 1, 'スパン名'); xlsxStr(s1, r, 2, v('siteSpan') || ''); r++;
+  xlsxStr(s1, r, 1, '測定本数'); xlsxNum(s1, r, 2, n('surveyPipeCount') || 0); r++;
+  xlsxStr(s1, r, 1, '測定日'); xlsxStr(s1, r, 2, v('surveyMeasureDate') || ''); r++;
+  xlsxStr(s1, r, 1, '＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝＝'); r++;
+  xlsxStr(s1, r, 1, '基線データ'); r++;
+  xlsxStr(s1, r, 1, '第1直線長(BP→IP1)[m]');
+  const L0Addr = xlsxNum(s1, r, 2, n('seg_L0') || 0); r++;
+  xlsxStr(s1, r, 1, '曲線'); xlsxStr(s1, r, 2, '半径R[m]'); xlsxStr(s1, r, 3, '方向');
+  xlsxStr(s1, r, 4, '交角 度'); xlsxStr(s1, r, 5, '交角 分'); xlsxStr(s1, r, 6, '交角 秒');
+  xlsxStr(s1, r, 7, '10進数'); xlsxStr(s1, r, 8, '直線長(前IP→当曲線IP)[m]'); r++;
+  const curveRows = [];
+  geom.curves.forEach((c, i) => {
+    const row = r;
+    const src = curves[i] || {};
+    xlsxStr(s1, row, 1, `第${c.id}曲線`);
+    const RAddr = xlsxNum(s1, row, 2, c.R);
+    const dirText = c.dir === 'R' ? '右' : '左';
+    xlsxStr(s1, row, 3, dirText);
+    const degAddr = xlsxNum(s1, row, 4, Math.round(src.deg || 0));
+    const minAddr = xlsxNum(s1, row, 5, Math.round(src.min || 0));
+    const secAddr = xlsxNum(s1, row, 6, Math.round(src.sec || 0));
+    const decVal = dmsToDeg(src.deg || 0, src.min || 0, src.sec || 0);
+    const decAddr = xlsxFormula(s1, row, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
+    let LAddr = null, LVal = 0;
+    if (i > 0) { LVal = +src.L || 0; LAddr = xlsxNum(s1, row, 8, LVal); }
+    else { xlsxStr(s1, row, 8, '（第1直線長を使用）'); }
+    curveRows.push({ row, RAddr, dirText, dir: c.dir, degAddr, minAddr, secAddr, decAddr, decVal, LAddr, LVal, R: c.R });
+    r++;
+  });
+  xlsxStr(s1, r, 1, '最終直線長(最終IP→EP)[m]');
+  const LfAddr = xlsxNum(s1, r, 2, n('seg_Lf') || 0);
+
+  // ══ シート2: 測量基準データ ══
+  let r2 = 1;
+  xlsxStr(s2, r2, 1, '法線方向座標（推進管理上の基準。機械点(0,0)・後視点(10,0)固定）'); r2++;
+  xlsxStr(s2, r2, 2, 'X'); xlsxStr(s2, r2, 3, 'Y'); r2++;
+  xlsxStr(s2, r2, 1, '機械点');
+  const nrmMxAddr = xlsxNum(s2, r2, 2, 0), nrmMyAddr = xlsxNum(s2, r2, 3, 0); r2++;
+  xlsxStr(s2, r2, 1, '後視点');
+  const nrmBxAddr = xlsxNum(s2, r2, 2, 10), nrmByAddr = xlsxNum(s2, r2, 3, 0); r2++;
+  xlsxStr(s2, r2, 1, '法線初期方向角(度)');
+  const nrmAzFormula = `MOD(DEGREES(ATAN2(${nrmBxAddr}-${nrmMxAddr},${nrmByAddr}-${nrmMyAddr})),360)`;
+  const nrmAzAddr = xlsxFormula(s2, r2, 2, nrmAzFormula, 0); r2 += 2;
+  xlsxStr(s2, r2, 1, '測量基点座標（実際に器械を据えた座標。第1直線以降の全座標計算の起点）'); r2++;
+  xlsxStr(s2, r2, 2, 'X'); xlsxStr(s2, r2, 3, 'Y'); r2++;
+  const instX = n('surveyInstX') || 0, instY = n('surveyInstY') || 0;
+  const bsXVal = v('surveyBsX') === '' ? 10 : (n('surveyBsX') || 0), bsYVal = n('surveyBsY') || 0;
+  xlsxStr(s2, r2, 1, '機械点');
+  const srvMxAddr = xlsxNum(s2, r2, 2, instX), srvMyAddr = xlsxNum(s2, r2, 3, instY); r2++;
+  xlsxStr(s2, r2, 1, '後視点');
+  const srvBxAddr = xlsxNum(s2, r2, 2, bsXVal), srvByAddr = xlsxNum(s2, r2, 3, bsYVal); r2++;
+  xlsxStr(s2, r2, 1, '機械初期方向角(度)');
+  // アプリ本体はこの角度を小数点以下3桁に丸めた文字列（非表示欄surveyBaseAz）で保持し、
+  // それを使って全座標を計算している（calcSurveyBaseAz()のfmt(deg,3)）。式でも同じ丸めを再現する。
+  const srvAzValRaw = radToDeg(azBetween({ x: instX, y: instY }, { x: bsXVal, y: bsYVal }));
+  const srvAzVal = Math.round(srvAzValRaw * 1000) / 1000;
+  const srvAzFormula = `ROUND(MOD(DEGREES(ATAN2(${srvBxAddr}-${srvMxAddr},${srvByAddr}-${srvMyAddr})),360),3)`;
+  const srvAzAddr = xlsxFormula(s2, r2, 2, srvAzFormula, srvAzVal);
+
+  // ══ シート3: 各座標データ（BP/IP/EP）＋ BC/RO/EC座標 ══
+  // 実際の座標計算は「測量基点座標」から求めた機械初期方向角を起点に行う（buildSurveyGeometry()と同じ規則）。
+  // 「法線方向座標」は参考表示用（アプリの基本情報タブの模式図で使う固定基準に対応、常に0°）。
+  let r3 = 1;
+  xlsxStr(s3, r3, 1, '各座標データ'); r3++;
+  xlsxStr(s3, r3, 1, '点'); xlsxStr(s3, r3, 2, 'X'); xlsxStr(s3, r3, 3, 'Y');
+  xlsxStr(s3, r3, 4, '方位角IN(度)[補助]'); xlsxStr(s3, r3, 5, '方位角OUT(度)[補助]'); xlsxStr(s3, r3, 6, 'TL[補助,m]'); r3++;
+  const bpRow = r3;
+  xlsxStr(s3, r3, 1, 'BP');
+  // X/Y座標はシート4（測定結果＋測定誤差）の誤差計算式からも参照するため、シート名を
+  // 付けた修飾アドレス（xlsxRef）で保持する。同一シート内（シート3自身の式）から使っても
+  // 自己シート修飾は無害なので、ここで一括して修飾しておく。
+  const bpXAddr = xlsxRef(s3, xlsxNum(s3, r3, 2, 0)), bpYAddr = xlsxRef(s3, xlsxNum(s3, r3, 3, 0));
+  const bpOutAddr = xlsxFormula(s3, r3, 5, xlsxRef(s2, srvAzAddr), srvAzVal);
+  r3++;
+
+  const ipInfo = []; // {row, xAddr, yAddr, inAddr, outAddr, tlAddr, xVal, yVal, inVal, outVal}
+  let prevXAddr = bpXAddr, prevYAddr = bpYAddr, prevOutAddr = bpOutAddr;
+  let prevXVal = 0, prevYVal = 0, prevOutVal = srvAzVal;
+  geom.curves.forEach((c, i) => {
+    const cr = curveRows[i];
+    const row = r3;
+    xlsxStr(s3, row, 1, `IP${c.id}`);
+    const inAddr = xlsxFormula(s3, row, 4, prevOutAddr, prevOutVal);
+    const inVal = prevOutVal;
+    const LAddrUse = (i === 0) ? xlsxRef(s1, L0Addr) : xlsxRef(s1, cr.LAddr);
+    const LValUse = (i === 0) ? (n('seg_L0') || 0) : cr.LVal;
+    const xVal = prevXVal + LValUse * Math.cos(degToRad(inVal));
+    const yVal = prevYVal + LValUse * Math.sin(degToRad(inVal));
+    const xAddr = xlsxFormula(s3, row, 2, `${prevXAddr}+${LAddrUse}*COS(RADIANS(${inAddr}))`, xVal);
+    const yAddr = xlsxFormula(s3, row, 3, `${prevYAddr}+${LAddrUse}*SIN(RADIANS(${inAddr}))`, yVal);
+    const tlVal = cr.R * Math.tan(degToRad(cr.decVal) / 2);
+    const tlAddr = xlsxFormula(s3, row, 6, `${xlsxRef(s1, cr.RAddr)}*TAN(RADIANS(${xlsxRef(s1, cr.decAddr)})/2)`, tlVal);
+    const sign = cr.dir === 'R' ? '+' : '-';
+    const outVal = cr.dir === 'R' ? inVal + cr.decVal : inVal - cr.decVal;
+    const outAddr = xlsxFormula(s3, row, 5, `${inAddr}${sign}${xlsxRef(s1, cr.decAddr)}`, outVal);
+    ipInfo.push({ id: c.id, row, xAddr, yAddr, inAddr, outAddr, tlAddr, xVal, yVal, inVal, outVal, R: cr.R, dir: cr.dir, dirText: cr.dirText });
+    prevXAddr = xAddr; prevYAddr = yAddr; prevOutAddr = outAddr;
+    prevXVal = xVal; prevYVal = yVal; prevOutVal = outVal;
+    r3++;
+  });
+  const epRow = r3;
+  xlsxStr(s3, r3, 1, 'EP');
+  const epXVal = prevXVal + (n('seg_Lf') || 0) * Math.cos(degToRad(prevOutVal));
+  const epYVal = prevYVal + (n('seg_Lf') || 0) * Math.sin(degToRad(prevOutVal));
+  const epXAddr = xlsxRef(s3, xlsxFormula(s3, r3, 2, `${prevXAddr}+${xlsxRef(s1, LfAddr)}*COS(RADIANS(${prevOutAddr}))`, epXVal));
+  const epYAddr = xlsxRef(s3, xlsxFormula(s3, r3, 3, `${prevYAddr}+${xlsxRef(s1, LfAddr)}*SIN(RADIANS(${prevOutAddr}))`, epYVal));
+  r3 += 2;
+
+  // BC/RO/EC座標（曲線の数だけ）
+  xlsxStr(s3, r3, 1, 'BC座標・RO(各曲線中心)座標・EC座標 ※すべて計算式'); r3++;
+  xlsxStr(s3, r3, 1, '点'); xlsxStr(s3, r3, 2, 'X'); xlsxStr(s3, r3, 3, 'Y'); r3++;
+  const curveGeomInfo = []; // {id, bc:{xAddr,yAddr,xVal,yVal}, ro:{...}, ec:{...}}
+  ipInfo.forEach((ip, idx) => {
+    const cr = curveRows[idx];
+    const tlVal = cr.R * Math.tan(degToRad(cr.decVal) / 2);
+    const bcXVal = ip.xVal - tlVal * Math.cos(degToRad(ip.inVal));
+    const bcYVal = ip.yVal - tlVal * Math.sin(degToRad(ip.inVal));
+    const bcRow = r3;
+    xlsxStr(s3, bcRow, 1, `BC${ip.id}`);
+    // BC/RO/EC座標はシート4の誤差計算式からも参照するため、返ってきたアドレスをここで
+    // シート名修飾（xlsxRef）しておく。同一シート内（このすぐ下のRO式など）で使っても
+    // 自己シート修飾は無害。
+    const bcXAddr = xlsxRef(s3, xlsxFormula(s3, bcRow, 2, `${ip.xAddr}-${ip.tlAddr}*COS(RADIANS(${ip.inAddr}))`, bcXVal));
+    const bcYAddr = xlsxRef(s3, xlsxFormula(s3, bcRow, 3, `${ip.yAddr}-${ip.tlAddr}*SIN(RADIANS(${ip.inAddr}))`, bcYVal));
+    r3++;
+
+    const roSignDeg = ip.dir === 'R' ? 90 : -90;
+    const roAzVal = ip.inVal + roSignDeg;
+    const roXVal = bcXVal + ip.R * Math.cos(degToRad(roAzVal));
+    const roYVal = bcYVal + ip.R * Math.sin(degToRad(roAzVal));
+    const roRow = r3;
+    xlsxStr(s3, roRow, 1, `RO${ip.id}`);
+    const roXAddr = xlsxRef(s3, xlsxFormula(s3, roRow, 2, `${bcXAddr}+${xlsxRef(s1, cr.RAddr)}*COS(RADIANS(${ip.inAddr}${ip.dir === 'R' ? '+90' : '-90'}))`, roXVal));
+    const roYAddr = xlsxRef(s3, xlsxFormula(s3, roRow, 3, `${bcYAddr}+${xlsxRef(s1, cr.RAddr)}*SIN(RADIANS(${ip.inAddr}${ip.dir === 'R' ? '+90' : '-90'}))`, roYVal));
+    r3++;
+
+    const ecXVal = ip.xVal + tlVal * Math.cos(degToRad(ip.outVal));
+    const ecYVal = ip.yVal + tlVal * Math.sin(degToRad(ip.outVal));
+    const ecRow = r3;
+    xlsxStr(s3, ecRow, 1, `EC${ip.id}`);
+    const ecXAddr = xlsxRef(s3, xlsxFormula(s3, ecRow, 2, `${ip.xAddr}+${ip.tlAddr}*COS(RADIANS(${ip.outAddr}))`, ecXVal));
+    const ecYAddr = xlsxRef(s3, xlsxFormula(s3, ecRow, 3, `${ip.yAddr}+${ip.tlAddr}*SIN(RADIANS(${ip.outAddr}))`, ecYVal));
+    r3++;
+
+    curveGeomInfo.push({
+      id: ip.id, R: ip.R, dir: ip.dir,
+      bc: { xAddr: bcXAddr, yAddr: bcYAddr, xVal: bcXVal, yVal: bcYVal },
+      ro: { xAddr: roXAddr, yAddr: roYAddr, xVal: roXVal, yVal: roYVal },
+      ec: { xAddr: ecXAddr, yAddr: ecYAddr, xVal: ecXVal, yVal: ecYVal },
+      decAddr: cr.decAddr, decVal: cr.decVal
+    });
+  });
+
+  // ══ シート4: 測定結果 ＋ 測定誤差 ══
+  let r4 = 1;
+  xlsxStr(s4, r4, 1, '測量結果'); r4++;
+  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, '距離(m)');
+  xlsxStr(s4, r4, 4, '度'); xlsxStr(s4, r4, 5, '分'); xlsxStr(s4, r4, 6, '秒'); xlsxStr(s4, r4, 7, '10進数'); r4++;
+  const tpInfo = [], kpInfo = [];
+  tpRows.forEach((row, i) => {
+    const rr = r4;
+    xlsxStr(s4, rr, 1, `TP${i + 1}`); xlsxStr(s4, rr, 2, '');
+    const distAddr = xlsxNum(s4, rr, 3, row.dist || 0);
+    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0));
+    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0));
+    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0));
+    const decVal = dmsToDeg(row.deg || 0, row.min || 0, row.sec || 0);
+    const decAddr = xlsxFormula(s4, rr, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
+    tpInfo.push({ row: rr, distAddr, decAddr, distVal: row.dist || 0, decVal });
+    r4++;
+  });
+  kpRows.forEach((row, i) => {
+    const rr = r4;
+    xlsxStr(s4, rr, 1, `KP${i + 1}`); xlsxStr(s4, rr, 2, row.role || '');
+    const distAddr = xlsxNum(s4, rr, 3, row.dist || 0);
+    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0));
+    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0));
+    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0));
+    const decVal = dmsToDeg(row.deg || 0, row.min || 0, row.sec || 0);
+    const decAddr = xlsxFormula(s4, rr, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
+    kpInfo.push({ row: rr, name: `KP${i + 1}`, role: row.role || '', distAddr, decAddr, distVal: row.dist || 0, decVal });
+    r4++;
+  });
+  r4++;
+
+  // ── トラバース計算（測定点座標） ──
+  xlsxStr(s4, r4, 1, 'トラバース計算（測定点座標）※式'); r4++;
+  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, 'X'); xlsxStr(s4, r4, 3, 'Y');
+  xlsxStr(s4, r4, 4, '後視方位角(度)[補助]'); xlsxStr(s4, r4, 5, '前視方位角(度)[補助]'); r4++;
+  const instRow = r4;
+  xlsxStr(s4, r4, 1, '器械点');
+  const instXAddr = xlsxFormula(s4, r4, 2, xlsxRef(s2, srvMxAddr), instX);
+  const instYAddr = xlsxFormula(s4, r4, 3, xlsxRef(s2, srvMyAddr), instY);
+  r4++;
+  const bsRow = r4;
+  xlsxStr(s4, r4, 1, '後視点');
+  const bsXAddr = xlsxFormula(s4, r4, 2, xlsxRef(s2, srvBxAddr), bsXVal);
+  const bsYAddr = xlsxFormula(s4, r4, 3, xlsxRef(s2, srvByAddr), bsYVal);
+  r4++;
+
+  let curXAddr = instXAddr, curYAddr = instYAddr, curXVal = instX, curYVal = instY;
+  let prevPXAddr = bsXAddr, prevPYAddr = bsYAddr, prevPXVal = bsXVal, prevPYVal = bsYVal;
+  const tpPtRows = [];
+  tpInfo.forEach((tp, i) => {
+    const row = r4;
+    xlsxStr(s4, row, 1, `TP${i + 1}`);
+    const bsAzVal = radToDeg(azBetween({ x: curXVal, y: curYVal }, { x: prevPXVal, y: prevPYVal }));
+    const bsAzAddr = xlsxFormula(s4, row, 4,
+      `MOD(DEGREES(ATAN2(${prevPXAddr}-${curXAddr},${prevPYAddr}-${curYAddr})),360)`, bsAzVal);
+    const fwAzVal = (bsAzVal + tp.decVal) % 360;
+    const fwAzAddr = xlsxFormula(s4, row, 5, `MOD(${bsAzAddr}+${xlsxRef(s4, tp.decAddr)},360)`, fwAzVal);
+    const fwAzRad = degToRad(bsAzVal + tp.decVal);
+    const xVal = curXVal + tp.distVal * Math.cos(fwAzRad);
+    const yVal = curYVal + tp.distVal * Math.sin(fwAzRad);
+    const xAddr = xlsxFormula(s4, row, 2, `${curXAddr}+${xlsxRef(s4, tp.distAddr)}*COS(RADIANS(${fwAzAddr}))`, xVal);
+    const yAddr = xlsxFormula(s4, row, 3, `${curYAddr}+${xlsxRef(s4, tp.distAddr)}*SIN(RADIANS(${fwAzAddr}))`, yVal);
+    tpPtRows.push({ row, xAddr, yAddr, xVal, yVal });
+    prevPXAddr = curXAddr; prevPYAddr = curYAddr; prevPXVal = curXVal; prevPYVal = curYVal;
+    curXAddr = xAddr; curYAddr = yAddr; curXVal = xVal; curYVal = yVal;
+    r4++;
+  });
+  // KP側の器械点(station)・後視点(backsight)を決定（calculateSurveyTraverse()と同じ規則）
+  let stationXAddr = curXAddr, stationYAddr = curYAddr, stationXVal = curXVal, stationYVal = curYVal;
+  let backsightXAddr, backsightYAddr, backsightXVal, backsightYVal;
+  if (tpPtRows.length >= 2) {
+    const b = tpPtRows[tpPtRows.length - 2];
+    backsightXAddr = b.xAddr; backsightYAddr = b.yAddr; backsightXVal = b.xVal; backsightYVal = b.yVal;
+  } else if (tpPtRows.length === 1) {
+    backsightXAddr = instXAddr; backsightYAddr = instYAddr; backsightXVal = instX; backsightYVal = instY;
+  } else {
+    backsightXAddr = bsXAddr; backsightYAddr = bsYAddr; backsightXVal = bsXVal; backsightYVal = bsYVal;
+  }
+  const kpBsAzVal = radToDeg(azBetween({ x: stationXVal, y: stationYVal }, { x: backsightXVal, y: backsightYVal }));
+  xlsxStr(s4, r4, 1, 'KP用 後視方位角');
+  const kpBsAzAddr = xlsxFormula(s4, r4, 4,
+    `MOD(DEGREES(ATAN2(${backsightXAddr}-${stationXAddr},${backsightYAddr}-${stationYAddr})),360)`, kpBsAzVal);
+  r4++;
+  const kpPtRows = [];
+  kpInfo.forEach((kp, i) => {
+    const row = r4;
+    xlsxStr(s4, row, 1, kp.name);
+    const fwAzVal = (kpBsAzVal + kp.decVal) % 360;
+    const fwAzAddr = xlsxFormula(s4, row, 5, `MOD(${kpBsAzAddr}+${xlsxRef(s4, kp.decAddr)},360)`, fwAzVal);
+    const fwAzRad = degToRad(kpBsAzVal + kp.decVal);
+    const xVal = stationXVal + kp.distVal * Math.cos(fwAzRad);
+    const yVal = stationYVal + kp.distVal * Math.sin(fwAzRad);
+    const xAddr = xlsxFormula(s4, row, 2, `${stationXAddr}+${xlsxRef(s4, kp.distAddr)}*COS(RADIANS(${fwAzAddr}))`, xVal);
+    const yAddr = xlsxFormula(s4, row, 3, `${stationYAddr}+${xlsxRef(s4, kp.distAddr)}*SIN(RADIANS(${fwAzAddr}))`, yVal);
+    kpPtRows.push({ name: kp.name, role: kp.role, row, xAddr, yAddr, xVal, yVal });
+    r4++;
+  });
+  r4++;
+
+  // ── 判定基準（現在のUI設定値をそのまま数値として反映） ──
+  xlsxStr(s4, r4, 1, '判定基準'); r4++;
+  xlsxStr(s4, r4, 1, '社内規格値');
+  const tolOkAddr = xlsxNum(s4, r4, 2, n('tolOk') || 80); xlsxStr(s4, r4, 3, 'mm'); r4++;
+  xlsxStr(s4, r4, 1, '規格値');
+  const tolWarnAddr = xlsxNum(s4, r4, 2, n('tolWarn') || 100); xlsxStr(s4, r4, 3, 'mm'); r4++;
+  r4++;
+
+  // ── 法線との測定誤差計算結果 ──
+  // 各区間（直線・曲線）を、始点→終点の順（BP→BC1→第1曲線→EC1→BC2→…→EP）で1本の配列にする。
+  // 直線はP1=始点,P2=終点。曲線はP1=中心(RO),P2=基準点(BC),R=半径。この配列が「区間別計算式一覧」の元。
+  const sections = [];
+  if (N === 0) {
+    sections.push({ label: 'BP-EP', type: 'straight', aXAddr: bpXAddr, aYAddr: bpYAddr, aXVal: 0, aYVal: 0, bXAddr: epXAddr, bYAddr: epYAddr, bXVal: epXVal, bYVal: epYVal });
+  } else {
+    sections.push({ label: `BP-BC${curveGeomInfo[0].id}`, type: 'straight', aXAddr: bpXAddr, aYAddr: bpYAddr, aXVal: 0, aYVal: 0, bXAddr: curveGeomInfo[0].bc.xAddr, bYAddr: curveGeomInfo[0].bc.yAddr, bXVal: curveGeomInfo[0].bc.xVal, bYVal: curveGeomInfo[0].bc.yVal });
+    for (let i = 0; i < N; i++) {
+      const cg = curveGeomInfo[i];
+      sections.push({
+        label: `第${cg.id}曲線`, type: 'curve', dir: cg.dir,
+        roXAddr: cg.ro.xAddr, roYAddr: cg.ro.yAddr, roXVal: cg.ro.xVal, roYVal: cg.ro.yVal,
+        bcXAddr: cg.bc.xAddr, bcYAddr: cg.bc.yAddr, bcXVal: cg.bc.xVal, bcYVal: cg.bc.yVal,
+        RAddr: xlsxRef(s1, curveRows[cg.id - 1].RAddr), RVal: cg.R,
+        decAddr: xlsxRef(s1, cg.decAddr), decVal: cg.decVal
+      });
+      if (i < N - 1) {
+        const next = curveGeomInfo[i + 1];
+        sections.push({
+          label: `EC${cg.id}-BC${next.id}`, type: 'straight',
+          aXAddr: cg.ec.xAddr, aYAddr: cg.ec.yAddr, aXVal: cg.ec.xVal, aYVal: cg.ec.yVal,
+          bXAddr: next.bc.xAddr, bYAddr: next.bc.yAddr, bXVal: next.bc.xVal, bYVal: next.bc.yVal
+        });
+      }
+    }
+    const last = curveGeomInfo[N - 1];
+    sections.push({ label: `EC${last.id}-EP`, type: 'straight', aXAddr: last.ec.xAddr, aYAddr: last.ec.yAddr, aXVal: last.ec.xVal, aYVal: last.ec.yVal, bXAddr: epXAddr, bYAddr: epYAddr, bXVal: epXVal, bYVal: epYVal });
+  }
+
+  xlsxStr(s4, r4, 1, '法線との測定誤差計算結果'); r4++;
+
+  // 区間別計算式一覧: 各区間の生データ（直線=始点/終点、曲線=中心/基準点/半径）を一覧化する。
+  // 「計算方法の説明」ではなく、実際に下の判定式が参照する数値そのもの（すべて式）を並べる。
+  xlsxStr(s4, r4, 1, '区間別計算式一覧'); r4++;
+  xlsxStr(s4, r4, 1, '区間'); xlsxStr(s4, r4, 2, '種別'); xlsxStr(s4, r4, 3, 'P1X'); xlsxStr(s4, r4, 4, 'P1Y');
+  xlsxStr(s4, r4, 5, 'P2X'); xlsxStr(s4, r4, 6, 'P2Y'); xlsxStr(s4, r4, 7, 'R'); r4++;
+  const legendFirstRow = r4;
+  sections.forEach(sec => {
+    xlsxStr(s4, r4, 1, sec.label);
+    xlsxStr(s4, r4, 2, sec.type === 'straight' ? '直線' : '曲線');
+    if (sec.type === 'straight') {
+      xlsxFormula(s4, r4, 3, sec.aXAddr, sec.aXVal);
+      xlsxFormula(s4, r4, 4, sec.aYAddr, sec.aYVal);
+      xlsxFormula(s4, r4, 5, sec.bXAddr, sec.bXVal);
+      xlsxFormula(s4, r4, 6, sec.bYAddr, sec.bYVal);
+    } else {
+      xlsxFormula(s4, r4, 3, sec.roXAddr, sec.roXVal);
+      xlsxFormula(s4, r4, 4, sec.roYAddr, sec.roYVal);
+      xlsxFormula(s4, r4, 5, sec.bcXAddr, sec.bcXVal);
+      xlsxFormula(s4, r4, 6, sec.bcYAddr, sec.bcYVal);
+      xlsxFormula(s4, r4, 7, sec.RAddr, sec.RVal);
+    }
+    r4++;
+  });
+  const legendLastRow = r4 - 1;
+  const legendP1XRange = `${xlsxAddr(legendFirstRow, 3)}:${xlsxAddr(legendLastRow, 3)}`;
+  const legendP1YRange = `${xlsxAddr(legendFirstRow, 4)}:${xlsxAddr(legendLastRow, 4)}`;
+  const legendP2XRange = `${xlsxAddr(legendFirstRow, 5)}:${xlsxAddr(legendLastRow, 5)}`;
+  const legendP2YRange = `${xlsxAddr(legendFirstRow, 6)}:${xlsxAddr(legendLastRow, 6)}`;
+  const legendRRange = `${xlsxAddr(legendFirstRow, 7)}:${xlsxAddr(legendLastRow, 7)}`;
+  r4++;
+
+  const summaryRows = []; // 後でヘッダの上に差し込むための情報
+  kpPtRows.forEach(kp => {
+    // 候補一覧: 区間ごとに優先度・誤差・左右だけを計算する（計画X/Yはここでは計算しない＝
+    // 最終的に採用される区間の分だけ、後で1回計算すれば十分なため）。
+    xlsxStr(s4, r4, 1, `${kp.name} 候補一覧`); r4++;
+    xlsxStr(s4, r4, 1, '区間'); xlsxStr(s4, r4, 2, '種別'); xlsxStr(s4, r4, 3, '優先度');
+    xlsxStr(s4, r4, 4, '誤差mm'); xlsxStr(s4, r4, 5, '左右'); xlsxStr(s4, r4, 6, 'スコア'); r4++;
+    const candFirstRow = r4;
+
+    sections.forEach(sec => {
+      const row = r4;
+      xlsxStr(s4, row, 1, sec.label); xlsxStr(s4, row, 2, sec.type === 'straight' ? '直線' : '曲線');
+      let prioVal, errVal, sideVal, prioFormula, errFormula, sideFormula;
+      if (sec.type === 'straight') {
+        const dxv = sec.bXVal - sec.aXVal, dyv = sec.bYVal - sec.aYVal;
+        const tVal = ((kp.xVal - sec.aXVal) * dxv + (kp.yVal - sec.aYVal) * dyv) / (dxv * dxv + dyv * dyv);
+        prioVal = (tVal >= 0 && tVal <= 1) ? 1 : 9;
+        // 符号は「区間の方向ベクトル(B-A) × (測点-A)」（judgeStraightのux*ey-uy*exと同じ向き）。
+        // (測点-A)×(B-A)にすると符号が反転し左右が逆になるので順序に注意。
+        const crossVal = dxv * (kp.yVal - sec.aYVal) - dyv * (kp.xVal - sec.aXVal);
+        const lenVal = Math.hypot(dxv, dyv) || 1;
+        errVal = Math.abs(crossVal) / lenVal * 1000;
+        sideVal = crossVal > 0 ? '右' : '左';
+
+        const tExpr = `((${kp.xAddr}-${sec.aXAddr})*(${sec.bXAddr}-${sec.aXAddr})+(${kp.yAddr}-${sec.aYAddr})*(${sec.bYAddr}-${sec.aYAddr}))/((${sec.bXAddr}-${sec.aXAddr})^2+(${sec.bYAddr}-${sec.aYAddr})^2)`;
+        prioFormula = `IF(AND(${tExpr}>=0,${tExpr}<=1),1,9)`;
+        const crossExpr = `(${sec.bXAddr}-${sec.aXAddr})*(${kp.yAddr}-${sec.aYAddr})-(${sec.bYAddr}-${sec.aYAddr})*(${kp.xAddr}-${sec.aXAddr})`;
+        errFormula = `ABS(${crossExpr})/SQRT((${sec.bXAddr}-${sec.aXAddr})^2+(${sec.bYAddr}-${sec.aYAddr})^2)*1000`;
+        sideFormula = `IF(${crossExpr}>0,"右","左")`;
+      } else {
+        const dxv = kp.xVal - sec.roXVal, dyv = kp.yVal - sec.roYVal;
+        const distVal = Math.hypot(dxv, dyv) || 1e-9;
+        const radialVal = distVal - sec.RVal;
+        const angVal = Math.atan2(dyv, dxv);
+        const sVal = Math.atan2(sec.bcYVal - sec.roYVal, sec.bcXVal - sec.roXVal);
+        let deltaVal = angVal - sVal, deltaNormVal;
+        if (sec.dir === 'R') deltaNormVal = ((deltaVal % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        else deltaNormVal = -(((-deltaVal) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI));
+        const iaRadVal = degToRad(sec.decVal);
+        prioVal = Math.abs(deltaNormVal) <= Math.abs(iaRadVal) + 1e-7 ? 0 : 8;
+        errVal = Math.abs(radialVal) * 1000;
+        if (radialVal < 0) sideVal = sec.dir === 'L' ? '左' : '右';
+        else if (radialVal > 0) sideVal = sec.dir === 'L' ? '右' : '左';
+        else sideVal = '中心';
+
+        const distExpr = `SQRT((${kp.xAddr}-${sec.roXAddr})^2+(${kp.yAddr}-${sec.roYAddr})^2)`;
+        const radialExpr = `(${distExpr}-${sec.RAddr})`;
+        const angExpr = `ATAN2(${kp.xAddr}-${sec.roXAddr},${kp.yAddr}-${sec.roYAddr})`;
+        const sExpr = `ATAN2(${sec.bcXAddr}-${sec.roXAddr},${sec.bcYAddr}-${sec.roYAddr})`;
+        const deltaExpr = `(${angExpr}-${sExpr})`;
+        const deltaNormExpr = sec.dir === 'R' ? `MOD(${deltaExpr},2*PI())` : `MOD(${deltaExpr},2*PI())-2*PI()`;
+        const iaRadExpr = `RADIANS(${sec.decAddr})`;
+        prioFormula = `IF(ABS(${deltaNormExpr})<=ABS(${iaRadExpr})+0.0000001,0,8)`;
+        errFormula = `ABS(${radialExpr})*1000`;
+        const dirLit = sec.dir === 'L' ? '"L"' : '"R"';
+        sideFormula = `IF(${radialExpr}<0,IF(${dirLit}="L","左","右"),IF(${radialExpr}>0,IF(${dirLit}="L","右","左"),"中心"))`;
+      }
+      const prioAddr = xlsxFormula(s4, row, 3, prioFormula, prioVal);
+      const errAddr = xlsxFormula(s4, row, 4, errFormula, errVal);
+      xlsxFormulaStr(s4, row, 5, sideFormula, sideVal);
+      const scoreVal = prioVal * 10000000 + errVal;
+      xlsxFormula(s4, row, 6, `${prioAddr}*10000000+${errAddr}`, scoreVal);
+      r4++;
+    });
+
+    const candLastRow = r4 - 1;
+    const scoreRange = `${xlsxAddr(candFirstRow, 6)}:${xlsxAddr(candLastRow, 6)}`;
+    const errRange = `${xlsxAddr(candFirstRow, 4)}:${xlsxAddr(candLastRow, 4)}`;
+    const sideRange = `${xlsxAddr(candFirstRow, 5)}:${xlsxAddr(candLastRow, 5)}`;
+    const nameRange = `${xlsxAddr(candFirstRow, 1)}:${xlsxAddr(candLastRow, 1)}`;
+    const typeRange = `${xlsxAddr(candFirstRow, 2)}:${xlsxAddr(candLastRow, 2)}`;
+
+    // best候補（キャッシュ値算出用）をjudgeStraight/judgeCurve相当のロジックで再計算する
+    let bestIdx = 0, bestScoreVal = Infinity;
+    const jpCands = sections.map((sec, idx) => {
+      let priority, errorMm, side;
+      if (sec.type === 'straight') {
+        const dxv = sec.bXVal - sec.aXVal, dyv = sec.bYVal - sec.aYVal;
+        const tVal = ((kp.xVal - sec.aXVal) * dxv + (kp.yVal - sec.aYVal) * dyv) / (dxv * dxv + dyv * dyv);
+        priority = (tVal >= 0 && tVal <= 1) ? 1 : 9;
+        const crossVal = dxv * (kp.yVal - sec.aYVal) - dyv * (kp.xVal - sec.aXVal);
+        errorMm = Math.abs(crossVal) / (Math.hypot(dxv, dyv) || 1) * 1000;
+        side = crossVal > 0 ? '右' : '左';
+      } else {
+        const dxv = kp.xVal - sec.roXVal, dyv = kp.yVal - sec.roYVal;
+        const distVal = Math.hypot(dxv, dyv) || 1e-9;
+        const radialVal = distVal - sec.RVal;
+        const angVal = Math.atan2(dyv, dxv), sVal = Math.atan2(sec.bcYVal - sec.roYVal, sec.bcXVal - sec.roXVal);
+        let deltaVal = angVal - sVal, deltaNormVal;
+        if (sec.dir === 'R') deltaNormVal = ((deltaVal % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        else deltaNormVal = -(((-deltaVal) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI));
+        priority = Math.abs(deltaNormVal) <= Math.abs(degToRad(sec.decVal)) + 1e-7 ? 0 : 8;
+        errorMm = Math.abs(radialVal) * 1000;
+        if (radialVal < 0) side = sec.dir === 'L' ? '左' : '右'; else if (radialVal > 0) side = sec.dir === 'L' ? '右' : '左'; else side = '中心';
+      }
+      const score = priority * 10000000 + errorMm;
+      if (score < bestScoreVal) { bestScoreVal = score; bestIdx = idx; }
+      return { priority, errorMm, side };
+    });
+    const bestSec = sections[bestIdx], bestCand = jpCands[bestIdx];
+
+    xlsxStr(s4, r4, 1, `${kp.name} 判定`); r4++;
+    xlsxStr(s4, r4, 1, '最小スコア');
+    const bestScoreAddr = xlsxFormula(s4, r4, 2, `MIN(${scoreRange})`, bestScoreVal); r4++;
+    xlsxStr(s4, r4, 1, '該当行位置');
+    const matchAddr = xlsxFormula(s4, r4, 2, `MATCH(${bestScoreAddr},${scoreRange},0)`, bestIdx + 1); r4++;
+    // 「今どこにいるか」（現在区間・種別）を先に確定させ、区間別計算式一覧（前述の表）から
+    // その区間のP1/P2/Rを参照して、計画X/Yを1回だけ計算する（種別に応じて式を選ぶ）。
+    xlsxStr(s4, r4, 1, '現在区間');
+    const currentSectionAddr = xlsxFormulaStr(s4, r4, 2, `INDEX(${nameRange},${matchAddr})`, bestSec.label); r4++;
+    xlsxStr(s4, r4, 1, '種別');
+    const typeAddr = xlsxFormulaStr(s4, r4, 2, `INDEX(${typeRange},${matchAddr})`, bestSec.type === 'straight' ? '直線' : '曲線'); r4++;
+    const p1xVal = bestSec.type === 'straight' ? bestSec.aXVal : bestSec.roXVal;
+    const p1yVal = bestSec.type === 'straight' ? bestSec.aYVal : bestSec.roYVal;
+    const p2xVal = bestSec.type === 'straight' ? bestSec.bXVal : bestSec.bcXVal;
+    const p2yVal = bestSec.type === 'straight' ? bestSec.bYVal : bestSec.bcYVal;
+    const rVal = bestSec.type === 'curve' ? bestSec.RVal : 0;
+    xlsxStr(s4, r4, 1, 'P1X'); const p1xAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP1XRange},${matchAddr})`, p1xVal); r4++;
+    xlsxStr(s4, r4, 1, 'P1Y'); const p1yAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP1YRange},${matchAddr})`, p1yVal); r4++;
+    xlsxStr(s4, r4, 1, 'P2X'); const p2xAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP2XRange},${matchAddr})`, p2xVal); r4++;
+    xlsxStr(s4, r4, 1, 'P2Y'); const p2yAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP2YRange},${matchAddr})`, p2yVal); r4++;
+    xlsxStr(s4, r4, 1, 'R'); const rAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendRRange},${matchAddr})`, rVal); r4++;
+    // 計画X/Y: 種別が直線ならP1-P2への垂線の足、曲線ならP1(中心)からの半径分の足を計算する。
+    const lineTVal = `((${kp.xAddr}-${p1xAddr})*(${p2xAddr}-${p1xAddr})+(${kp.yAddr}-${p1yAddr})*(${p2yAddr}-${p1yAddr}))/((${p2xAddr}-${p1xAddr})^2+(${p2yAddr}-${p1yAddr})^2)`;
+    const lineTClamped = `MAX(0,MIN(1,${lineTVal}))`;
+    const curveDist = `SQRT((${kp.xAddr}-${p1xAddr})^2+(${kp.yAddr}-${p1yAddr})^2)`;
+    const curveRadial = `(${curveDist}-${rAddr})`;
+    const planXFormula = `IF(${typeAddr}="直線",${p1xAddr}+${lineTClamped}*(${p2xAddr}-${p1xAddr}),${kp.xAddr}-${curveRadial}*(${kp.xAddr}-${p1xAddr})/${curveDist})`;
+    const planYFormula = `IF(${typeAddr}="直線",${p1yAddr}+${lineTClamped}*(${p2yAddr}-${p1yAddr}),${kp.yAddr}-${curveRadial}*(${kp.yAddr}-${p1yAddr})/${curveDist})`;
+    let planXVal, planYVal;
+    if (bestSec.type === 'straight') {
+      const tc = Math.max(0, Math.min(1, ((kp.xVal - p1xVal) * (p2xVal - p1xVal) + (kp.yVal - p1yVal) * (p2yVal - p1yVal)) / ((p2xVal - p1xVal) ** 2 + (p2yVal - p1yVal) ** 2)));
+      planXVal = p1xVal + tc * (p2xVal - p1xVal);
+      planYVal = p1yVal + tc * (p2yVal - p1yVal);
+    } else {
+      const distV = Math.hypot(kp.xVal - p1xVal, kp.yVal - p1yVal);
+      const radialV = distV - rVal;
+      planXVal = kp.xVal - radialV * (kp.xVal - p1xVal) / distV;
+      planYVal = kp.yVal - radialV * (kp.yVal - p1yVal) / distV;
+    }
+    xlsxStr(s4, r4, 1, '計画X'); const planXAddr = xlsxFormula(s4, r4, 2, planXFormula, planXVal); r4++;
+    xlsxStr(s4, r4, 1, '計画Y'); const planYAddr = xlsxFormula(s4, r4, 2, planYFormula, planYVal); r4++;
+    xlsxStr(s4, r4, 1, '誤差(mm)'); const errAddrFinal = xlsxFormula(s4, r4, 2, `INDEX(${errRange},${matchAddr})`, bestCand.errorMm); r4++;
+    xlsxStr(s4, r4, 1, '左右'); const sideAddrFinal = xlsxFormulaStr(s4, r4, 2, `INDEX(${sideRange},${matchAddr})`, bestCand.side); r4++;
+    const rankVal = bestCand.errorMm <= (n('tolOk') || 80) ? 'OK' : (bestCand.errorMm <= (n('tolWarn') || 100) ? '注意' : 'NG');
+    xlsxStr(s4, r4, 1, '判定');
+    xlsxFormulaStr(s4, r4, 2, `IF(${errAddrFinal}<=${tolOkAddr},"OK",IF(${errAddrFinal}<=${tolWarnAddr},"注意","NG"))`, rankVal);
+    r4 += 2;
+
+    summaryRows.push({ name: kp.name, role: kp.role, xAddr: kp.xAddr, yAddr: kp.yAddr, xVal: kp.xVal, yVal: kp.yVal, sectionAddr: currentSectionAddr, sectionVal: bestSec.label, planXAddr, planYAddr, planXVal, planYVal, errAddr: errAddrFinal, sideAddr: sideAddrFinal, rank: rankVal, errVal: bestCand.errorMm, sideVal: bestCand.side });
+  });
+
+  // 一覧サマリー（各KPの最終行の値を参照するだけの表。先頭付近に置く）
+  const summaryStartRow = r4;
+  xlsxStr(s4, r4, 1, '法線との測定誤差計算結果（一覧）'); r4++;
+  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, '現在区間'); xlsxStr(s4, r4, 4, '測定点X'); xlsxStr(s4, r4, 5, '測定点Y');
+  xlsxStr(s4, r4, 6, '計画X'); xlsxStr(s4, r4, 7, '計画Y'); xlsxStr(s4, r4, 8, '誤差(mm)'); xlsxStr(s4, r4, 9, '左右'); xlsxStr(s4, r4, 10, '判定'); r4++;
+  summaryRows.forEach(sr => {
+    xlsxStr(s4, r4, 1, sr.name); xlsxStr(s4, r4, 2, sr.role);
+    xlsxFormulaStr(s4, r4, 3, sr.sectionAddr, sr.sectionVal);
+    xlsxFormula(s4, r4, 4, sr.xAddr, sr.xVal);
+    xlsxFormula(s4, r4, 5, sr.yAddr, sr.yVal);
+    xlsxFormula(s4, r4, 6, sr.planXAddr, sr.planXVal);
+    xlsxFormula(s4, r4, 7, sr.planYAddr, sr.planYVal);
+    xlsxFormula(s4, r4, 8, sr.errAddr, sr.errVal);
+    xlsxFormulaStr(s4, r4, 9, sr.sideAddr, sr.sideVal);
+    xlsxFormulaStr(s4, r4, 10, `IF(${sr.errAddr}<=${tolOkAddr},"OK",IF(${sr.errAddr}<=${tolWarnAddr},"注意","NG"))`, sr.rank);
+    r4++;
+  });
+
+  // ── 列幅の設定（文字列が見切れないよう最適化） ──
+  xlsxSetColWidths(s1, { 1: 24, 2: 12, 3: 8, 4: 8, 5: 6, 6: 6, 7: 10, 8: 22 });
+  xlsxSetColWidths(s2, { 1: 32, 2: 12, 3: 12 });
+  xlsxSetColWidths(s3, { 1: 8, 2: 13, 3: 13, 4: 12, 5: 12, 6: 10 });
+  xlsxSetColWidths(s4, { 1: 22, 2: 10, 3: 12, 4: 10, 5: 10, 6: 10, 7: 12, 8: 12, 9: 10, 10: 10 });
+
+  // ── ZIPにまとめてダウンロード ──
+  const enc = new TextEncoder();
+  const files = [
+    { name: '[Content_Types].xml', data: enc.encode(XLSX_CONTENT_TYPES) },
+    { name: '_rels/.rels', data: enc.encode(XLSX_RELS_ROOT) },
+    { name: 'xl/workbook.xml', data: enc.encode(xlsxWorkbookXml([s1.name, s2.name, s3.name, s4.name])) },
+    { name: 'xl/_rels/workbook.xml.rels', data: enc.encode(XLSX_WORKBOOK_RELS) },
+    { name: 'xl/styles.xml', data: enc.encode(XLSX_STYLES) },
+    { name: 'xl/worksheets/sheet1.xml', data: enc.encode(xlsxSheetXml(s1)) },
+    { name: 'xl/worksheets/sheet2.xml', data: enc.encode(xlsxSheetXml(s2)) },
+    { name: 'xl/worksheets/sheet3.xml', data: enc.encode(xlsxSheetXml(s3)) },
+    { name: 'xl/worksheets/sheet4.xml', data: enc.encode(xlsxSheetXml(s4)) },
+  ];
+  const zipBytes = xlsxBuildZip(files);
+  const blob = new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = v('siteName') || 'project';
+  const span = v('siteSpan') || '';
+  a.href = url;
+  a.download = `MYcurve_${name}${span ? '_' + span : ''}_測量データ_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Excelファイルを保存しました');
 }
 
 // 種別ごとの色（曲線=青、直線=緑）
@@ -4793,7 +5605,7 @@ function renderJackStages(wallBeffInfo) {
   const stageCount = Math.max(0, Math.floor(jackCount / 2));
 
   if (stageCount === 0) {
-    el.innerHTML = '<div class="note-box">推進力タブでジャッキ使用台数を設定すると表示されます。</div>';
+    el.innerHTML = '<div class="note-box">上の「必要ジャッキ本数」で選択するか、使用台数を直接入力すると表示されます。</div>';
     return;
   }
 
@@ -4850,7 +5662,7 @@ function renderJackStages(wallBeffInfo) {
   }).join('');
 
   el.innerHTML = `
-    <p class="report-note" style="margin:0 2px 6px">ジャッキ能力は全段共通: <b class="mono">${cap} kN</b>（ジャッキ径目安 <b class="mono">${dia.toFixed(0)} mm</b>）。「⚡推進力」タブの「ジャッキ1本の能力」で変更できます。設置高さHは、定規（H鋼）の下面を0とした、その段のジャッキ底面までの高さです。</p>
+    <p class="report-note" style="margin:0 2px 6px">ジャッキ能力は全段共通: <b class="mono">${cap} kN</b>（ジャッキ径目安 <b class="mono">${dia.toFixed(0)} mm</b>）。上の「採用ジャッキ 1本の能力」で変更できます。設置高さHは、定規（H鋼）の下面を0とした、その段のジャッキ底面までの高さです。</p>
     <div class="tbl-wrap"><table class="report-table">
       <thead><tr><th>段</th><th>基数</th><th>ジャッキ幅[m]<br>（片側・中心オフセット）</th><th>設置高さ H[m]<br>（定規下面基準）</th><th>局所支圧壁厚さ</th></tr></thead>
       <tbody>${rows}</tbody>
