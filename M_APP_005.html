@@ -4429,6 +4429,7 @@ const XLSX_CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
   + '<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
   + '<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '<Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
   + '</Types>';
 const XLSX_RELS_ROOT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -4440,7 +4441,8 @@ const XLSX_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>'
   + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet3.xml"/>'
   + '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>'
-  + '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+  + '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet5.xml"/>'
+  + '<Relationship Id="rId6" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
   + '</Relationships>';
 // スタイルID（cellXfsの並びと対応。xlsxStr/xlsxNum/xlsxFormula/xlsxFormulaStrの既定値・上書き用の定数）:
 //   1=罫線付きテキスト（既定）／2=罫線付き数値0.000（既定）／3=罫線付き整数0／4=罫線付き太字・見出し塗りつぶし
@@ -4463,11 +4465,14 @@ const XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
   + '</cellXfs>'
   + '</styleSheet>';
-function xlsxWorkbookXml(sheetNames) {
+// activeTabIndex: ファイルを開いたときに最初に表示させたいシートの0始まりインデックス（省略時0）。
+// 結果一覧シートをタブの並び順は変えずに「開いたら最初に見える」状態にするために使う。
+function xlsxWorkbookXml(sheetNames, activeTabIndex) {
   const sheetsXml = sheetNames.map((nm, i) => `<sheet name="${xlsxEsc(nm)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
+  const bookViews = activeTabIndex ? `<bookViews><workbookView activeTab="${activeTabIndex}"/></bookViews>` : '';
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-    + `<sheets>${sheetsXml}</sheets></workbook>`;
+    + `${bookViews}<sheets>${sheetsXml}</sheets></workbook>`;
 }
 
 function exportSurveyXLSX() {
@@ -4479,6 +4484,7 @@ function exportSurveyXLSX() {
   const s2 = xlsxMakeSheet('測量基準データ');
   const s3 = xlsxMakeSheet('各座標データ');
   const s4 = xlsxMakeSheet('測定結果＋測定誤差');
+  const s5 = xlsxMakeSheet('結果一覧'); // 画面の「計算結果一覧」と同じ内容だけを独立したシートにまとめたもの。開いたら最初に見える。
 
   // ══ シート1: 基線データ ══
   let r = 1;
@@ -5003,25 +5009,29 @@ function exportSurveyXLSX() {
     });
   });
 
-  // 一覧サマリー（画面の「📊計算結果一覧」（KP|役割|X|Y|位置|RO-測点距離|Rとの差|計画X|計画Y|左右誤差|判定）と
-  // 同じ列構成にする。各セルは上のブロックで既に計算済みのセルをそのまま参照するだけ。予測点があれば先頭行になる。
-  const summaryStartRow = r4;
-  xlsxStr(s4, r4, 1, '法線との測定誤差計算結果（一覧）'); r4++;
-  xlsxStr(s4, r4, 1, 'KP', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, '役割', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, 'X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 4, 'Y', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 5, '位置', XLSX_STYLE_HEADER);
-  xlsxStr(s4, r4, 6, 'RO-測点距離', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 7, 'Rとの差', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 8, '計画X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 9, '計画Y', XLSX_STYLE_HEADER);
-  xlsxStr(s4, r4, 10, '左右誤差', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 11, '判定', XLSX_STYLE_HEADER); r4++;
+  // ══ シート5: 結果一覧 ══
+  // 画面の「📊計算結果一覧」（KP|役割|X|Y|位置|RO-測点距離|Rとの差|計画X|計画Y|左右誤差|判定）と
+  // 同じ列構成の表を、詳細な計算過程（シート4）とは独立したシートとして先頭に置く。
+  // ファイルを開いてすぐこの表だけを見られるようにするのが目的（xlsxWorkbookXmlのactiveTabで既定表示にする）。
+  // 各セルはシート4で既に計算済みのセルをそのまま参照するだけ（クロスシート参照）。予測点があれば先頭行になる。
+  let r5 = 1;
+  xlsxStr(s5, r5, 1, '法線との測定誤差計算結果（一覧）', XLSX_STYLE_HEADER); r5++;
+  xlsxStr(s5, r5, 1, '詳細な計算過程は「測定結果＋測定誤差」シートを参照してください。'); r5++;
+  xlsxStr(s5, r5, 1, 'KP', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 2, '役割', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 3, 'X', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 4, 'Y', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 5, '位置', XLSX_STYLE_HEADER);
+  xlsxStr(s5, r5, 6, 'RO-測点距離', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 7, 'Rとの差', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 8, '計画X', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 9, '計画Y', XLSX_STYLE_HEADER);
+  xlsxStr(s5, r5, 10, '左右誤差', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 11, '判定', XLSX_STYLE_HEADER); r5++;
   summaryRows.forEach(sr => {
-    xlsxStr(s4, r4, 1, sr.name); xlsxStr(s4, r4, 2, sr.role);
-    xlsxFormula(s4, r4, 3, sr.xAddr, sr.xVal);
-    xlsxFormula(s4, r4, 4, sr.yAddr, sr.yVal);
-    xlsxFormulaStr(s4, r4, 5, sr.sectionAddr, sr.sectionVal);
-    xlsxFormulaStr(s4, r4, 6, sr.roDistAddr, sr.roDistVal);
-    xlsxFormulaStr(s4, r4, 7, sr.radialMmAddr, sr.radialMmVal);
-    xlsxFormula(s4, r4, 8, sr.planXAddr, sr.planXVal);
-    xlsxFormula(s4, r4, 9, sr.planYAddr, sr.planYVal);
-    xlsxFormulaStr(s4, r4, 10, sr.sideErrAddr, sr.sideErrVal);
-    xlsxFormulaStr(s4, r4, 11, sr.rankAddr, sr.rankVal);
-    r4++;
+    xlsxStr(s5, r5, 1, sr.name); xlsxStr(s5, r5, 2, sr.role);
+    xlsxFormula(s5, r5, 3, xlsxRef(s4, sr.xAddr), sr.xVal);
+    xlsxFormula(s5, r5, 4, xlsxRef(s4, sr.yAddr), sr.yVal);
+    xlsxFormulaStr(s5, r5, 5, xlsxRef(s4, sr.sectionAddr), sr.sectionVal);
+    xlsxFormulaStr(s5, r5, 6, xlsxRef(s4, sr.roDistAddr), sr.roDistVal);
+    xlsxFormulaStr(s5, r5, 7, xlsxRef(s4, sr.radialMmAddr), sr.radialMmVal);
+    xlsxFormula(s5, r5, 8, xlsxRef(s4, sr.planXAddr), sr.planXVal);
+    xlsxFormula(s5, r5, 9, xlsxRef(s4, sr.planYAddr), sr.planYVal);
+    xlsxFormulaStr(s5, r5, 10, xlsxRef(s4, sr.sideErrAddr), sr.sideErrVal);
+    xlsxFormulaStr(s5, r5, 11, xlsxRef(s4, sr.rankAddr), sr.rankVal);
+    r5++;
   });
 
   // ── 列幅の設定（文字列が見切れないよう最適化） ──
@@ -5029,19 +5039,21 @@ function exportSurveyXLSX() {
   xlsxSetColWidths(s2, { 1: 42, 2: 12, 3: 12 });
   xlsxSetColWidths(s3, { 1: 12, 2: 14, 3: 14, 4: 16, 5: 16, 6: 12 });
   xlsxSetColWidths(s4, { 1: 42, 2: 16, 3: 16, 4: 16, 5: 16, 6: 18, 7: 16, 8: 14, 9: 14, 10: 16, 11: 10 });
+  xlsxSetColWidths(s5, { 1: 12, 2: 12, 3: 14, 4: 14, 5: 16, 6: 16, 7: 14, 8: 14, 9: 14, 10: 14, 11: 10 });
 
   // ── ZIPにまとめてダウンロード ──
   const enc = new TextEncoder();
   const files = [
     { name: '[Content_Types].xml', data: enc.encode(XLSX_CONTENT_TYPES) },
     { name: '_rels/.rels', data: enc.encode(XLSX_RELS_ROOT) },
-    { name: 'xl/workbook.xml', data: enc.encode(xlsxWorkbookXml([s1.name, s2.name, s3.name, s4.name])) },
+    { name: 'xl/workbook.xml', data: enc.encode(xlsxWorkbookXml([s1.name, s2.name, s3.name, s4.name, s5.name], 4)) },
     { name: 'xl/_rels/workbook.xml.rels', data: enc.encode(XLSX_WORKBOOK_RELS) },
     { name: 'xl/styles.xml', data: enc.encode(XLSX_STYLES) },
     { name: 'xl/worksheets/sheet1.xml', data: enc.encode(xlsxSheetXml(s1)) },
     { name: 'xl/worksheets/sheet2.xml', data: enc.encode(xlsxSheetXml(s2)) },
     { name: 'xl/worksheets/sheet3.xml', data: enc.encode(xlsxSheetXml(s3)) },
     { name: 'xl/worksheets/sheet4.xml', data: enc.encode(xlsxSheetXml(s4)) },
+    { name: 'xl/worksheets/sheet5.xml', data: enc.encode(xlsxSheetXml(s5)) },
   ];
   const zipBytes = xlsxBuildZip(files);
   const blob = new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
