@@ -297,7 +297,7 @@ tr.row-selected{background:#eff6ff}
       </div>
       <div class="field-row full" id="pipeGradeRow">
         <label>種別</label>
-        <select id="pipeGrade" onchange="onPipeDiaChange()">
+        <select id="pipeGrade" onchange="onPipeDiaChange();applyCushionSigmaAllowDefault()">
           <option value="1shu">1種（50N）</option>
           <option value="2shu">2種（70N）</option>
         </select>
@@ -329,7 +329,7 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
     </div>
     <div class="note-box" style="font-size:11px">つぶれ代: 推進荷重でクッション材が圧縮された後の厚さ減少分。1本毎の推進力計算表の距離には (クッション材厚－つぶれ代) を管長に加えて反映します。<br>
-    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。管の設計基準強度の50%程度を目安に、管メーカーの資料に基づき入力してください（未入力の間はクッション材選定は行いません）。</div>
+    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
@@ -1226,6 +1226,20 @@ const CATEGORY_GRADES = {
   steel: [],
 };
 
+// クッション材選定用の許容平均圧縮応力度σ_allowの参考値（ヒューム管のみ）。
+// 出典: 播磨コンクリート工業「Wジョイント推進管」（クッション材厚10mmを考慮した値）。
+// 1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²。メーカー・クッション材厚が異なれば実際の値は変わるため、
+// あくまで初期値の参考として自動入力し、pipeCushionSigmaAllow欄は引き続き手動で上書き可能にする。
+// レジン管・鋼管は対応する一次資料が無いため自動入力しない（手入力のまま）。
+const HUME_SIGMA_ALLOW = { '1shu': 13.0, '2shu': 17.5 };
+function applyCushionSigmaAllowDefault() {
+  const cat = v('pipeCategory') || 'hume';
+  const grade = v('pipeGrade');
+  if (cat === 'hume' && HUME_SIGMA_ALLOW[grade] != null) {
+    setV('pipeCushionSigmaAllow', HUME_SIGMA_ALLOW[grade]);
+  }
+}
+
 // 呼び径/管種/種別から自動決定される項目（外径・内径・管厚・重量・許容耐荷力・外圧強さ）は
 // 標準管の表がある限り編集不可にする。鋼管のみ表が無いため手入力を許可する。
 const PIPE_AUTO_FIELD_IDS = ['pipeOuter','pipeInner','pipeThick','pipeWeight','pipeAllow','pipePext'];
@@ -1260,6 +1274,7 @@ function onPipeCategoryChange() {
     setPipeAutoFieldsReadonly(true); // ヒューム管・レジン管: 標準表から自動設定
   }
   onPipeDiaChange();
+  applyCushionSigmaAllowDefault();
 }
 
 function onPipeDiaChange() {
@@ -2794,11 +2809,54 @@ function judgePoint(p) {
   return {...r, rank, name:p.name, role:p.role, x:p.x, y:p.y};
 }
 
-function renderSurveySummary(results) {
+// ══════════════════════════════════════
+//  予測点：直近2本（役割欄「N本目前」「N本目後」）の折れ角から、次の1本の着地点を推定する
+//  考え方: 2本目(前→後)の方向と1本目(前→後)の方向の差＝実測の折れ角。
+//  この折れ角がそのまま続くと仮定し、1本目の方向にもう一度同じ折れ角を適用した方向へ、
+//  1本目後(＝現時点の管列の先端)から管有効長l′だけ進んだ点を予測点とする。
+//  predDir = dir1 + (dir1-dir2) = 2*dir1-dir2　という式になるため、角度の正規化（-180〜180化）は
+//  表示用にのみ行い、予測点自体の計算（cos/sinに渡す角度）には不要。
+// ══════════════════════════════════════
+function parsePipeRole(role) {
+  const norm = String(role || '').trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const m = /^(\d+)\s*本目\s*(前|後)$/.exec(norm);
+  return m ? { no: parseInt(m[1], 10), part: m[2] } : null;
+}
+function wrapDeg180(d) { let x = d % 360; if (x > 180) x -= 360; if (x < -180) x += 360; return x; }
+
+// points: {role,x,y}の配列（surveyResultsやkpPtRows相当）。1本目・2本目とも前後が揃っていなければnull。
+function computeKpPrediction(points) {
+  const byPipe = {};
+  points.forEach(p => {
+    const pr = parsePipeRole(p.role);
+    if (!pr) return;
+    byPipe[pr.no] = byPipe[pr.no] || {};
+    byPipe[pr.no][pr.part] = p;
+  });
+  const p1 = byPipe[1], p2 = byPipe[2];
+  if (!p1 || !p1['前'] || !p1['後'] || !p2 || !p2['前'] || !p2['後']) return null;
+  const front1 = p1['前'], back1 = p1['後'], front2 = p2['前'], back2 = p2['後'];
+  const dir2 = Math.atan2(back2.y - front2.y, back2.x - front2.x);
+  const dir1 = Math.atan2(back1.y - front1.y, back1.x - front1.x);
+  const predDir = 2 * dir1 - dir2;
+  const pipeLen = n('pipeLen') || 2.43;
+  return {
+    x: back1.x + pipeLen * Math.cos(predDir), y: back1.y + pipeLen * Math.sin(predDir),
+    pipeLen, bendDeg: wrapDeg180(radToDeg(dir1) - radToDeg(dir2)), dir1Deg: radToDeg(dir1), dir2Deg: radToDeg(dir2)
+  };
+}
+
+function renderSurveySummary(results, pred) {
   const box = document.getElementById('surveySummaryCards');
   if (!box) return;
   if (!results.length) { box.innerHTML = '<div class="note-box">KPがありません。「KPを追加」して距離・角度を入力してください。</div>'; return; }
-  box.innerHTML = results.map(r => `
+  const predCard = pred ? `
+    <div class="kpcard ${rankClass(pred.rank)}" style="border-style:dashed;background:rgba(29,111,216,.06)">
+      <div class="line"><div class="name">🔮 予測点（次の1本）</div><div class="big">${esc(pred.short||((pred.side||'')+' '+fmt(pred.errorMm,0)))}</div></div>
+      <div class="line sub"><span>位置：${esc(pred.sectionName)}</span><span>判定：<span class="pill ${rankClass(pred.rank)}">${pred.rank}</span></span></div>
+      <div class="sub" style="margin-top:4px">折れ角 ${fmt(pred.bendDeg,2)}°　管有効長 ${fmt(pred.pipeLen,2)}m 進んだ予測 X=${fmt(pred.x,3)} / Y=${fmt(pred.y,3)}</div>
+    </div>` : '';
+  box.innerHTML = predCard + results.map(r => `
     <div class="kpcard ${rankClass(r.rank)}">
       <div class="line"><div class="name">${esc(r.name)} ${esc(r.role||'')}</div><div class="big">${esc(r.short||((r.side||'')+' '+fmt(r.errorMm,0)))}</div></div>
       <div class="line sub"><span>位置：${esc(r.sectionName)}</span><span>判定：<span class="pill ${rankClass(r.rank)}">${r.rank}</span></span></div>
@@ -2806,16 +2864,22 @@ function renderSurveySummary(results) {
     </div>
   `).join('');
 }
-function renderSurveyTable(results) {
+function renderSurveyTable(results, pred) {
   const el = document.getElementById('surveyResultTable');
   if (!el) return;
   if (!results.length) { el.innerHTML = ''; return; }
   let h = '<div class="tbl-wrap"><table><tr><th>KP</th><th>役割</th><th>X</th><th>Y</th><th>位置</th><th>RO-測点距離</th><th>Rとの差</th><th>計画X</th><th>計画Y</th><th>左右誤差</th><th>判定</th></tr>';
+  if (pred) {
+    h += `<tr style="background:rgba(29,111,216,.08)"><td><b>🔮予測点</b></td><td>次の1本</td><td class="mono">${fmt(pred.x,3)}</td><td class="mono">${fmt(pred.y,3)}</td><td>${esc(pred.sectionName)}</td><td class="mono">${pred.roDist?fmt(pred.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(pred.radialMm)?fmt(pred.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(pred.foot.x,3)}</td><td class="mono">${fmt(pred.foot.y,3)}</td><td><b>${esc(pred.short||fmt(pred.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(pred.rank)}">${pred.rank}</span></td></tr>`;
+  }
   results.forEach(r => {
     h += `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.role||'')}</td><td class="mono">${fmt(r.x,3)}</td><td class="mono">${fmt(r.y,3)}</td><td>${esc(r.sectionName)}</td><td class="mono">${r.roDist?fmt(r.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(r.radialMm)?fmt(r.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(r.foot.x,3)}</td><td class="mono">${fmt(r.foot.y,3)}</td><td><b>${esc(r.short||fmt(r.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(r.rank)}">${r.rank}</span></td></tr>`;
   });
   h += '</table></div>';
   el.innerHTML = h;
+  if (!pred && results.length >= 2) {
+    el.innerHTML += '<div class="note-box" style="font-size:11px;margin-top:6px">予測点を表示するには、直近2本のKPの役割欄に「1本目前」「1本目後」「2本目前」「2本目後」と入力してください。</div>';
+  }
 }
 function renderSurveyProcess(results) {
   const el = document.getElementById('surveyCalcProcess');
@@ -2831,12 +2895,15 @@ function renderSurveyProcess(results) {
   el.innerHTML = h;
 }
 
+let lastKpPrediction = null;
 function calcSurvey() {
   surveyGeom = buildSurveyGeometry();
   const {kpPoints} = calculateSurveyTraverse();
   surveyResults = kpPoints.map(judgePoint);
-  renderSurveySummary(surveyResults);
-  renderSurveyTable(surveyResults);
+  const predRaw = computeKpPrediction(surveyResults);
+  lastKpPrediction = predRaw ? { ...judgePoint({ x: predRaw.x, y: predRaw.y, name: '予測点', role: '' }), pipeLen: predRaw.pipeLen, bendDeg: predRaw.bendDeg } : null;
+  renderSurveySummary(surveyResults, lastKpPrediction);
+  renderSurveyTable(surveyResults, lastKpPrediction);
   renderSurveyProcess(surveyResults);
   const dsEl = document.getElementById('surveyDesignInfo');
   if (dsEl) dsEl.textContent = `曲線${getCurves().length}箇所　路線長 ${fmt(surveyGeom.totalDistance,2)}m（設計値）`;
@@ -4662,6 +4729,41 @@ function exportSurveyXLSX() {
   });
   r4++;
 
+  // ── 予測点：直近2本（役割欄「1本目前/後」「2本目前/後」）の折れ角から次の1本の着地点を推定 ──
+  // 考え方はM_APP_005.htmlのcomputeKpPrediction()と同一（2本目→1本目の折れ角を1本目にもう一度適用し、
+  // 1本目後から管有効長l′だけ進んだ点を予測点とする）。役割が一致する行が無ければ計算しない。
+  const roleMap = {};
+  kpPtRows.forEach(kp => {
+    const pr = parsePipeRole(kp.role);
+    if (!pr) return;
+    roleMap[pr.no] = roleMap[pr.no] || {};
+    roleMap[pr.no][pr.part] = kp;
+  });
+  let predKp = null;
+  if (roleMap[1] && roleMap[1]['前'] && roleMap[1]['後'] && roleMap[2] && roleMap[2]['前'] && roleMap[2]['後']) {
+    const front1 = roleMap[1]['前'], back1 = roleMap[1]['後'], front2 = roleMap[2]['前'], back2 = roleMap[2]['後'];
+    xlsxStr(s4, r4, 1, '予測点の計算（役割「1本目前/後」「2本目前/後」から）'); r4++;
+    xlsxStr(s4, r4, 1, '管有効長 l′[m]');
+    const pipeLenVal = n('pipeLen') || 2.43;
+    const pipeLenAddr = xlsxNum(s4, r4, 2, pipeLenVal); r4++;
+    const dir2Val = Math.atan2(back2.yVal - front2.yVal, back2.xVal - front2.xVal);
+    const dir1Val = Math.atan2(back1.yVal - front1.yVal, back1.xVal - front1.xVal);
+    const predDirVal = 2 * dir1Val - dir2Val;
+    xlsxStr(s4, r4, 1, '2本目 方向角[rad]（前→後）');
+    const dir2Addr = xlsxFormula(s4, r4, 2, `ATAN2(${back2.xAddr}-${front2.xAddr},${back2.yAddr}-${front2.yAddr})`, dir2Val); r4++;
+    xlsxStr(s4, r4, 1, '1本目 方向角[rad]（前→後）');
+    const dir1Addr = xlsxFormula(s4, r4, 2, `ATAN2(${back1.xAddr}-${front1.xAddr},${back1.yAddr}-${front1.yAddr})`, dir1Val); r4++;
+    xlsxStr(s4, r4, 1, '予測方向角[rad]（=1本目方向角×2−2本目方向角）');
+    const predDirAddr = xlsxFormula(s4, r4, 2, `2*${dir1Addr}-${dir2Addr}`, predDirVal); r4++;
+    xlsxStr(s4, r4, 1, '予測点（1本目後から予測方向角へl′進んだ点）'); xlsxStr(s4, r4, 3, 'X'); xlsxStr(s4, r4, 4, 'Y'); r4++;
+    const predXVal = back1.xVal + pipeLenVal * Math.cos(predDirVal);
+    const predYVal = back1.yVal + pipeLenVal * Math.sin(predDirVal);
+    const predXAddr = xlsxFormula(s4, r4, 3, `${back1.xAddr}+${pipeLenAddr}*COS(${predDirAddr})`, predXVal);
+    const predYAddr = xlsxFormula(s4, r4, 4, `${back1.yAddr}+${pipeLenAddr}*SIN(${predDirAddr})`, predYVal);
+    r4 += 2;
+    predKp = { name: '予測点', role: '次の1本', xAddr: predXAddr, yAddr: predYAddr, xVal: predXVal, yVal: predYVal };
+  }
+
   // ── 判定基準（現在のUI設定値をそのまま数値として反映） ──
   xlsxStr(s4, r4, 1, '判定基準'); r4++;
   xlsxStr(s4, r4, 1, '社内規格値');
@@ -4732,7 +4834,8 @@ function exportSurveyXLSX() {
   r4++;
 
   const summaryRows = []; // 後でヘッダの上に差し込むための情報
-  kpPtRows.forEach(kp => {
+  const judgeTargets = predKp ? [predKp, ...kpPtRows] : kpPtRows; // 予測点があれば先頭に並べる（画面表示順と同じ）
+  judgeTargets.forEach(kp => {
     // 候補一覧: 区間ごとに優先度・誤差・左右だけを計算する（計画X/Yはここでは計算しない＝
     // 最終的に採用される区間の分だけ、後で1回計算すれば十分なため）。
     xlsxStr(s4, r4, 1, `${kp.name} 候補一覧`); r4++;
@@ -4874,29 +4977,50 @@ function exportSurveyXLSX() {
     xlsxStr(s4, r4, 1, '計画Y'); const planYAddr = xlsxFormula(s4, r4, 2, planYFormula, planYVal); r4++;
     xlsxStr(s4, r4, 1, '誤差(mm)'); const errAddrFinal = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},4,FALSE)`, bestCand.errorMm); r4++;
     xlsxStr(s4, r4, 1, '左右'); const sideAddrFinal = xlsxFormulaStr(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},5,FALSE)`, bestCand.side); r4++;
+    // RO-測点距離／Rとの差（曲線区間のときだけ意味を持つ。直線区間は画面表示と同じ「-」にする）
+    const roDistVal = bestSec.type === 'curve' ? Math.hypot(kp.xVal - p1xVal, kp.yVal - p1yVal) : null;
+    const radialMmVal = bestSec.type === 'curve' ? (roDistVal - rVal) * 1000 : null;
+    xlsxStr(s4, r4, 1, 'RO-測点距離');
+    const roDistAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",TEXT(${curveDist},"0.000")&" m","-")`, roDistVal == null ? '-' : roDistVal.toFixed(3) + ' m'); r4++;
+    xlsxStr(s4, r4, 1, 'Rとの差');
+    const radialMmAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",TEXT((${curveDist}-${rAddr})*1000,"0.0")&" mm","-")`, radialMmVal == null ? '-' : radialMmVal.toFixed(1) + ' mm'); r4++;
+    // 左右誤差（画面の計算結果一覧と同じ結合表記: 曲線="左右 誤差mmを整数丸め"、直線="誤差mmを小数1桁+mm"）
+    const sideErrVal = bestSec.type === 'curve' ? `${bestCand.side} ${Math.round(bestCand.errorMm)}` : `${bestCand.errorMm.toFixed(1)} mm`;
+    xlsxStr(s4, r4, 1, '左右誤差');
+    const sideErrAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",${sideAddrFinal}&" "&TEXT(${errAddrFinal},"0"),TEXT(${errAddrFinal},"0.0")&" mm")`, sideErrVal); r4++;
     const rankVal = bestCand.errorMm <= (n('tolOk') || 80) ? 'OK' : (bestCand.errorMm <= (n('tolWarn') || 100) ? '注意' : 'NG');
     xlsxStr(s4, r4, 1, '判定');
-    xlsxFormulaStr(s4, r4, 2, `IF(${errAddrFinal}<=${tolOkAddr},"OK",IF(${errAddrFinal}<=${tolWarnAddr},"注意","NG"))`, rankVal);
+    const rankAddr = xlsxFormulaStr(s4, r4, 2, `IF(${errAddrFinal}<=${tolOkAddr},"OK",IF(${errAddrFinal}<=${tolWarnAddr},"注意","NG"))`, rankVal);
     r4 += 2;
 
-    summaryRows.push({ name: kp.name, role: kp.role, xAddr: kp.xAddr, yAddr: kp.yAddr, xVal: kp.xVal, yVal: kp.yVal, sectionAddr: currentSectionAddr, sectionVal: bestSec.label, planXAddr, planYAddr, planXVal, planYVal, errAddr: errAddrFinal, sideAddr: sideAddrFinal, rank: rankVal, errVal: bestCand.errorMm, sideVal: bestCand.side });
+    summaryRows.push({
+      name: kp.name, role: kp.role, xAddr: kp.xAddr, yAddr: kp.yAddr, xVal: kp.xVal, yVal: kp.yVal,
+      sectionAddr: currentSectionAddr, sectionVal: bestSec.label,
+      roDistAddr, roDistVal: roDistVal == null ? '-' : roDistVal.toFixed(3) + ' m',
+      radialMmAddr, radialMmVal: radialMmVal == null ? '-' : radialMmVal.toFixed(1) + ' mm',
+      planXAddr, planYAddr, planXVal, planYVal,
+      sideErrAddr, sideErrVal, rankAddr, rankVal
+    });
   });
 
-  // 一覧サマリー（各KPの最終行の値を参照するだけの表。先頭付近に置く）
+  // 一覧サマリー（画面の「📊計算結果一覧」（KP|役割|X|Y|位置|RO-測点距離|Rとの差|計画X|計画Y|左右誤差|判定）と
+  // 同じ列構成にする。各セルは上のブロックで既に計算済みのセルをそのまま参照するだけ。予測点があれば先頭行になる。
   const summaryStartRow = r4;
   xlsxStr(s4, r4, 1, '法線との測定誤差計算結果（一覧）'); r4++;
-  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, '現在区間'); xlsxStr(s4, r4, 4, '測定点X'); xlsxStr(s4, r4, 5, '測定点Y');
-  xlsxStr(s4, r4, 6, '計画X'); xlsxStr(s4, r4, 7, '計画Y'); xlsxStr(s4, r4, 8, '誤差(mm)'); xlsxStr(s4, r4, 9, '左右'); xlsxStr(s4, r4, 10, '判定'); r4++;
+  xlsxStr(s4, r4, 1, 'KP'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, 'X'); xlsxStr(s4, r4, 4, 'Y'); xlsxStr(s4, r4, 5, '位置');
+  xlsxStr(s4, r4, 6, 'RO-測点距離'); xlsxStr(s4, r4, 7, 'Rとの差'); xlsxStr(s4, r4, 8, '計画X'); xlsxStr(s4, r4, 9, '計画Y');
+  xlsxStr(s4, r4, 10, '左右誤差'); xlsxStr(s4, r4, 11, '判定'); r4++;
   summaryRows.forEach(sr => {
     xlsxStr(s4, r4, 1, sr.name); xlsxStr(s4, r4, 2, sr.role);
-    xlsxFormulaStr(s4, r4, 3, sr.sectionAddr, sr.sectionVal);
-    xlsxFormula(s4, r4, 4, sr.xAddr, sr.xVal);
-    xlsxFormula(s4, r4, 5, sr.yAddr, sr.yVal);
-    xlsxFormula(s4, r4, 6, sr.planXAddr, sr.planXVal);
-    xlsxFormula(s4, r4, 7, sr.planYAddr, sr.planYVal);
-    xlsxFormula(s4, r4, 8, sr.errAddr, sr.errVal);
-    xlsxFormulaStr(s4, r4, 9, sr.sideAddr, sr.sideVal);
-    xlsxFormulaStr(s4, r4, 10, `IF(${sr.errAddr}<=${tolOkAddr},"OK",IF(${sr.errAddr}<=${tolWarnAddr},"注意","NG"))`, sr.rank);
+    xlsxFormula(s4, r4, 3, sr.xAddr, sr.xVal);
+    xlsxFormula(s4, r4, 4, sr.yAddr, sr.yVal);
+    xlsxFormulaStr(s4, r4, 5, sr.sectionAddr, sr.sectionVal);
+    xlsxFormulaStr(s4, r4, 6, sr.roDistAddr, sr.roDistVal);
+    xlsxFormulaStr(s4, r4, 7, sr.radialMmAddr, sr.radialMmVal);
+    xlsxFormula(s4, r4, 8, sr.planXAddr, sr.planXVal);
+    xlsxFormula(s4, r4, 9, sr.planYAddr, sr.planYVal);
+    xlsxFormulaStr(s4, r4, 10, sr.sideErrAddr, sr.sideErrVal);
+    xlsxFormulaStr(s4, r4, 11, sr.rankAddr, sr.rankVal);
     r4++;
   });
 
@@ -4904,7 +5028,7 @@ function exportSurveyXLSX() {
   xlsxSetColWidths(s1, { 1: 24, 2: 12, 3: 8, 4: 8, 5: 6, 6: 6, 7: 10, 8: 22 });
   xlsxSetColWidths(s2, { 1: 32, 2: 12, 3: 12 });
   xlsxSetColWidths(s3, { 1: 8, 2: 13, 3: 13, 4: 12, 5: 12, 6: 10 });
-  xlsxSetColWidths(s4, { 1: 22, 2: 10, 3: 12, 4: 10, 5: 10, 6: 10, 7: 12, 8: 12, 9: 10, 10: 10 });
+  xlsxSetColWidths(s4, { 1: 22, 2: 12, 3: 10, 4: 10, 5: 12, 6: 14, 7: 12, 8: 10, 9: 10, 10: 12, 11: 8 });
 
   // ── ZIPにまとめてダウンロード ──
   const enc = new TextEncoder();
@@ -6623,6 +6747,7 @@ function setProjectData(d) {
     setV('pipeGrade', grade);
     setV('pipeDia', dia);
     onPipeDiaChange();  // 標準値テーブルから再計算（dia確定後に一度だけ）
+    applyCushionSigmaAllowDefault();  // grade確定後にσ_allowの参考値を設定（保存値があれば下で上書き）
     // 有効長・クッション・Bs・継手 は保存値を優先（標準値再計算の後に上書きしないと消えてしまうため最後に適用）
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
