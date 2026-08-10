@@ -4446,10 +4446,16 @@ const XLSX_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '</Relationships>';
 // スタイルID（cellXfsの並びと対応。xlsxStr/xlsxNum/xlsxFormula/xlsxFormulaStrの既定値・上書き用の定数）:
 //   1=罫線付きテキスト（既定）／2=罫線付き数値0.000（既定）／3=罫線付き整数0／4=罫線付き太字・見出し塗りつぶし
-const XLSX_STYLE_TEXT = 1, XLSX_STYLE_NUM = 2, XLSX_STYLE_INT = 3, XLSX_STYLE_HEADER = 4;
+//   5=罫線付き数値0.000"m"（ユーザー定義表示形式。セルの中身は数値のまま、表示だけ単位付きにする）
+//   6=罫線付き数値0.0"mm"（同上）
+// ※「文字列＆数字＆文字列」のように連結してしまうと数値として扱えなくなる（並べ替え・数式で使えない）
+//   というユーザー指摘を踏まえ、RO-測点距離・Rとの差は数値セル＋ユーザー定義表示形式にしている。
+//   左右＋誤差(mm)のような「方向」を伴う値は表示形式だけでは表現できないため、別々の列に分けている。
+const XLSX_STYLE_TEXT = 1, XLSX_STYLE_NUM = 2, XLSX_STYLE_INT = 3, XLSX_STYLE_HEADER = 4, XLSX_STYLE_M = 5, XLSX_STYLE_MM = 6;
 const XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-  + '<numFmts count="2"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="0"/></numFmts>'
+  + '<numFmts count="4"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="0"/>'
+  + '<numFmt numFmtId="166" formatCode="0.000&quot; m&quot;"/><numFmt numFmtId="167" formatCode="0.0&quot; mm&quot;"/></numFmts>'
   + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
   + '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
   + '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill></fills>'
@@ -4457,12 +4463,14 @@ const XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right>'
   + '<top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>'
   + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-  + '<cellXfs count="5">'
+  + '<cellXfs count="7">'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>'
   + '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
   + '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
   + '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="167" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
   + '</cellXfs>'
   + '</styleSheet>';
 // activeTabIndex: ファイルを開いたときに最初に表示させたいシートの0始まりインデックス（省略時0）。
@@ -4983,17 +4991,24 @@ function exportSurveyXLSX() {
     xlsxStr(s4, r4, 1, '計画Y'); const planYAddr = xlsxFormula(s4, r4, 2, planYFormula, planYVal); r4++;
     xlsxStr(s4, r4, 1, '誤差(mm)'); const errAddrFinal = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},4,FALSE)`, bestCand.errorMm); r4++;
     xlsxStr(s4, r4, 1, '左右'); const sideAddrFinal = xlsxFormulaStr(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},5,FALSE)`, bestCand.side); r4++;
-    // RO-測点距離／Rとの差（曲線区間のときだけ意味を持つ。直線区間は画面表示と同じ「-」にする）
+    // RO-測点距離／Rとの差（曲線区間のときだけ意味を持つ。直線区間は「-」にする）。
+    // 「文字列＆数字＆文字列」で連結すると数値として扱えなくなる（並べ替え・数式で使えない）という
+    // ユーザー指摘を踏まえ、TEXT()での文字列連結はやめ、セルの中身は数値のまま
+    // ユーザー定義表示形式（XLSX_STYLE_M="0.000\" m\""・XLSX_STYLE_MM="0.0\" mm\""）で単位だけ表示する。
     const roDistVal = bestSec.type === 'curve' ? Math.hypot(kp.xVal - p1xVal, kp.yVal - p1yVal) : null;
     const radialMmVal = bestSec.type === 'curve' ? (roDistVal - rVal) * 1000 : null;
+    const roDistFormula = `IF(${typeAddr}="曲線",${curveDist},"-")`;
+    const radialMmFormula = `IF(${typeAddr}="曲線",(${curveDist}-${rAddr})*1000,"-")`;
     xlsxStr(s4, r4, 1, 'RO-測点距離');
-    const roDistAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",TEXT(${curveDist},"0.000")&" m","-")`, roDistVal == null ? '-' : roDistVal.toFixed(3) + ' m'); r4++;
+    const roDistAddr = roDistVal == null
+      ? xlsxFormulaStr(s4, r4, 2, roDistFormula, '-', XLSX_STYLE_M)
+      : xlsxFormula(s4, r4, 2, roDistFormula, roDistVal, XLSX_STYLE_M);
+    r4++;
     xlsxStr(s4, r4, 1, 'Rとの差');
-    const radialMmAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",TEXT((${curveDist}-${rAddr})*1000,"0.0")&" mm","-")`, radialMmVal == null ? '-' : radialMmVal.toFixed(1) + ' mm'); r4++;
-    // 左右誤差（画面の計算結果一覧と同じ結合表記: 曲線="左右 誤差mmを整数丸め"、直線="誤差mmを小数1桁+mm"）
-    const sideErrVal = bestSec.type === 'curve' ? `${bestCand.side} ${Math.round(bestCand.errorMm)}` : `${bestCand.errorMm.toFixed(1)} mm`;
-    xlsxStr(s4, r4, 1, '左右誤差');
-    const sideErrAddr = xlsxFormulaStr(s4, r4, 2, `IF(${typeAddr}="曲線",${sideAddrFinal}&" "&TEXT(${errAddrFinal},"0"),TEXT(${errAddrFinal},"0.0")&" mm")`, sideErrVal); r4++;
+    const radialMmAddr = radialMmVal == null
+      ? xlsxFormulaStr(s4, r4, 2, radialMmFormula, '-', XLSX_STYLE_MM)
+      : xlsxFormula(s4, r4, 2, radialMmFormula, radialMmVal, XLSX_STYLE_MM);
+    r4++;
     const rankVal = bestCand.errorMm <= (n('tolOk') || 80) ? 'OK' : (bestCand.errorMm <= (n('tolWarn') || 100) ? '注意' : 'NG');
     xlsxStr(s4, r4, 1, '判定');
     const rankAddr = xlsxFormulaStr(s4, r4, 2, `IF(${errAddrFinal}<=${tolOkAddr},"OK",IF(${errAddrFinal}<=${tolWarnAddr},"注意","NG"))`, rankVal);
@@ -5002,35 +5017,42 @@ function exportSurveyXLSX() {
     summaryRows.push({
       name: kp.name, role: kp.role, xAddr: kp.xAddr, yAddr: kp.yAddr, xVal: kp.xVal, yVal: kp.yVal,
       sectionAddr: currentSectionAddr, sectionVal: bestSec.label,
-      roDistAddr, roDistVal: roDistVal == null ? '-' : roDistVal.toFixed(3) + ' m',
-      radialMmAddr, radialMmVal: radialMmVal == null ? '-' : radialMmVal.toFixed(1) + ' mm',
+      roDistAddr, roDistVal: roDistVal == null ? '-' : roDistVal,
+      radialMmAddr, radialMmVal: radialMmVal == null ? '-' : radialMmVal,
       planXAddr, planYAddr, planXVal, planYVal,
-      sideErrAddr, sideErrVal, rankAddr, rankVal
+      errAddr: errAddrFinal, errVal: bestCand.errorMm,
+      sideAddr: sideAddrFinal, sideVal: bestCand.side,
+      rankAddr, rankVal
     });
   });
 
   // ══ シート5: 結果一覧 ══
-  // 画面の「📊計算結果一覧」（KP|役割|X|Y|位置|RO-測点距離|Rとの差|計画X|計画Y|左右誤差|判定）と
-  // 同じ列構成の表を、詳細な計算過程（シート4）とは独立したシートとして先頭に置く。
+  // 画面の「📊計算結果一覧」相当の表を、詳細な計算過程（シート4）とは独立したシートとして先頭に置く。
   // ファイルを開いてすぐこの表だけを見られるようにするのが目的（xlsxWorkbookXmlのactiveTabで既定表示にする）。
   // 各セルはシート4で既に計算済みのセルをそのまま参照するだけ（クロスシート参照）。予測点があれば先頭行になる。
+  // 列構成: KP|役割|X|Y|位置|RO-測点距離|Rとの差|計画X|計画Y|誤差(mm)|左右|判定
+  // （左右＋誤差を1セルに連結した「左右誤差」表記は画面表示専用にとどめ、Excel側は並べ替え・数式で
+  //   使えるよう誤差(mm)を数値のまま独立した列にしている。ユーザー指摘: 文字列連結すると数値扱いできない）
   let r5 = 1;
   xlsxStr(s5, r5, 1, '法線との測定誤差計算結果（一覧）', XLSX_STYLE_HEADER); r5++;
   xlsxStr(s5, r5, 1, '詳細な計算過程は「測定結果＋測定誤差」シートを参照してください。'); r5++;
   xlsxStr(s5, r5, 1, 'KP', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 2, '役割', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 3, 'X', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 4, 'Y', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 5, '位置', XLSX_STYLE_HEADER);
   xlsxStr(s5, r5, 6, 'RO-測点距離', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 7, 'Rとの差', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 8, '計画X', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 9, '計画Y', XLSX_STYLE_HEADER);
-  xlsxStr(s5, r5, 10, '左右誤差', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 11, '判定', XLSX_STYLE_HEADER); r5++;
+  xlsxStr(s5, r5, 10, '誤差(mm)', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 11, '左右', XLSX_STYLE_HEADER); xlsxStr(s5, r5, 12, '判定', XLSX_STYLE_HEADER); r5++;
   summaryRows.forEach(sr => {
     xlsxStr(s5, r5, 1, sr.name); xlsxStr(s5, r5, 2, sr.role);
     xlsxFormula(s5, r5, 3, xlsxRef(s4, sr.xAddr), sr.xVal);
     xlsxFormula(s5, r5, 4, xlsxRef(s4, sr.yAddr), sr.yVal);
     xlsxFormulaStr(s5, r5, 5, xlsxRef(s4, sr.sectionAddr), sr.sectionVal);
-    xlsxFormulaStr(s5, r5, 6, xlsxRef(s4, sr.roDistAddr), sr.roDistVal);
-    xlsxFormulaStr(s5, r5, 7, xlsxRef(s4, sr.radialMmAddr), sr.radialMmVal);
+    if (sr.roDistVal === '-') xlsxFormulaStr(s5, r5, 6, xlsxRef(s4, sr.roDistAddr), '-', XLSX_STYLE_M);
+    else xlsxFormula(s5, r5, 6, xlsxRef(s4, sr.roDistAddr), sr.roDistVal, XLSX_STYLE_M);
+    if (sr.radialMmVal === '-') xlsxFormulaStr(s5, r5, 7, xlsxRef(s4, sr.radialMmAddr), '-', XLSX_STYLE_MM);
+    else xlsxFormula(s5, r5, 7, xlsxRef(s4, sr.radialMmAddr), sr.radialMmVal, XLSX_STYLE_MM);
     xlsxFormula(s5, r5, 8, xlsxRef(s4, sr.planXAddr), sr.planXVal);
     xlsxFormula(s5, r5, 9, xlsxRef(s4, sr.planYAddr), sr.planYVal);
-    xlsxFormulaStr(s5, r5, 10, xlsxRef(s4, sr.sideErrAddr), sr.sideErrVal);
-    xlsxFormulaStr(s5, r5, 11, xlsxRef(s4, sr.rankAddr), sr.rankVal);
+    xlsxFormula(s5, r5, 10, xlsxRef(s4, sr.errAddr), sr.errVal);
+    xlsxFormulaStr(s5, r5, 11, xlsxRef(s4, sr.sideAddr), sr.sideVal);
+    xlsxFormulaStr(s5, r5, 12, xlsxRef(s4, sr.rankAddr), sr.rankVal);
     r5++;
   });
 
@@ -5038,8 +5060,8 @@ function exportSurveyXLSX() {
   xlsxSetColWidths(s1, { 1: 32, 2: 12, 3: 8, 4: 10, 5: 10, 6: 10, 7: 12, 8: 26 });
   xlsxSetColWidths(s2, { 1: 42, 2: 12, 3: 12 });
   xlsxSetColWidths(s3, { 1: 12, 2: 14, 3: 14, 4: 16, 5: 16, 6: 12 });
-  xlsxSetColWidths(s4, { 1: 42, 2: 16, 3: 16, 4: 16, 5: 16, 6: 18, 7: 16, 8: 14, 9: 14, 10: 16, 11: 10 });
-  xlsxSetColWidths(s5, { 1: 12, 2: 12, 3: 14, 4: 14, 5: 16, 6: 16, 7: 14, 8: 14, 9: 14, 10: 14, 11: 10 });
+  xlsxSetColWidths(s4, { 1: 42, 2: 16, 3: 16, 4: 16, 5: 16, 6: 14, 7: 14, 8: 14, 9: 14, 10: 16, 11: 10 });
+  xlsxSetColWidths(s5, { 1: 12, 2: 12, 3: 14, 4: 14, 5: 16, 6: 14, 7: 14, 8: 14, 9: 14, 10: 12, 11: 8, 12: 10 });
 
   // ── ZIPにまとめてダウンロード ──
   const enc = new TextEncoder();
