@@ -326,8 +326,10 @@ tr.row-selected{background:#eff6ff}
       </div>
       <div class="field-row"><label>クッション材厚 S4 [mm]</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
       <div class="field-row"><label>クッション材つぶれ代 [mm]</label><input id="pipeCrush" class="mono" value="0" type="number" step="1" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
+      <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
     </div>
-    <div class="note-box" style="font-size:11px">つぶれ代: 推進荷重でクッション材が圧縮された後の厚さ減少分。1本毎の推進力計算表の距離には (クッション材厚－つぶれ代) を管長に加えて反映します。</div>
+    <div class="note-box" style="font-size:11px">つぶれ代: 推進荷重でクッション材が圧縮された後の厚さ減少分。1本毎の推進力計算表の距離には (クッション材厚－つぶれ代) を管長に加えて反映します。<br>
+    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。管の設計基準強度の50%程度を目安に、管メーカーの資料に基づき入力してください（未入力の間はクッション材選定は行いません）。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
@@ -383,6 +385,12 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>α 摩擦範囲係数</label><input id="soilAlpha" class="mono" type="number" step="0.001" value="0.625" oninput="autoSave()"><span class="unit">—</span></div>
         <div class="field-row"><label>β 周辺荷重割増</label><input id="soilBeta" class="mono" type="number" step="0.01" value="1.20" oninput="autoSave()"><span class="unit">—</span></div>
       </div>
+    </div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+      <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">区間別土質（任意・地層が変わる場合）</div>
+      <div class="note-box" style="font-size:11px;margin-bottom:6px">BP（起点）からの距離[m]で区間を区切り、区間ごとに異なる土質（γ・φ・φ管体部・C・N・N′・付着力C′）を設定できます。推進力計算は各区間・先端抵抗ともに、その位置に該当する区間別土質があればそれを、無ければ上の共通土質条件を使って計算します。区間が重なる場合は先に登録した区間が優先されます。</div>
+      <div id="soilZoneList"></div>
+      <button class="big-btn secondary" onclick="addSoilZone()" style="min-height:40px;font-size:13px">＋ 区間別土質を追加</button>
     </div>
   </div>
 
@@ -459,6 +467,15 @@ tr.row-selected{background:#eff6ff}
       S₁ = D×l′/(R−D/2) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
     </div>
     <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
+  </div>
+
+  <div class="card accordion" id="seismicJointCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🌏 地震時継手抜出照査（レベル1・レベル2地震動）</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      地震時必要抜出量＝管長×設計地盤ひずみ（標準値：レベル1=0.23%／レベル2=1.5%）。抜出し余裕＝継手の抜出し長−据付時残留開口S₁−地震時必要抜出量（≥0でOK）。<br>
+      出典: 下水道協会「下水道施設耐震計算例－管路施設編－2001年版」（下水道施設耐震対策指針と解説・標準土質モデル タイプⅡ準拠）。
+    </div>
+    <div id="seismicJointResult"><div class="note-box">計算を実行すると表示されます。</div></div>
   </div>
 
   <div class="card accordion" id="pipeScheduleCard">
@@ -664,6 +681,14 @@ tr.row-selected{background:#eff6ff}
     <div class="card accordion" id="bcCard" style="display:none">
       <div class="card-title accent" onclick="toggleAccordion(this)">⚠️ 詳細: BC点外圧管種検討表</div>
       <div class="tbl-wrap"><table id="bcTable"></table></div>
+    </div>
+
+    <div class="card accordion" id="cushionCard" style="display:none">
+      <div class="card-title accent" onclick="toggleAccordion(this)">🧊 詳細: クッション材（PB/FJ）選定</div>
+      <div class="note-box" style="font-size:11px;margin-bottom:6px">
+        BC点の軸力FBCを管壁断面積で除した無潰れ（剛体接触）想定の局部圧縮応力度σ_reqと、推進管仕様カードで入力したσ_allowを比較し、PB（標準品）またはFJリングの推奨グレードを選定します。σ_allow未入力の間は判定しません。
+      </div>
+      <div class="tbl-wrap"><table id="cushionTable"></table></div>
     </div>
 
     <div class="card accordion" id="extCard">
@@ -1553,6 +1578,88 @@ function calcCurveElements(c) {
   const CL = c.R * IA_rad;
   const SL = c.R * (1/Math.cos(IA_rad/2) - 1);
   return { IA_deg, IA_rad, TL, CL, SL };
+}
+
+// ══════════════════════════════════════
+//  区間別土質（任意）— BPからの距離[m]で区切った地層ごとに、
+//  γ・φ・φ管体部・C・N・N′・付着力C′を個別に設定できる。
+//  一次資料（設計計算書）は地層境界ごとにこれらの値を切り替えて
+//  Fo/foを計算しているため、単一の土質条件だけでは再現できない現場に対応する。
+// ══════════════════════════════════════
+let soilZones = [];
+let soilZoneCounter = 0;
+
+function addSoilZone() {
+  const id = ++soilZoneCounter;
+  const prevEnd = soilZones.length ? (soilZones[soilZones.length-1].toM || 0) : 0;
+  soilZones.push({
+    id, fromM: prevEnd, toM: prevEnd + 10,
+    gamma: n('soilGamma') || 18, phi: n('soilPhi') || 30, phiPipe: n('soilPhiPipe') || 20,
+    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10
+  });
+  renderSoilZones();
+  autoSave();
+}
+
+function removeSoilZone(id) {
+  soilZones = soilZones.filter(z => z.id !== id);
+  renderSoilZones();
+  autoSave();
+}
+
+function onSoilZoneChange(id) {
+  const z = soilZones.find(x => x.id === id);
+  if (!z) return;
+  z.fromM   = parseFloat(document.getElementById('sz_from_'+id).value)   || 0;
+  z.toM     = parseFloat(document.getElementById('sz_to_'+id).value)     || 0;
+  z.gamma   = parseFloat(document.getElementById('sz_gamma_'+id).value)  || 0;
+  z.phi     = parseFloat(document.getElementById('sz_phi_'+id).value)    || 0;
+  z.phiPipe = parseFloat(document.getElementById('sz_phip_'+id).value)   || 0;
+  z.C       = parseFloat(document.getElementById('sz_c_'+id).value)      || 0;
+  z.N       = parseFloat(document.getElementById('sz_n_'+id).value)      || 0;
+  z.Nprime  = parseFloat(document.getElementById('sz_np_'+id).value)     || 0;
+  z.adh     = parseFloat(document.getElementById('sz_adh_'+id).value)    || 0;
+  autoSave();
+  refreshForceIfCalculated();
+}
+
+function renderSoilZones() {
+  const el = document.getElementById('soilZoneList');
+  if (!el) return;
+  if (!soilZones.length) {
+    el.innerHTML = '<div class="note-box" style="margin:6px 0">区間別土質は未設定です（現場全体で上の共通土質条件を使用）。</div>';
+    return;
+  }
+  el.innerHTML = soilZones.map(z => `
+    <div class="curve-block">
+      <div class="curve-block-title">
+        <span>区間土質（BP+${z.fromM}m 〜 ${z.toM}m）</span>
+        <button class="del-btn" onclick="removeSoilZone(${z.id})">削除</button>
+      </div>
+      <div class="two-col">
+        <div class="field-row"><label>開始距離（BPから）[m]</label><input id="sz_from_${z.id}" class="mono" type="number" step="0.1" value="${z.fromM}" oninput="onSoilZoneChange(${z.id})"><span class="unit">m</span></div>
+        <div class="field-row"><label>終了距離（BPから）[m]</label><input id="sz_to_${z.id}" class="mono" type="number" step="0.1" value="${z.toM}" oninput="onSoilZoneChange(${z.id})"><span class="unit">m</span></div>
+        <div class="field-row"><label>γ [kN/m³]</label><input id="sz_gamma_${z.id}" class="mono" type="number" step="0.1" value="${z.gamma}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m³</span></div>
+        <div class="field-row"><label>φ 地盤 [°]</label><input id="sz_phi_${z.id}" class="mono" type="number" step="1" value="${z.phi}" oninput="onSoilZoneChange(${z.id})"><span class="unit">°</span></div>
+        <div class="field-row"><label>φ 管体部 [°]</label><input id="sz_phip_${z.id}" class="mono" type="number" step="1" value="${z.phiPipe}" oninput="onSoilZoneChange(${z.id})"><span class="unit">°</span></div>
+        <div class="field-row"><label>C [kN/m²]</label><input id="sz_c_${z.id}" class="mono" type="number" step="0.5" value="${z.C}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m²</span></div>
+        <div class="field-row"><label>N値</label><input id="sz_n_${z.id}" class="mono" type="number" step="1" value="${z.N}" oninput="onSoilZoneChange(${z.id})"><span class="unit">—</span></div>
+        <div class="field-row"><label>N′（貫入抵抗設計値）</label><input id="sz_np_${z.id}" class="mono" type="number" step="0.1" value="${z.Nprime}" oninput="onSoilZoneChange(${z.id})"><span class="unit">—</span></div>
+        <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="sz_adh_${z.id}" class="mono" type="number" step="0.5" value="${z.adh}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m²</span></div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// distFromBP[m]（BP=起点=0）に該当する区間別土質があればその値を、無ければ土質条件タブの
+// 共通値を返す。区間が重なる場合は先に登録した区間（配列の先頭）を優先する。
+function resolveSoilAt(distFromBP) {
+  const std = {
+    gamma: n('soilGamma') || 18, phi: n('soilPhi') || 30, phiPipe: n('soilPhiPipe') || 20,
+    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10
+  };
+  const zone = soilZones.find(z => distFromBP >= Math.min(z.fromM, z.toM) && distFromBP <= Math.max(z.fromM, z.toM));
+  return zone ? { gamma: zone.gamma, phi: zone.phi, phiPipe: zone.phiPipe, C: zone.C, N: zone.N, Nprime: zone.Nprime, adh: zone.adh } : std;
 }
 
 function calcAlignment() {
@@ -2801,6 +2908,61 @@ function updatePipeLenOpt() {
     </div>`;
   });
   resultEl.innerHTML = html || '<div class="ok-box">全曲線区間で現在管長が許容範囲内です。</div>';
+  updateSeismicJointCheck();
+}
+
+// ══════════════════════════════════════
+//  地震時継手抜出照査（レベル1・レベル2地震動）
+//  出典: 下水道協会「下水道施設耐震計算例－管路施設編－2001年版」
+//  （下水道施設耐震対策指針と解説・標準土質モデル タイプⅡ準拠、設計地盤ひずみは標準値を使用）
+//  レベル1地震動: 設計地盤ひずみ 0.23%　／　レベル2地震動: 設計地盤ひずみ 1.5%
+//  地震時必要抜出量 = 管長 × 設計地盤ひずみ
+//  抜出し余裕 = 継手の抜出し長(pulloutOpen) − 据付時残留開口S1 − 地震時必要抜出量（≥0でOK）
+// ══════════════════════════════════════
+const SEISMIC_STRAIN = { L1: 0.0023, L2: 0.015 };
+
+function calcSeismicJointCheck(pipeLen_m, S1_mm, pulloutOpenMm) {
+  const mk = (strain) => {
+    const need = pipeLen_m * 1000 * strain;
+    const margin = pulloutOpenMm - S1_mm - need;
+    return { need, margin, ok: margin >= 0 };
+  };
+  return { L1: mk(SEISMIC_STRAIN.L1), L2: mk(SEISMIC_STRAIN.L2) };
+}
+
+function updateSeismicJointCheck() {
+  const resultEl = document.getElementById('seismicJointResult');
+  if (!resultEl) return;
+  const stdSpec = resolveSpec(null);
+  const curList = getCurves();
+
+  const rowHtml = (label, pipeLen, S1, pulloutOpenMm) => {
+    const r = calcSeismicJointCheck(pipeLen, S1, pulloutOpenMm);
+    const cell = (lvl) => `${lvl.margin.toFixed(1)}mm <span class="pill ${lvl.ok?'ok':'ng'}">${lvl.ok?'OK':'NG'}</span>`;
+    return `<tr><td style="padding:4px;border-bottom:1px solid var(--line)">${label}</td>`
+      + `<td style="text-align:center" class="mono">${pipeLen.toFixed(2)}m</td>`
+      + `<td style="text-align:center" class="mono">${S1.toFixed(1)}mm</td>`
+      + `<td style="text-align:center" class="mono">${pulloutOpenMm}mm</td>`
+      + `<td style="text-align:center">${cell(r.L1)}</td>`
+      + `<td style="text-align:center">${cell(r.L2)}</td></tr>`;
+  };
+
+  let rows = '';
+  // 直線区間（据付時の曲線起因の残留開口は無いためS1=0とみなす。クッション圧縮残りは別途考慮せず安全側）
+  rows += rowHtml('直線区間（標準仕様）', stdSpec.lp, 0, stdSpec.jointAllowMm);
+
+  // 曲線区間（曲線通過による据付時残留開口S1あり）
+  curList.forEach((c, i) => {
+    const spec = resolveSpec(c.spec);
+    if (spec.D && c.R > spec.D / 2) {
+      const S1 = calcS1(spec.D, spec.lp, c.R, spec.S4);
+      rows += rowHtml(`第${i + 1}曲線 R=${c.R}m`, spec.lp, S1, spec.jointAllowMm);
+    }
+  });
+
+  resultEl.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">`
+    + `<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">区間</th><th>管長</th><th>据付時開口S₁</th><th>継手抜出し長</th><th>L1余裕</th><th>L2余裕</th></tr>`
+    + rows + `</table></div>`;
 }
 
 // ══════════════════════════════════════
@@ -3050,11 +3212,21 @@ function calcTerzaghi(gamma, phi_deg, C, H, D) {
   const kmu = k0 * mu;
   let Ce, q;
   if (kmu < 1e-9) {
-    Ce = H; q = gamma * H;
+    // kmu→0（φ≈0）の極限。Ceはkmu→0でHに収束する（除去可能特異点）が、
+    // qの式自体はkmu=0でも(gamma-2C/Be)*Ceのまま有効（粘着力Cによる緩みの
+    // 軽減効果はφ=0でも消えない）。以前はq=gamma*Hとしておりcの寄与が
+    // 丸ごと抜け落ちていた（一次資料の実例: γ=15,φ'=0,C=65,H=14.88mでq=0.00になる
+    // べきところ、旧式ではq=223.2と大きく食い違っていた）。
+    Ce = H; q = (gamma - 2 * C / Be) * Ce;
   } else {
     Ce = (Be / (2 * kmu)) * (1 - Math.exp(-2 * kmu * H / Be));
     q = (gamma - 2 * C / Be) * Ce;
   }
+  // 緩み土圧qは物理的に負値を取らない（粘着力の効果が自重を上回る場合は
+  // 土がアーチを組んで支圧壁側に荷重を伝えないだけで、負の圧力＝管を持ち上げる
+  // 力にはならない）。一次資料でも高い粘着力の地盤ではq=0.00と表示されており、
+  // 負値のままにはしていない。
+  q = Math.max(0, q);
   // 活荷重（T-25後輪荷重、下水道協会式）
   const P = 100, a = 0.2, c = 2.75, betaLive = 0.9;
   const impactI = Math.min(0.5, Math.max(0, 0.65 - 0.1 * H));
@@ -3145,6 +3317,42 @@ function calcFaBC(lp, r, qa, alpha) {
 }
 
 // ══════════════════════════════════════
+//  クッション材（PB/FJリング）選定
+//  推進管の目地部は、軸力を伝達する際にクッション材が圧縮（つぶれ）ることで
+//  接触面積を実質的に増やし、局部応力を緩和する考え方（つぶれることで設置面積を増やす）。
+//  FJリング（積水化成品工業）は発泡倍率違いで4グレードあり、応力-ひずみ曲線は
+//  「急な立ち上がり→長いプラトー域→高ひずみ域での急激な密実化」という形状を持つ。
+//  プラトー域では応力がほぼ一定値（プラトー応力）に留まるため、伝達される局部応力の
+//  上限はほぼプラトー応力で決まると考えてよい。
+//  プラトー応力の目安値（発泡倍率が低い＝密度が高いグレードほどプラトー応力は高い）:
+//    ①1.7倍 ≈21N/mm²／②2.0倍W ≈14.5N/mm²／③2.5倍G ≈9.5N/mm²／④3.0倍Y ≈7.5N/mm²
+//  出典: 「Center Plastic Buffer Curve System」応力-ひずみ曲線図（積水化成品工業、
+//  試験実施：日本建築総合試験所 試験番号VA-06-0046）からの読み取り概算値。
+//  ※PB（パーティクルボード）は応力-ひずみデータが未取得のため、圧縮による応力低減は
+//    考慮せず、無潰れ（剛体接触）想定での判定に留める（安全側の簡易判定）。
+// ══════════════════════════════════════
+const FJ_GRADES = [
+  { key:'fj17', label:'FJ 1.7倍',  plateau:21.0 },
+  { key:'fj20', label:'FJ 2.0倍W', plateau:14.5 },
+  { key:'fj25', label:'FJ 2.5倍G', plateau:9.5  },
+  { key:'fj30', label:'FJ 3.0倍Y', plateau:7.5  },
+]; // プラトー応力が高い（＝剛性が高い）順に並べる
+
+// sigmaReq: 無潰れ想定の局部圧縮応力度[N/mm²]、sigmaAllow: 許容応力度[N/mm²]（未入力なら判定不可）
+function selectCushionMaterial(sigmaReq, sigmaAllow) {
+  if (!(sigmaAllow > 0)) return { material:'unknown', label:'—', note:'σ_allowを入力してください。' };
+  if (sigmaReq <= sigmaAllow) {
+    return { material:'PB', label:'PB（パーティクルボード）標準品', note:'無潰れ（剛体接触）と仮定しても許容応力度以内のため、標準品PBで対応可能と考えられます。' };
+  }
+  const fit = FJ_GRADES.filter(g => g.plateau <= sigmaAllow);
+  if (fit.length) {
+    const g = fit[0];
+    return { material:'FJ', grade:g, label:`FJリング ${g.label}`, note:`プラトー応力${g.plateau}N/mm²が許容応力度以下となる、規格グレードの中で最も剛性の高いものを推奨します。` };
+  }
+  return { material:'NG', label:'規格品では対応不可', note:'最も柔らかいFJ 3.0倍Y（プラトー応力約7.5N/mm²）でも許容応力度を上回ります。特殊クッション材や多重積層等の個別検討が必要です。' };
+}
+
+// ══════════════════════════════════════
 //  外圧耐荷力 Mr/M
 // ══════════════════════════════════════
 function calcExtPressureCheck(D_in, t, W, P_ext, q_ext) {
@@ -3222,17 +3430,24 @@ function calculate() {
   // 最小土被りの土圧（参考値）
   const tz_min = calcTerzaghi(gamma, phi_soil, C, Hmin, D);
 
-  // 区間の実効spec（区間ごとのD・Wを使ってfoを再計算するためのヘルパー）
-  function foForSpec(spec, hVal, qTotalVal) {
-    const p = { D: spec.D, W: spec.W, N, Nprime, phi_soil, phi_pipe, C, adh, q_total: qTotalVal, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
-    return calcFoFo(currentMethod, p);
+  // 区間の実効spec（区間ごとのD・Wを使ってfoを再計算するためのヘルパー）。
+  // distFromBP[m]（BP=起点=0）に該当する区間別土質があればその値を、無ければ土質条件タブの
+  // 共通値を使う（resolveSoilAt()、区間別土質が1つも無ければ常に共通値＝従来通りの挙動）。
+  function foForSpec(spec, hVal, distFromBP) {
+    const zone = resolveSoilAt(distFromBP);
+    const tzLocal = calcTerzaghi(zone.gamma, zone.phi, zone.C, hVal, spec.D);
+    const p = { D: spec.D, W: spec.W, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
+    const r = calcFoFo(currentMethod, p);
+    return { ...r, q_total: tzLocal.q_total, zone };
   }
 
-  // fo・Fo（最大土被りで計算、標準仕様の値。Foは先端一箇所の値のため全区間共通で使う）
-  const { Fo, fo, foDetail } = foForSpec(stdSpec, H, q_total);
+  // 先端抵抗Fo・foは「今まさに掘進している位置」の土質を使う。区間別土質のBP距離は
+  // 到達側立坑の手前（total-arrivalDist）を先端の位置とみなす（到達側から積算する設計のため）。
+  const tipDistBP = total - arrivalDist;
+  const { Fo, fo, foDetail } = foForSpec(stdSpec, H, tipDistBP);
 
-  // fo（最小土被り、参考値）
-  const { fo: fo_min } = foForSpec(stdSpec, Hmin, tz_min.q_total);
+  // fo（最小土被り、参考値。先端と同じ位置の土質を使う）
+  const { fo: fo_min } = foForSpec(stdSpec, Hmin, tipDistBP);
 
   // 区間分割: 曲線区間を EP→SP 方向で処理
   // curves配列順 = SP側（発進側）から到達側の順とする
@@ -3273,13 +3488,18 @@ function calculate() {
   // 先端抵抗は地山に貫入した時点から常にかかる基礎値のため、表では一番先頭に表示する。
   const N_curves = curList.length;
 
+  // 区間別土質を参照するためのBP距離カーソル。到達側（tipDistBP）から発進側へ向けて、
+  // 処理した区間の長さの分だけ減算していく（区間の代表位置＝区間の中点で該当区間を判定する）。
+  let bpCursor = tipDistBP;
+
   // 最終直線（到達側）＝直線区間の個別仕様カードの「最終直線」パネルに対応
   if (epStraight > 0) {
     const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec);
-    const { fo: segFo } = foForSpec(segSpec, H, q_total);
+    const { fo: segFo, q_total: segQ } = foForSpec(segSpec, H, bpCursor - epStraight/2);
     const dF = segFo * epStraight;
     F_cum += dF;
-    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec });
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec, qTotal: segQ });
+    bpCursor -= epStraight;
   }
   // 先端抵抗（先端一箇所の値。標準仕様のD・Wを使用）
   F_cum += Fo;
@@ -3294,8 +3514,9 @@ function calculate() {
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
     const cSpec = resolveSpec(c.spec);
-    const { fo: curveFo } = foForSpec(cSpec, H, q_total);
-    const { alpha, K, k: kConst } = calcCurveK(c.R, cSpec.D, cSpec.lp, phi_soil);
+    const curveZone = resolveSoilAt(bpCursor - c.CL/2);
+    const { fo: curveFo } = foForSpec(cSpec, H, bpCursor - c.CL/2);
+    const { alpha, K, k: kConst } = calcCurveK(c.R, cSpec.D, cSpec.lp, curveZone.phi);
     const n_pipes = Math.max(1, Math.round(c.CL / cSpec.lp));
     const lambda = n_pipes > 1 ? (Math.pow(K, n_pipes+1) - K) / (n_pipes * (K - 1)) : K;
     const F_before = F_cum;
@@ -3305,15 +3526,17 @@ function calculate() {
       label: `第${curveNo}曲線`, type:'curve', curveNo,
       L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, kConst, n: n_pipes, lambda, fo:curveFo, dF: F_cum - F_before, F_cum, ord: 2*curveNo, spec: cSpec
     });
+    bpCursor -= c.CL;
     // 曲線通過後、次（BP側）の曲線に至るまでの直線（＝第curveNo直線）
     if (i < reversedCurves.length - 1) {
       const midLen = useRealLengths ? straightLenAt(curveNo - 1) : intermediateStraightFallback;
       if (midLen > 0) {
         const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec);
-        const { fo: midFo } = foForSpec(midSpec, H, q_total);
+        const { fo: midFo, q_total: midQ } = foForSpec(midSpec, H, bpCursor - midLen/2);
         const dF = midFo * midLen;
         F_cum += dF;
-        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec });
+        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec, qTotal: midQ });
+        bpCursor -= midLen;
       }
     }
   });
@@ -3324,19 +3547,21 @@ function calculate() {
     : (reversedCurves.length > 0 ? spStraight - intermediateStraightFallback * (reversedCurves.length - 1) : spStraight);
   if (spRemain > 0) {
     const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec);
-    const { fo: firstFo } = foForSpec(firstSpec, H, q_total);
+    const { fo: firstFo, q_total: firstQ } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
     const dF = firstFo * spRemain;
     F_cum += dF;
-    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec });
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec, qTotal: firstQ });
+    bpCursor -= spRemain;
   }
 
   const F_total = F_cum;
 
   // 外圧耐荷力照査（標準仕様、サマリー表示用）
   const extCheck = calcExtPressureCheck(Di, t, W, P_ext, q_total);
-  // 外圧耐荷力照査（区間ごと。区間ごとの管厚・重量・外圧強さを反映）
+  // 外圧耐荷力照査（区間ごと。区間ごとの管厚・重量・外圧強さに加え、区間別土質があれば
+  // その区間の土圧qTotalを反映する。無ければ共通の土質条件から求めたq_totalを使う）
   const extResults = segments.filter(s => s.type !== 'tip').map(s => {
-    const c = calcExtPressureCheck(s.spec.Di, s.spec.t, s.spec.W, s.spec.Pext, q_total);
+    const c = calcExtPressureCheck(s.spec.Di, s.spec.t, s.spec.W, s.spec.Pext, s.qTotal != null ? s.qTotal : q_total);
     return { label: s.label, isCurve: s.type === 'curve', individual: !!(s.spec && s.spec.on), ...c };
   });
 
@@ -3354,8 +3579,19 @@ function calculate() {
     return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, ok: FaBC!=null ? bc.F <= FaBC : null };
   });
 
+  // クッション材（PB/FJ）選定: BC点ごとの軸力FBCを管壁断面積で除した無潰れ想定の局部圧縮応力度と、
+  // 入力された許容応力度σ_allowを比較してPB(標準品)またはFJリングの推奨グレードを選ぶ。
+  const sigmaAllowCushion = n('pipeCushionSigmaAllow') || 0;
+  const cushionResults = FBC_arr.map(bc => {
+    const spec = bc.spec;
+    const A_mm2 = Math.PI / 4 * (Math.pow(spec.D * 1000, 2) - Math.pow(spec.Di * 1000, 2));
+    const sigmaReq = A_mm2 > 0 ? (bc.F * 1000) / A_mm2 : 0;
+    const sel = selectCushionMaterial(sigmaReq, sigmaAllowCushion);
+    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel };
+  });
+
   lastCalcResult = {
-    F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax,
+    F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, cushionResults, sigmaAllowCushion, q_total, foDetail, tz, tz_min, Hmin, Hmax,
     // ── 計算書（PDF準拠レポート）用に保持する入力値・中間値 ──
     stdSpec, dia, Bs, gamma, phi_soil, phi_pipe, C, N, Nprime, adh, alpha_coef, beta_coef, method: currentMethod,
     curList, realStraightLengths: realStraightLengths.slice(), groundLen, launchDist, arrivalDist, total,
@@ -3382,7 +3618,7 @@ function selectJackConfig(cap, count) {
 }
 
 function renderResults(res) {
-  const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
+  const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, cushionResults, sigmaAllowCushion, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
   const okForce = F_total <= Fa;
 
   // サマリーメトリクス
@@ -3479,6 +3715,26 @@ function renderResults(res) {
       `<thead><tr><th>BC点</th><th>使用管種</th><th>FBC(kN)</th><th>FaBC(kN)</th><th>判定</th></tr></thead><tbody>${rows}</tbody>`;
   } else {
     bcCard.style.display = 'none';
+  }
+
+  // クッション材（PB/FJ）選定
+  const cushionCard = document.getElementById('cushionCard');
+  if (cushionResults && cushionResults.length > 0) {
+    cushionCard.style.display = '';
+    const cRows = cushionResults.map(c => {
+      const rowNG = c.sel.material === 'NG';
+      const matPill = c.sel.material === 'unknown' ? '<span class="pill">未入力</span>'
+        : c.sel.material === 'NG' ? '<span class="pill ng">対応不可</span>'
+        : `<span class="pill ok">${c.sel.label}</span>`;
+      return `<tr class="${rowNG?'row-ng':''}"><td>${c.name}</td><td class="mono">${c.FBC.toFixed(0)}</td>
+        <td class="mono">${c.sigmaReq.toFixed(2)}</td><td>${matPill}</td>
+        <td class="left" style="font-size:11px">${c.sel.note}</td></tr>`;
+    }).join('');
+    document.getElementById('cushionTable').innerHTML =
+      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>σ_req(N/mm²)</th><th>推奨材質</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
+      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="5" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`);
+  } else {
+    cushionCard.style.display = 'none';
   }
 
   // 外圧耐荷力照査（区間別。区間ごとの管厚・重量・外圧強さを反映）
@@ -4470,11 +4726,9 @@ function exportSurveyXLSX() {
     r4++;
   });
   const legendLastRow = r4 - 1;
-  const legendP1XRange = `${xlsxAddr(legendFirstRow, 3)}:${xlsxAddr(legendLastRow, 3)}`;
-  const legendP1YRange = `${xlsxAddr(legendFirstRow, 4)}:${xlsxAddr(legendLastRow, 4)}`;
-  const legendP2XRange = `${xlsxAddr(legendFirstRow, 5)}:${xlsxAddr(legendLastRow, 5)}`;
-  const legendP2YRange = `${xlsxAddr(legendFirstRow, 6)}:${xlsxAddr(legendLastRow, 6)}`;
-  const legendRRange = `${xlsxAddr(legendFirstRow, 7)}:${xlsxAddr(legendLastRow, 7)}`;
+  // 区分（区間名、1列目）をキーに種別・P1X・P1Y・P2X・P2Y・Rを引けるVLOOKUP用の範囲。
+  // 1列目が区間名で全行ユニークなため、そのままVLOOKUPのキー列として使える。
+  const legendRange = `${xlsxAddr(legendFirstRow, 1)}:${xlsxAddr(legendLastRow, 7)}`;
   r4++;
 
   const summaryRows = []; // 後でヘッダの上に差し込むための情報
@@ -4544,10 +4798,9 @@ function exportSurveyXLSX() {
 
     const candLastRow = r4 - 1;
     const scoreRange = `${xlsxAddr(candFirstRow, 6)}:${xlsxAddr(candLastRow, 6)}`;
-    const errRange = `${xlsxAddr(candFirstRow, 4)}:${xlsxAddr(candLastRow, 4)}`;
-    const sideRange = `${xlsxAddr(candFirstRow, 5)}:${xlsxAddr(candLastRow, 5)}`;
     const nameRange = `${xlsxAddr(candFirstRow, 1)}:${xlsxAddr(candLastRow, 1)}`;
-    const typeRange = `${xlsxAddr(candFirstRow, 2)}:${xlsxAddr(candLastRow, 2)}`;
+    // 区分（区間名、1列目）をキーに誤差mm・左右を引けるVLOOKUP用の範囲（候補一覧テーブル自体）。
+    const candRange = `${xlsxAddr(candFirstRow, 1)}:${xlsxAddr(candLastRow, 6)}`;
 
     // best候補（キャッシュ値算出用）をjudgeStraight/judgeCurve相当のロジックで再計算する
     let bestIdx = 0, bestScoreVal = Infinity;
@@ -4581,24 +4834,24 @@ function exportSurveyXLSX() {
     xlsxStr(s4, r4, 1, `${kp.name} 判定`); r4++;
     xlsxStr(s4, r4, 1, '最小スコア');
     const bestScoreAddr = xlsxFormula(s4, r4, 2, `MIN(${scoreRange})`, bestScoreVal); r4++;
-    xlsxStr(s4, r4, 1, '該当行位置');
-    const matchAddr = xlsxFormula(s4, r4, 2, `MATCH(${bestScoreAddr},${scoreRange},0)`, bestIdx + 1); r4++;
-    // 「今どこにいるか」（現在区間・種別）を先に確定させ、区間別計算式一覧（前述の表）から
-    // その区間のP1/P2/Rを参照して、計画X/Yを1回だけ計算する（種別に応じて式を選ぶ）。
-    xlsxStr(s4, r4, 1, '現在区間');
-    const currentSectionAddr = xlsxFormulaStr(s4, r4, 2, `INDEX(${nameRange},${matchAddr})`, bestSec.label); r4++;
+    // 「今どこにいるか」（区分＝現在区間）をまず確定させる。以降のP1/P2/R・誤差・左右は
+    // すべてこの区分（区間名）をキーにVLOOKUPで参照する（区分別計算式一覧・候補一覧の
+    // どちらも1列目が区間名なので、そのままVLOOKUPのキー列として使える）。行位置(MATCH)を
+    // 個別セルに残さず、区分の特定に必要な箇所だけで使う。
+    xlsxStr(s4, r4, 1, '現在区間（区分）');
+    const currentSectionAddr = xlsxFormulaStr(s4, r4, 2, `INDEX(${nameRange},MATCH(${bestScoreAddr},${scoreRange},0))`, bestSec.label); r4++;
     xlsxStr(s4, r4, 1, '種別');
-    const typeAddr = xlsxFormulaStr(s4, r4, 2, `INDEX(${typeRange},${matchAddr})`, bestSec.type === 'straight' ? '直線' : '曲線'); r4++;
+    const typeAddr = xlsxFormulaStr(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},2,FALSE)`, bestSec.type === 'straight' ? '直線' : '曲線'); r4++;
     const p1xVal = bestSec.type === 'straight' ? bestSec.aXVal : bestSec.roXVal;
     const p1yVal = bestSec.type === 'straight' ? bestSec.aYVal : bestSec.roYVal;
     const p2xVal = bestSec.type === 'straight' ? bestSec.bXVal : bestSec.bcXVal;
     const p2yVal = bestSec.type === 'straight' ? bestSec.bYVal : bestSec.bcYVal;
     const rVal = bestSec.type === 'curve' ? bestSec.RVal : 0;
-    xlsxStr(s4, r4, 1, 'P1X'); const p1xAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP1XRange},${matchAddr})`, p1xVal); r4++;
-    xlsxStr(s4, r4, 1, 'P1Y'); const p1yAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP1YRange},${matchAddr})`, p1yVal); r4++;
-    xlsxStr(s4, r4, 1, 'P2X'); const p2xAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP2XRange},${matchAddr})`, p2xVal); r4++;
-    xlsxStr(s4, r4, 1, 'P2Y'); const p2yAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendP2YRange},${matchAddr})`, p2yVal); r4++;
-    xlsxStr(s4, r4, 1, 'R'); const rAddr = xlsxFormula(s4, r4, 2, `INDEX(${legendRRange},${matchAddr})`, rVal); r4++;
+    xlsxStr(s4, r4, 1, 'P1X'); const p1xAddr = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},3,FALSE)`, p1xVal); r4++;
+    xlsxStr(s4, r4, 1, 'P1Y'); const p1yAddr = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},4,FALSE)`, p1yVal); r4++;
+    xlsxStr(s4, r4, 1, 'P2X'); const p2xAddr = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},5,FALSE)`, p2xVal); r4++;
+    xlsxStr(s4, r4, 1, 'P2Y'); const p2yAddr = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},6,FALSE)`, p2yVal); r4++;
+    xlsxStr(s4, r4, 1, 'R'); const rAddr = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${legendRange},7,FALSE)`, rVal); r4++;
     // 計画X/Y: 種別が直線ならP1-P2への垂線の足、曲線ならP1(中心)からの半径分の足を計算する。
     const lineTVal = `((${kp.xAddr}-${p1xAddr})*(${p2xAddr}-${p1xAddr})+(${kp.yAddr}-${p1yAddr})*(${p2yAddr}-${p1yAddr}))/((${p2xAddr}-${p1xAddr})^2+(${p2yAddr}-${p1yAddr})^2)`;
     const lineTClamped = `MAX(0,MIN(1,${lineTVal}))`;
@@ -4619,8 +4872,8 @@ function exportSurveyXLSX() {
     }
     xlsxStr(s4, r4, 1, '計画X'); const planXAddr = xlsxFormula(s4, r4, 2, planXFormula, planXVal); r4++;
     xlsxStr(s4, r4, 1, '計画Y'); const planYAddr = xlsxFormula(s4, r4, 2, planYFormula, planYVal); r4++;
-    xlsxStr(s4, r4, 1, '誤差(mm)'); const errAddrFinal = xlsxFormula(s4, r4, 2, `INDEX(${errRange},${matchAddr})`, bestCand.errorMm); r4++;
-    xlsxStr(s4, r4, 1, '左右'); const sideAddrFinal = xlsxFormulaStr(s4, r4, 2, `INDEX(${sideRange},${matchAddr})`, bestCand.side); r4++;
+    xlsxStr(s4, r4, 1, '誤差(mm)'); const errAddrFinal = xlsxFormula(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},4,FALSE)`, bestCand.errorMm); r4++;
+    xlsxStr(s4, r4, 1, '左右'); const sideAddrFinal = xlsxFormulaStr(s4, r4, 2, `VLOOKUP(${currentSectionAddr},${candRange},5,FALSE)`, bestCand.side); r4++;
     const rankVal = bestCand.errorMm <= (n('tolOk') || 80) ? 'OK' : (bestCand.errorMm <= (n('tolWarn') || 100) ? '注意' : 'NG');
     xlsxStr(s4, r4, 1, '判定');
     xlsxFormulaStr(s4, r4, 2, `IF(${errAddrFinal}<=${tolOkAddr},"OK",IF(${errAddrFinal}<=${tolWarnAddr},"注意","NG"))`, rankVal);
@@ -6292,6 +6545,7 @@ function getProjectData() {
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
       jointType: n('pipeJointType'), cushion: n('pipeCushion'), crush: n('pipeCrush'),
+      cushionSigmaAllow: n('pipeCushionSigmaAllow'),
       Pext: n('pipePext'), Bs: n('pipeBs')
     },
     soil: {
@@ -6299,7 +6553,8 @@ function getProjectData() {
       phiPipe: n('soilPhiPipe'), C: n('soilC'), N: n('soilN'), Nprime: n('soilNprime'),
       Hmin: n('soilHmin'), Hmax: n('soilHmax'), adh: n('soilAdh'), water: n('soilWater'),
       gravel: n('soilGravel'), gravelM: n('soilGravelM'),
-      alpha: n('soilAlpha'), beta: n('soilBeta')
+      alpha: n('soilAlpha'), beta: n('soilBeta'),
+      zones: soilZones.map(z => ({fromM:z.fromM, toM:z.toM, gamma:z.gamma, phi:z.phi, phiPipe:z.phiPipe, C:z.C, N:z.N, Nprime:z.Nprime, adh:z.adh}))
     },
     alignment: {
       totalLength: n('totalLength'), curves: getCurves(),
@@ -6373,6 +6628,7 @@ function setProjectData(d) {
     if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush);
+    if (d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
     // 継手種別: 旧フォーマットはJC/JB/JA表記、新フォーマットは許容mm値(60/40/30)
     const jointMap = {'JC':'60','JB':'40','JA':'30','60':'60','40':'40','30':'30'};
@@ -6397,6 +6653,13 @@ function setProjectData(d) {
     setV('soilAdh', d.soil.adh||10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
     setV('soilAlpha', d.soil.alpha||0.625); setV('soilBeta', d.soil.beta||1.20);
+    soilZoneCounter = 0;
+    soilZones = (d.soil.zones || []).map(z => ({
+      id: ++soilZoneCounter, fromM: z.fromM||0, toM: z.toM||0,
+      gamma: z.gamma||18, phi: z.phi||30, phiPipe: z.phiPipe||20,
+      C: z.C||0, N: z.N||15, Nprime: z.Nprime ?? z.N ?? 15, adh: z.adh||10
+    }));
+    renderSoilZones();
   }
   if (d.alignment) {
     curves = [];
@@ -6635,6 +6898,7 @@ function updateProjectSummary() {
     onPipeCategoryChange(); // 自動項目の読取専用化・シールド機外径の初期値設定
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
     renderCurves();
+    renderSoilZones();
     calcAlignment(); // 線形計算結果（区間ごとの個別仕様パネルを含む）を初期表示する
     updateGroundLen();
     calcSurveyBaseAz();
