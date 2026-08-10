@@ -2810,32 +2810,20 @@ function judgePoint(p) {
 }
 
 // ══════════════════════════════════════
-//  予測点：直近2本（役割欄「N本目前」「N本目後」）の折れ角から、次の1本の着地点を推定する
+//  予測点：先頭4点（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後、常にこの並び順）の
+//  折れ角から、次の1本の着地点を推定する。役割欄の文字入力は不要——KPが4点以上あれば常に表示する。
 //  考え方: 2本目(前→後)の方向と1本目(前→後)の方向の差＝実測の折れ角。
 //  この折れ角がそのまま続くと仮定し、1本目の方向にもう一度同じ折れ角を適用した方向へ、
 //  1本目後(＝現時点の管列の先端)から管有効長l′だけ進んだ点を予測点とする。
 //  predDir = dir1 + (dir1-dir2) = 2*dir1-dir2　という式になるため、角度の正規化（-180〜180化）は
 //  表示用にのみ行い、予測点自体の計算（cos/sinに渡す角度）には不要。
 // ══════════════════════════════════════
-function parsePipeRole(role) {
-  const norm = String(role || '').trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-  const m = /^(\d+)\s*本目\s*(前|後)$/.exec(norm);
-  return m ? { no: parseInt(m[1], 10), part: m[2] } : null;
-}
 function wrapDeg180(d) { let x = d % 360; if (x > 180) x -= 360; if (x < -180) x += 360; return x; }
 
-// points: {role,x,y}の配列（surveyResultsやkpPtRows相当）。1本目・2本目とも前後が揃っていなければnull。
+// points: {x,y}の配列（surveyResultsやkpPtRows相当）。先頭4点をKP1〜KP4として使う。4点未満ならnull。
 function computeKpPrediction(points) {
-  const byPipe = {};
-  points.forEach(p => {
-    const pr = parsePipeRole(p.role);
-    if (!pr) return;
-    byPipe[pr.no] = byPipe[pr.no] || {};
-    byPipe[pr.no][pr.part] = p;
-  });
-  const p1 = byPipe[1], p2 = byPipe[2];
-  if (!p1 || !p1['前'] || !p1['後'] || !p2 || !p2['前'] || !p2['後']) return null;
-  const front1 = p1['前'], back1 = p1['後'], front2 = p2['前'], back2 = p2['後'];
+  if (!points || points.length < 4) return null;
+  const [front1, back1, front2, back2] = points;
   const dir2 = Math.atan2(back2.y - front2.y, back2.x - front2.x);
   const dir1 = Math.atan2(back1.y - front1.y, back1.x - front1.x);
   const predDir = 2 * dir1 - dir2;
@@ -2878,7 +2866,7 @@ function renderSurveyTable(results, pred) {
   h += '</table></div>';
   el.innerHTML = h;
   if (!pred && results.length >= 2) {
-    el.innerHTML += '<div class="note-box" style="font-size:11px;margin-top:6px">予測点を表示するには、直近2本のKPの役割欄に「1本目前」「1本目後」「2本目前」「2本目後」と入力してください。</div>';
+    el.innerHTML += '<div class="note-box" style="font-size:11px;margin-top:6px">予測点を表示するには、KPを4点以上入力してください（先頭4点をKP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後として使用します）。</div>';
   }
 }
 function renderSurveyProcess(results) {
@@ -4391,19 +4379,25 @@ function xlsxSet(sheet, row, col, xml) {
   if (row > sheet.maxRow) sheet.maxRow = row;
   return xlsxAddr(row, col);
 }
-function xlsxNum(sheet, row, col, value) {
+// styleIdは省略可（既定: 数値セルは罫線付き0.000、文字セルは罫線付きテキスト）。
+// 見出し行にはXLSX_STYLE_HEADER、整数（度/分/秒等）にはXLSX_STYLE_INTを明示的に渡す。
+function xlsxNum(sheet, row, col, value, styleId) {
   const val = Number.isFinite(value) ? value : 0;
-  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}"><v>${val}</v></c>`);
+  const s = styleId != null ? styleId : XLSX_STYLE_NUM;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" s="${s}"><v>${val}</v></c>`);
 }
-function xlsxStr(sheet, row, col, text) {
-  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(text)}</t></is></c>`);
+function xlsxStr(sheet, row, col, text, styleId) {
+  const s = styleId != null ? styleId : XLSX_STYLE_TEXT;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" s="${s}" t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(text)}</t></is></c>`);
 }
-function xlsxFormula(sheet, row, col, formula, cachedValue) {
+function xlsxFormula(sheet, row, col, formula, cachedValue, styleId) {
   const val = Number.isFinite(cachedValue) ? cachedValue : 0;
-  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}"><f>${xlsxEsc(formula)}</f><v>${val}</v></c>`);
+  const s = styleId != null ? styleId : XLSX_STYLE_NUM;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" s="${s}"><f>${xlsxEsc(formula)}</f><v>${val}</v></c>`);
 }
-function xlsxFormulaStr(sheet, row, col, formula, cachedText) {
-  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" t="str"><f>${xlsxEsc(formula)}</f><v>${xlsxEsc(cachedText)}</v></c>`);
+function xlsxFormulaStr(sheet, row, col, formula, cachedText, styleId) {
+  const s = styleId != null ? styleId : XLSX_STYLE_TEXT;
+  return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" s="${s}" t="str"><f>${xlsxEsc(formula)}</f><v>${xlsxEsc(cachedText)}</v></c>`);
 }
 function xlsxRef(sheet, addr) { return `'${sheet.name}'!${addr}`; }
 function xlsxSheetXml(sheet) {
@@ -4448,13 +4442,26 @@ const XLSX_WORKBOOK_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet4.xml"/>'
   + '<Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
   + '</Relationships>';
+// スタイルID（cellXfsの並びと対応。xlsxStr/xlsxNum/xlsxFormula/xlsxFormulaStrの既定値・上書き用の定数）:
+//   1=罫線付きテキスト（既定）／2=罫線付き数値0.000（既定）／3=罫線付き整数0／4=罫線付き太字・見出し塗りつぶし
+const XLSX_STYLE_TEXT = 1, XLSX_STYLE_NUM = 2, XLSX_STYLE_INT = 3, XLSX_STYLE_HEADER = 4;
 const XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-  + '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>'
-  + '<fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills>'
-  + '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>'
+  + '<numFmts count="2"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="0"/></numFmts>'
+  + '<fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>'
+  + '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+  + '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill></fills>'
+  + '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
+  + '<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right>'
+  + '<top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>'
   + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-  + '<cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>'
+  + '<cellXfs count="5">'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>'
+  + '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '</cellXfs>'
   + '</styleSheet>';
 function xlsxWorkbookXml(sheetNames) {
   const sheetsXml = sheetNames.map((nm, i) => `<sheet name="${xlsxEsc(nm)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('');
@@ -4483,9 +4490,9 @@ function exportSurveyXLSX() {
   xlsxStr(s1, r, 1, '基線データ'); r++;
   xlsxStr(s1, r, 1, '第1直線長(BP→IP1)[m]');
   const L0Addr = xlsxNum(s1, r, 2, n('seg_L0') || 0); r++;
-  xlsxStr(s1, r, 1, '曲線'); xlsxStr(s1, r, 2, '半径R[m]'); xlsxStr(s1, r, 3, '方向');
-  xlsxStr(s1, r, 4, '交角 度'); xlsxStr(s1, r, 5, '交角 分'); xlsxStr(s1, r, 6, '交角 秒');
-  xlsxStr(s1, r, 7, '10進数'); xlsxStr(s1, r, 8, '直線長(前IP→当曲線IP)[m]'); r++;
+  xlsxStr(s1, r, 1, '曲線', XLSX_STYLE_HEADER); xlsxStr(s1, r, 2, '半径R[m]', XLSX_STYLE_HEADER); xlsxStr(s1, r, 3, '方向', XLSX_STYLE_HEADER);
+  xlsxStr(s1, r, 4, '交角 度', XLSX_STYLE_HEADER); xlsxStr(s1, r, 5, '交角 分', XLSX_STYLE_HEADER); xlsxStr(s1, r, 6, '交角 秒', XLSX_STYLE_HEADER);
+  xlsxStr(s1, r, 7, '10進数', XLSX_STYLE_HEADER); xlsxStr(s1, r, 8, '直線長(前IP→当曲線IP)[m]', XLSX_STYLE_HEADER); r++;
   const curveRows = [];
   geom.curves.forEach((c, i) => {
     const row = r;
@@ -4494,9 +4501,9 @@ function exportSurveyXLSX() {
     const RAddr = xlsxNum(s1, row, 2, c.R);
     const dirText = c.dir === 'R' ? '右' : '左';
     xlsxStr(s1, row, 3, dirText);
-    const degAddr = xlsxNum(s1, row, 4, Math.round(src.deg || 0));
-    const minAddr = xlsxNum(s1, row, 5, Math.round(src.min || 0));
-    const secAddr = xlsxNum(s1, row, 6, Math.round(src.sec || 0));
+    const degAddr = xlsxNum(s1, row, 4, Math.round(src.deg || 0), XLSX_STYLE_INT);
+    const minAddr = xlsxNum(s1, row, 5, Math.round(src.min || 0), XLSX_STYLE_INT);
+    const secAddr = xlsxNum(s1, row, 6, Math.round(src.sec || 0), XLSX_STYLE_INT);
     const decVal = dmsToDeg(src.deg || 0, src.min || 0, src.sec || 0);
     const decAddr = xlsxFormula(s1, row, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
     let LAddr = null, LVal = 0;
@@ -4540,7 +4547,7 @@ function exportSurveyXLSX() {
   // 「法線方向座標」は参考表示用（アプリの基本情報タブの模式図で使う固定基準に対応、常に0°）。
   let r3 = 1;
   xlsxStr(s3, r3, 1, '各座標データ'); r3++;
-  xlsxStr(s3, r3, 1, '点'); xlsxStr(s3, r3, 2, 'X'); xlsxStr(s3, r3, 3, 'Y');
+  xlsxStr(s3, r3, 1, '点', XLSX_STYLE_HEADER); xlsxStr(s3, r3, 2, 'X', XLSX_STYLE_HEADER); xlsxStr(s3, r3, 3, 'Y', XLSX_STYLE_HEADER);
   xlsxStr(s3, r3, 4, '方位角IN(度)[補助]'); xlsxStr(s3, r3, 5, '方位角OUT(度)[補助]'); xlsxStr(s3, r3, 6, 'TL[補助,m]'); r3++;
   const bpRow = r3;
   xlsxStr(s3, r3, 1, 'BP');
@@ -4586,7 +4593,7 @@ function exportSurveyXLSX() {
 
   // BC/RO/EC座標（曲線の数だけ）
   xlsxStr(s3, r3, 1, 'BC座標・RO(各曲線中心)座標・EC座標 ※すべて計算式'); r3++;
-  xlsxStr(s3, r3, 1, '点'); xlsxStr(s3, r3, 2, 'X'); xlsxStr(s3, r3, 3, 'Y'); r3++;
+  xlsxStr(s3, r3, 1, '点', XLSX_STYLE_HEADER); xlsxStr(s3, r3, 2, 'X', XLSX_STYLE_HEADER); xlsxStr(s3, r3, 3, 'Y', XLSX_STYLE_HEADER); r3++;
   const curveGeomInfo = []; // {id, bc:{xAddr,yAddr,xVal,yVal}, ro:{...}, ec:{...}}
   ipInfo.forEach((ip, idx) => {
     const cr = curveRows[idx];
@@ -4632,16 +4639,16 @@ function exportSurveyXLSX() {
   // ══ シート4: 測定結果 ＋ 測定誤差 ══
   let r4 = 1;
   xlsxStr(s4, r4, 1, '測量結果'); r4++;
-  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, '距離(m)');
-  xlsxStr(s4, r4, 4, '度'); xlsxStr(s4, r4, 5, '分'); xlsxStr(s4, r4, 6, '秒'); xlsxStr(s4, r4, 7, '10進数'); r4++;
+  xlsxStr(s4, r4, 1, '名称', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, '役割', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, '距離(m)', XLSX_STYLE_HEADER);
+  xlsxStr(s4, r4, 4, '度', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 5, '分', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 6, '秒', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 7, '10進数', XLSX_STYLE_HEADER); r4++;
   const tpInfo = [], kpInfo = [];
   tpRows.forEach((row, i) => {
     const rr = r4;
     xlsxStr(s4, rr, 1, `TP${i + 1}`); xlsxStr(s4, rr, 2, '');
     const distAddr = xlsxNum(s4, rr, 3, row.dist || 0);
-    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0));
-    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0));
-    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0));
+    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0), XLSX_STYLE_INT);
+    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0), XLSX_STYLE_INT);
+    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0), XLSX_STYLE_INT);
     const decVal = dmsToDeg(row.deg || 0, row.min || 0, row.sec || 0);
     const decAddr = xlsxFormula(s4, rr, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
     tpInfo.push({ row: rr, distAddr, decAddr, distVal: row.dist || 0, decVal });
@@ -4651,9 +4658,9 @@ function exportSurveyXLSX() {
     const rr = r4;
     xlsxStr(s4, rr, 1, `KP${i + 1}`); xlsxStr(s4, rr, 2, row.role || '');
     const distAddr = xlsxNum(s4, rr, 3, row.dist || 0);
-    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0));
-    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0));
-    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0));
+    const degAddr = xlsxNum(s4, rr, 4, Math.round(row.deg || 0), XLSX_STYLE_INT);
+    const minAddr = xlsxNum(s4, rr, 5, Math.round(row.min || 0), XLSX_STYLE_INT);
+    const secAddr = xlsxNum(s4, rr, 6, Math.round(row.sec || 0), XLSX_STYLE_INT);
     const decVal = dmsToDeg(row.deg || 0, row.min || 0, row.sec || 0);
     const decAddr = xlsxFormula(s4, rr, 7, `${degAddr}+${minAddr}/60+${secAddr}/3600`, decVal);
     kpInfo.push({ row: rr, name: `KP${i + 1}`, role: row.role || '', distAddr, decAddr, distVal: row.dist || 0, decVal });
@@ -4663,8 +4670,8 @@ function exportSurveyXLSX() {
 
   // ── トラバース計算（測定点座標） ──
   xlsxStr(s4, r4, 1, 'トラバース計算（測定点座標）※式'); r4++;
-  xlsxStr(s4, r4, 1, '名称'); xlsxStr(s4, r4, 2, 'X'); xlsxStr(s4, r4, 3, 'Y');
-  xlsxStr(s4, r4, 4, '後視方位角(度)[補助]'); xlsxStr(s4, r4, 5, '前視方位角(度)[補助]'); r4++;
+  xlsxStr(s4, r4, 1, '名称', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, 'X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, 'Y', XLSX_STYLE_HEADER);
+  xlsxStr(s4, r4, 4, '後視方位角(度)[補助]', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 5, '前視方位角(度)[補助]', XLSX_STYLE_HEADER); r4++;
   const instRow = r4;
   xlsxStr(s4, r4, 1, '器械点');
   const instXAddr = xlsxFormula(s4, r4, 2, xlsxRef(s2, srvMxAddr), instX);
@@ -4729,20 +4736,13 @@ function exportSurveyXLSX() {
   });
   r4++;
 
-  // ── 予測点：直近2本（役割欄「1本目前/後」「2本目前/後」）の折れ角から次の1本の着地点を推定 ──
+  // ── 予測点：先頭4点（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後）の折れ角から次の1本の着地点を推定 ──
   // 考え方はM_APP_005.htmlのcomputeKpPrediction()と同一（2本目→1本目の折れ角を1本目にもう一度適用し、
-  // 1本目後から管有効長l′だけ進んだ点を予測点とする）。役割が一致する行が無ければ計算しない。
-  const roleMap = {};
-  kpPtRows.forEach(kp => {
-    const pr = parsePipeRole(kp.role);
-    if (!pr) return;
-    roleMap[pr.no] = roleMap[pr.no] || {};
-    roleMap[pr.no][pr.part] = kp;
-  });
+  // 1本目後から管有効長l′だけ進んだ点を予測点とする）。役割欄の文字入力は不要、KPが4点以上あれば常に計算する。
   let predKp = null;
-  if (roleMap[1] && roleMap[1]['前'] && roleMap[1]['後'] && roleMap[2] && roleMap[2]['前'] && roleMap[2]['後']) {
-    const front1 = roleMap[1]['前'], back1 = roleMap[1]['後'], front2 = roleMap[2]['前'], back2 = roleMap[2]['後'];
-    xlsxStr(s4, r4, 1, '予測点の計算（役割「1本目前/後」「2本目前/後」から）'); r4++;
+  if (kpPtRows.length >= 4) {
+    const [front1, back1, front2, back2] = kpPtRows;
+    xlsxStr(s4, r4, 1, '予測点の計算（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後）'); r4++;
     xlsxStr(s4, r4, 1, '管有効長 l′[m]');
     const pipeLenVal = n('pipeLen') || 2.43;
     const pipeLenAddr = xlsxNum(s4, r4, 2, pipeLenVal); r4++;
@@ -4807,8 +4807,8 @@ function exportSurveyXLSX() {
   // 区間別計算式一覧: 各区間の生データ（直線=始点/終点、曲線=中心/基準点/半径）を一覧化する。
   // 「計算方法の説明」ではなく、実際に下の判定式が参照する数値そのもの（すべて式）を並べる。
   xlsxStr(s4, r4, 1, '区間別計算式一覧'); r4++;
-  xlsxStr(s4, r4, 1, '区間'); xlsxStr(s4, r4, 2, '種別'); xlsxStr(s4, r4, 3, 'P1X'); xlsxStr(s4, r4, 4, 'P1Y');
-  xlsxStr(s4, r4, 5, 'P2X'); xlsxStr(s4, r4, 6, 'P2Y'); xlsxStr(s4, r4, 7, 'R'); r4++;
+  xlsxStr(s4, r4, 1, '区間', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, '種別', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, 'P1X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 4, 'P1Y', XLSX_STYLE_HEADER);
+  xlsxStr(s4, r4, 5, 'P2X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 6, 'P2Y', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 7, 'R', XLSX_STYLE_HEADER); r4++;
   const legendFirstRow = r4;
   sections.forEach(sec => {
     xlsxStr(s4, r4, 1, sec.label);
@@ -4839,8 +4839,8 @@ function exportSurveyXLSX() {
     // 候補一覧: 区間ごとに優先度・誤差・左右だけを計算する（計画X/Yはここでは計算しない＝
     // 最終的に採用される区間の分だけ、後で1回計算すれば十分なため）。
     xlsxStr(s4, r4, 1, `${kp.name} 候補一覧`); r4++;
-    xlsxStr(s4, r4, 1, '区間'); xlsxStr(s4, r4, 2, '種別'); xlsxStr(s4, r4, 3, '優先度');
-    xlsxStr(s4, r4, 4, '誤差mm'); xlsxStr(s4, r4, 5, '左右'); xlsxStr(s4, r4, 6, 'スコア'); r4++;
+    xlsxStr(s4, r4, 1, '区間', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, '種別', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, '優先度', XLSX_STYLE_HEADER);
+    xlsxStr(s4, r4, 4, '誤差mm', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 5, '左右', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 6, 'スコア', XLSX_STYLE_HEADER); r4++;
     const candFirstRow = r4;
 
     sections.forEach(sec => {
@@ -5007,9 +5007,9 @@ function exportSurveyXLSX() {
   // 同じ列構成にする。各セルは上のブロックで既に計算済みのセルをそのまま参照するだけ。予測点があれば先頭行になる。
   const summaryStartRow = r4;
   xlsxStr(s4, r4, 1, '法線との測定誤差計算結果（一覧）'); r4++;
-  xlsxStr(s4, r4, 1, 'KP'); xlsxStr(s4, r4, 2, '役割'); xlsxStr(s4, r4, 3, 'X'); xlsxStr(s4, r4, 4, 'Y'); xlsxStr(s4, r4, 5, '位置');
-  xlsxStr(s4, r4, 6, 'RO-測点距離'); xlsxStr(s4, r4, 7, 'Rとの差'); xlsxStr(s4, r4, 8, '計画X'); xlsxStr(s4, r4, 9, '計画Y');
-  xlsxStr(s4, r4, 10, '左右誤差'); xlsxStr(s4, r4, 11, '判定'); r4++;
+  xlsxStr(s4, r4, 1, 'KP', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 2, '役割', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 3, 'X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 4, 'Y', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 5, '位置', XLSX_STYLE_HEADER);
+  xlsxStr(s4, r4, 6, 'RO-測点距離', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 7, 'Rとの差', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 8, '計画X', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 9, '計画Y', XLSX_STYLE_HEADER);
+  xlsxStr(s4, r4, 10, '左右誤差', XLSX_STYLE_HEADER); xlsxStr(s4, r4, 11, '判定', XLSX_STYLE_HEADER); r4++;
   summaryRows.forEach(sr => {
     xlsxStr(s4, r4, 1, sr.name); xlsxStr(s4, r4, 2, sr.role);
     xlsxFormula(s4, r4, 3, sr.xAddr, sr.xVal);
@@ -5025,10 +5025,10 @@ function exportSurveyXLSX() {
   });
 
   // ── 列幅の設定（文字列が見切れないよう最適化） ──
-  xlsxSetColWidths(s1, { 1: 24, 2: 12, 3: 8, 4: 8, 5: 6, 6: 6, 7: 10, 8: 22 });
-  xlsxSetColWidths(s2, { 1: 32, 2: 12, 3: 12 });
-  xlsxSetColWidths(s3, { 1: 8, 2: 13, 3: 13, 4: 12, 5: 12, 6: 10 });
-  xlsxSetColWidths(s4, { 1: 22, 2: 12, 3: 10, 4: 10, 5: 12, 6: 14, 7: 12, 8: 10, 9: 10, 10: 12, 11: 8 });
+  xlsxSetColWidths(s1, { 1: 32, 2: 12, 3: 8, 4: 10, 5: 10, 6: 10, 7: 12, 8: 26 });
+  xlsxSetColWidths(s2, { 1: 42, 2: 12, 3: 12 });
+  xlsxSetColWidths(s3, { 1: 12, 2: 14, 3: 14, 4: 16, 5: 16, 6: 12 });
+  xlsxSetColWidths(s4, { 1: 42, 2: 16, 3: 16, 4: 16, 5: 16, 6: 18, 7: 16, 8: 14, 9: 14, 10: 16, 11: 10 });
 
   // ── ZIPにまとめてダウンロード ──
   const enc = new TextEncoder();
