@@ -4409,7 +4409,9 @@ function xlsxFormulaStr(sheet, row, col, formula, cachedText, styleId) {
   return xlsxSet(sheet, row, col, `<c r="${xlsxAddr(row, col)}" s="${s}" t="str"><f>${xlsxEsc(formula)}</f><v>${xlsxEsc(cachedText)}</v></c>`);
 }
 function xlsxRef(sheet, addr) { return `'${sheet.name}'!${addr}`; }
-function xlsxSheetXml(sheet) {
+// drawingRId: このシートに埋め込みグラフ（xl/drawings/drawingN.xml）を関連付ける場合、
+// シート自身の_rels（xl/worksheets/_rels/sheetN.xml.rels）内のrelationship IDを渡す（省略可）。
+function xlsxSheetXml(sheet, drawingRId) {
   const rowsXml = [];
   for (let r = 1; r <= sheet.maxRow; r++) {
     const prefix = r + '_';
@@ -4425,7 +4427,9 @@ function xlsxSheetXml(sheet) {
   const colsXml = colEntries.length
     ? `<cols>${colEntries.map(c => `<col min="${c}" max="${c}" width="${sheet.colWidths[c]}" customWidth="1"/>`).join('')}</cols>`
     : '';
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${colsXml}<sheetData>${rowsXml.join('')}</sheetData></worksheet>`;
+  const drawingXml = drawingRId ? `<drawing r:id="${drawingRId}"/>` : '';
+  const rNs = drawingRId ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : '';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${rNs}>${colsXml}<sheetData>${rowsXml.join('')}</sheetData>${drawingXml}</worksheet>`;
 }
 
 const XLSX_CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -4439,6 +4443,8 @@ const XLSX_CONTENT_TYPES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<Override PartName="/xl/worksheets/sheet3.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
   + '<Override PartName="/xl/worksheets/sheet4.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
   + '<Override PartName="/xl/worksheets/sheet5.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+  + '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+  + '<Override PartName="/xl/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>'
   + '</Types>';
 const XLSX_RELS_ROOT = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
@@ -4491,6 +4497,79 @@ function xlsxWorkbookXml(sheetNames, activeTabIndex) {
     + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
     + `${bookViews}<sheets>${sheetsXml}</sheets></workbook>`;
 }
+
+// ══════════════════════════════════════
+//  埋め込み散布図（線形の平面図）を「各座標データ」シートに自動配置する。
+//  ユーザーが手動で作っていた散布図（直線=BP-IP-EP、曲線=BC-RO-EC）と同じ考え方だが、
+//  曲線は直線3点を結ぶだけでは弧にならないため、曲線描画用サンプル点（生成済みの円弧上の点列）を
+//  そのまま追加系列として使うことで、実際の弧の形がそのまま出るようにしている。
+// ══════════════════════════════════════
+const CHART_CURVE_COLORS = ['1F77B4', '2CA02C', '9467BD', '8C564B', 'E377C2', '17BECF', '7F7F7F', 'BCBD22'];
+function xlsxChartSeriesXml(idx, name, sheetName, xRange, yRange, colorHex, showMarker) {
+  const marker = showMarker
+    ? '<c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr><a:solidFill><a:srgbClr val="' + colorHex + '"/></a:solidFill></c:spPr></c:marker>'
+    : '<c:marker><c:symbol val="none"/></c:marker>';
+  return '<c:ser>'
+    + `<c:idx val="${idx}"/><c:order val="${idx}"/>`
+    + `<c:tx><c:v>${xlsxEsc(name)}</c:v></c:tx>`
+    + `<c:spPr><a:ln w="19050"><a:solidFill><a:srgbClr val="${colorHex}"/></a:solidFill></a:ln></c:spPr>`
+    + marker
+    + `<c:xVal><c:numRef><c:f>'${xlsxEsc(sheetName)}'!${xRange}</c:f></c:numRef></c:xVal>`
+    + `<c:yVal><c:numRef><c:f>'${xlsxEsc(sheetName)}'!${yRange}</c:f></c:numRef></c:yVal>`
+    + '<c:smooth val="0"/>'
+    + '</c:ser>';
+}
+// seriesList: [{name, xRange, yRange, color, marker}]（rangeは"$B$3:$B$5"のようなシート内の列レンジ、シート名は別引数で共通指定）
+function xlsxChartXml(titleText, sheetName, seriesList) {
+  const serXml = seriesList.map((s, i) => xlsxChartSeriesXml(i, s.name, sheetName, s.xRange, s.yRange, s.color, s.marker)).join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+    + '<c:chart>'
+    + `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${xlsxEsc(titleText)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>`
+    + '<c:autoTitleDeleted val="0"/>'
+    + '<c:plotArea><c:layout/>'
+    + '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>'
+    + serXml
+    + '<c:axId val="111111111"/><c:axId val="222222222"/>'
+    + '</c:scatterChart>'
+    + '<c:valAx><c:axId val="111111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/>'
+    + '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Y（右+）</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>'
+    + '<c:crossAx val="222222222"/></c:valAx>'
+    + '<c:valAx><c:axId val="222222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/>'
+    + '<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>X（前方+）</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>'
+    + '<c:crossAx val="111111111"/></c:valAx>'
+    + '</c:plotArea>'
+    + '<c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>'
+    + '<c:plotVisOnly val="1"/>'
+    + '</c:chart>'
+    + '</c:chartSpace>';
+}
+// グラフをシート上のセル範囲(0始まり col/row)に貼り付けるdrawing1.xml。rId1で1個のchartを参照する。
+function xlsxDrawingXml(fromCol, fromRow, toCol, toRow) {
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+    + '<xdr:twoCellAnchor>'
+    + `<xdr:from><xdr:col>${fromCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`
+    + `<xdr:to><xdr:col>${toCol}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>`
+    + '<xdr:graphicFrame macro="">'
+    + '<xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="線形グラフ"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>'
+    + '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>'
+    + '<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'
+    + '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId1"/>'
+    + '</a:graphicData></a:graphic>'
+    + '</xdr:graphicFrame>'
+    + '<xdr:clientData/>'
+    + '</xdr:twoCellAnchor>'
+    + '</xdr:wsDr>';
+}
+const XLSX_DRAWING_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart1.xml"/>'
+  + '</Relationships>';
+const XLSX_SHEET3_RELS = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+  + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
+  + '</Relationships>';
 
 function exportSurveyXLSX() {
   if (!curves.length && !(n('seg_L0') || n('seg_Lf'))) { showToast('基線データがありません'); return; }
@@ -4651,13 +4730,42 @@ function exportSurveyXLSX() {
     r3++;
 
     curveGeomInfo.push({
-      id: ip.id, R: ip.R, dir: ip.dir,
+      id: ip.id, R: ip.R, dir: ip.dir, RAddr: xlsxRef(s1, cr.RAddr),
       bc: { xAddr: bcXAddr, yAddr: bcYAddr, xVal: bcXVal, yVal: bcYVal },
       ro: { xAddr: roXAddr, yAddr: roYAddr, xVal: roXVal, yVal: roYVal },
       ec: { xAddr: ecXAddr, yAddr: ecYAddr, xVal: ecXVal, yVal: ecYVal },
-      decAddr: cr.decAddr, decVal: cr.decVal
+      decAddr: xlsxRef(s1, cr.decAddr), decVal: cr.decVal
     });
   });
+
+  // 曲線描画用サンプル点（散布図用）: 各曲線をBC→ECまでN分割し、RO中心・半径Rの円周上の点を
+  // 生データとして並べる。散布図でこの列を選べば、直線（BP-IP-EP）だけでなく実際の弧の形も描ける。
+  // 角度は「ROから見たBCの方位角」を起点に、dir='R'なら+方向・dir='L'なら-方向にIAだけ掃引する
+  // （curveDelta()の符号規約と同じ）。
+  const CURVE_SAMPLE_N = 24;
+  if (curveGeomInfo.length) {
+    xlsxStr(s3, r3, 1, `曲線描画用サンプル点（散布図用、各曲線をBC→ECまで${CURVE_SAMPLE_N}分割）`); r3++;
+    curveGeomInfo.forEach(cg => {
+      const dirSign = cg.dir === 'R' ? 1 : -1;
+      xlsxStr(s3, r3, 1, `第${cg.id}曲線`, XLSX_STYLE_HEADER); xlsxStr(s3, r3, 2, 'X', XLSX_STYLE_HEADER); xlsxStr(s3, r3, 3, 'Y', XLSX_STYLE_HEADER); r3++;
+      const theta0Val = Math.atan2(cg.bc.yVal - cg.ro.yVal, cg.bc.xVal - cg.ro.xVal);
+      const theta0Formula = `ATAN2(${cg.bc.xAddr}-${cg.ro.xAddr},${cg.bc.yAddr}-${cg.ro.yAddr})`;
+      const firstRow = r3;
+      for (let i = 0; i <= CURVE_SAMPLE_N; i++) {
+        const frac = i / CURVE_SAMPLE_N;
+        const angVal = theta0Val + dirSign * frac * degToRad(cg.decVal);
+        const xVal = cg.ro.xVal + cg.R * Math.cos(angVal);
+        const yVal = cg.ro.yVal + cg.R * Math.sin(angVal);
+        const angFormula = `${theta0Formula}${dirSign > 0 ? '+' : '-'}(${i}/${CURVE_SAMPLE_N})*RADIANS(${cg.decAddr})`;
+        xlsxFormula(s3, r3, 2, `${cg.ro.xAddr}+${cg.RAddr}*COS(${angFormula})`, xVal);
+        xlsxFormula(s3, r3, 3, `${cg.ro.yAddr}+${cg.RAddr}*SIN(${angFormula})`, yVal);
+        r3++;
+      }
+      cg.sampleFirstRow = firstRow;
+      cg.sampleLastRow = r3 - 1;
+      r3++;
+    });
+  }
 
   // ══ シート4: 測定結果 ＋ 測定誤差 ══
   let r4 = 1;
@@ -4813,7 +4921,7 @@ function exportSurveyXLSX() {
         roXAddr: cg.ro.xAddr, roYAddr: cg.ro.yAddr, roXVal: cg.ro.xVal, roYVal: cg.ro.yVal,
         bcXAddr: cg.bc.xAddr, bcYAddr: cg.bc.yAddr, bcXVal: cg.bc.xVal, bcYVal: cg.bc.yVal,
         RAddr: xlsxRef(s1, curveRows[cg.id - 1].RAddr), RVal: cg.R,
-        decAddr: xlsxRef(s1, cg.decAddr), decVal: cg.decVal
+        decAddr: cg.decAddr, decVal: cg.decVal
       });
       if (i < N - 1) {
         const next = curveGeomInfo[i + 1];
@@ -5075,6 +5183,20 @@ function exportSurveyXLSX() {
   xlsxSetColWidths(s4, { 1: 42, 2: 16, 3: 16, 4: 16, 5: 16, 6: 14, 7: 14, 8: 14, 9: 14, 10: 16, 11: 10 });
   xlsxSetColWidths(s5, { 1: 12, 2: 12, 3: 14, 4: 14, 5: 16, 6: 14, 7: 14, 8: 14, 9: 14, 10: 12, 11: 8, 12: 10 });
 
+  // ── 埋め込み散布図（線形の平面図）: 直線区間(BP-IP-EP)＋曲線ごとのサンプル点を系列にする ──
+  const chartSeries = [
+    { name: '直線区間(BP-IP-EP)', xRange: `$B$${bpRow}:$B$${epRow}`, yRange: `$C$${bpRow}:$C$${epRow}`, color: 'ED7D31', marker: true }
+  ];
+  curveGeomInfo.forEach((cg, i) => {
+    if (!cg.sampleFirstRow) return;
+    chartSeries.push({
+      name: `第${cg.id}曲線`, color: CHART_CURVE_COLORS[i % CHART_CURVE_COLORS.length], marker: false,
+      xRange: `$B$${cg.sampleFirstRow}:$B$${cg.sampleLastRow}`, yRange: `$C$${cg.sampleFirstRow}:$C$${cg.sampleLastRow}`
+    });
+  });
+  const chartXml = xlsxChartXml('線形（BP〜EP 平面図）', s3.name, chartSeries);
+  const drawingXml = xlsxDrawingXml(7, 1, 20, 35);
+
   // ── ZIPにまとめてダウンロード ──
   const enc = new TextEncoder();
   const files = [
@@ -5085,9 +5207,13 @@ function exportSurveyXLSX() {
     { name: 'xl/styles.xml', data: enc.encode(XLSX_STYLES) },
     { name: 'xl/worksheets/sheet1.xml', data: enc.encode(xlsxSheetXml(s1)) },
     { name: 'xl/worksheets/sheet2.xml', data: enc.encode(xlsxSheetXml(s2)) },
-    { name: 'xl/worksheets/sheet3.xml', data: enc.encode(xlsxSheetXml(s3)) },
+    { name: 'xl/worksheets/sheet3.xml', data: enc.encode(xlsxSheetXml(s3, 'rId1')) },
     { name: 'xl/worksheets/sheet4.xml', data: enc.encode(xlsxSheetXml(s4)) },
     { name: 'xl/worksheets/sheet5.xml', data: enc.encode(xlsxSheetXml(s5)) },
+    { name: 'xl/worksheets/_rels/sheet3.xml.rels', data: enc.encode(XLSX_SHEET3_RELS) },
+    { name: 'xl/drawings/drawing1.xml', data: enc.encode(drawingXml) },
+    { name: 'xl/drawings/_rels/drawing1.xml.rels', data: enc.encode(XLSX_DRAWING_RELS) },
+    { name: 'xl/charts/chart1.xml', data: enc.encode(chartXml) },
   ];
   const zipBytes = xlsxBuildZip(files);
   const blob = new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
