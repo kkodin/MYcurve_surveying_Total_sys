@@ -3254,6 +3254,12 @@ function setShaftType(side, type, el) {
   if (side === 'launch') {
     showFor('launchRectIn', type === 'rect' || type === 'oval');
     showFor('launchCircleIn', type === 'circle');
+    // 支圧壁は発進立坑内に構築するため、立坑種別が変わったら支圧壁タブの立坑種別チップも
+    // 追従させる（立坑内径の同期＝onLaunchCircleDChange/onWallCircleDChangeと同じ理由。
+    // ユーザー報告: 発進立坑を矩形に変えても支圧壁タブが円形のまま残り不整合になっていた）。
+    // 支圧壁タブ側のチップは変更後も独立してクリック可能なので、手動で個別に上書きもできる。
+    const wallEl = document.querySelector(`#wallShaftChips [data-val="${type}"]`);
+    if (wallEl && typeof setWallShaft === 'function') setWallShaft(type, wallEl);
   } else {
     showFor('arrivalManholeIn', type === 'manhole');
     showFor('arrivalRectIn', type === 'rect' || type === 'oval');
