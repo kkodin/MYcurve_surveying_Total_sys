@@ -2068,28 +2068,69 @@ function drawAlignmentVisual(targetId, viewOverride) {
   });
   drawPoint(ep, 'EP', '#0f172a');
 
-  // 測量タブの測定点（KP）を実測位置に重ね描きする。ラベル先頭に推定本数（到達側=1本目、
-  // 標準管長で概算）を表示する。測量タブは基準方位角(baseAz)分だけ回転した座標系のため、
-  // このビジュアル表示のスキーマ座標（az=0起点）に合わせて逆回転してから重ねる。
+  // 測量タブの測定点（KP）を実測位置に重ね描きする。ラベルは測量本数（surveyPipeCount）を
+  // 基準に「N本目F（前）／N本目R（後）」で表示する（KP1・KP2=測量本数本目、KP3・KP4=その1本前、
+  // 以降2点ごとに1本ずつ遡る。60章の予測点ロジックと同じ「KP1=先頭管前面」の考え方）。
+  // 測量タブは基準方位角(baseAz)分だけ回転した座標系のため、このビジュアル表示のスキーマ座標
+  // （az=0起点）に合わせて逆回転してから重ねる。
   if (surveyGeom && surveyResults && surveyResults.length) {
     const baseAzRad = degToRad(n('surveyBaseAz') || 0);
     const cosA = Math.cos(-baseAzRad), sinA = Math.sin(-baseAzRad);
-    const lp = n('pipeLen') || 2.43;
-    const totalDist = surveyGeom.totalDistance || 0;
+    const pipeCountBase = n('surveyPipeCount') || 0;
     const rankColor = { 'OK': '#16a34a', '注意': '#d97706', 'NG': '#dc2626' };
-    surveyResults.forEach(r => {
+    const SURVEY_LINE_COLOR = '#9333ea'; // 実測線・予測線用の目立つ色（計画線の緑・青と重複しない紫）
+    const toScreen = (r) => {
       const rw = { x: r.x * cosA - r.y * sinA, y: r.x * sinA + r.y * cosA };
-      const px = tx(rw), py = ty(rw);
-      const pipeNo = Math.max(1, Math.round((totalDist - (r.distFromBP || 0)) / lp));
-      const color = rankColor[r.rank] || '#0f172a';
+      return { px: tx(rw), py: ty(rw) };
+    };
+    const kpLabel = (r) => {
+      const kpIdx = parseInt(String(r.name || '').replace(/[^\d]/g, ''), 10) - 1;
+      if (!(pipeCountBase > 0) || !(kpIdx >= 0)) return r.name;
+      const pipeNo = pipeCountBase - Math.floor(kpIdx / 2);
+      return `${pipeNo}本目${kpIdx % 2 === 0 ? 'F' : 'R'}`;
+    };
+
+    // 実測KP点を測定順（先頭管前面→後方）に結ぶ実線
+    if (surveyResults.length >= 2) {
       ctx.beginPath();
-      ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath();
-      ctx.fillStyle = color;
+      surveyResults.forEach((r, i) => {
+        const { px, py } = toScreen(r);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.setLineDash([]);
+      ctx.strokeStyle = SURVEY_LINE_COLOR;
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+    // 先頭管前面（KP1）から予測点への点線
+    if (lastKpPrediction) {
+      const p0 = toScreen(surveyResults[0]), p1 = toScreen(lastKpPrediction);
+      ctx.beginPath();
+      ctx.moveTo(p0.px, p0.py);
+      ctx.lineTo(p1.px, p1.py);
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = SURVEY_LINE_COLOR;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    const drawKpPoint = (r, isPrediction) => {
+      const { px, py } = toScreen(r);
+      ctx.beginPath();
+      if (isPrediction) {
+        ctx.arc(px, py, 6, 0, Math.PI * 2);
+        ctx.fillStyle = SURVEY_LINE_COLOR;
+      } else {
+        ctx.moveTo(px, py - 6); ctx.lineTo(px + 6, py); ctx.lineTo(px, py + 6); ctx.lineTo(px - 6, py); ctx.closePath();
+        ctx.fillStyle = rankColor[r.rank] || '#0f172a';
+      }
       ctx.fill();
       ctx.font = 'bold 10px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`${pipeNo}本目 ${r.name}`, px, py - 10);
-    });
+      ctx.fillText(isPrediction ? r.name : kpLabel(r), px, py - 10);
+    };
+    surveyResults.forEach(r => drawKpPoint(r, false));
+    if (lastKpPrediction) drawKpPoint(lastKpPrediction, true);
   }
 
   // 曲線要素の注記（円で囲んで表示）。ドラッグで移動・右下ハンドルで拡大縮小できる
