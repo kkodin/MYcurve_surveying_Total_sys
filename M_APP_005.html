@@ -2822,6 +2822,13 @@ function judgePoint(p) {
 // ══════════════════════════════════════
 function wrapDeg180(d) { let x = d % 360; if (x > 180) x -= 360; if (x < -180) x += 360; return x; }
 
+// 予測点の名称＝「測量本数（surveyPipeCount）＋1」本目予測。本数が未入力・0以下なら「次回予測」にする
+// （過去バージョン曲線Vr018\M_APP_001のpredictionPipeLabel()と同じ考え方）。
+function predictionPipeLabel() {
+  const pipe = Math.floor(n('surveyPipeCount') || 0);
+  return pipe > 0 ? `${pipe + 1}本目予測` : '次回予測';
+}
+
 // points: {x,y}の配列（surveyResultsやkpPtRows相当）。先頭4点をKP1〜KP4として使う。4点未満ならnull。
 function computeKpPrediction(points) {
   if (!points || points.length < 4) return null;
@@ -2842,7 +2849,7 @@ function renderSurveySummary(results, pred) {
   if (!results.length) { box.innerHTML = '<div class="note-box">KPがありません。「KPを追加」して距離・角度を入力してください。</div>'; return; }
   const predCard = pred ? `
     <div class="kpcard ${rankClass(pred.rank)}" style="border-style:dashed;background:rgba(29,111,216,.06)">
-      <div class="line"><div class="name">🔮 予測点（次の1本）</div><div class="big">${esc(pred.short||((pred.side||'')+' '+fmt(pred.errorMm,0)))}</div></div>
+      <div class="line"><div class="name">🔮 ${esc(pred.name)}</div><div class="big">${esc(pred.short||((pred.side||'')+' '+fmt(pred.errorMm,0)))}</div></div>
       <div class="line sub"><span>位置：${esc(pred.sectionName)}</span><span>判定：<span class="pill ${rankClass(pred.rank)}">${pred.rank}</span></span></div>
       <div class="sub" style="margin-top:4px">折れ角 ${fmt(pred.bendDeg,2)}°　管有効長 ${fmt(pred.pipeLen,2)}m 進んだ予測 X=${fmt(pred.x,3)} / Y=${fmt(pred.y,3)}</div>
     </div>` : '';
@@ -2860,7 +2867,7 @@ function renderSurveyTable(results, pred) {
   if (!results.length) { el.innerHTML = ''; return; }
   let h = '<div class="tbl-wrap"><table><tr><th>KP</th><th>役割</th><th>X</th><th>Y</th><th>位置</th><th>RO-測点距離</th><th>Rとの差</th><th>計画X</th><th>計画Y</th><th>左右誤差</th><th>判定</th></tr>';
   if (pred) {
-    h += `<tr style="background:rgba(29,111,216,.08)"><td><b>🔮予測点</b></td><td>次の1本</td><td class="mono">${fmt(pred.x,3)}</td><td class="mono">${fmt(pred.y,3)}</td><td>${esc(pred.sectionName)}</td><td class="mono">${pred.roDist?fmt(pred.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(pred.radialMm)?fmt(pred.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(pred.foot.x,3)}</td><td class="mono">${fmt(pred.foot.y,3)}</td><td><b>${esc(pred.short||fmt(pred.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(pred.rank)}">${pred.rank}</span></td></tr>`;
+    h += `<tr style="background:rgba(29,111,216,.08)"><td><b>🔮${esc(pred.name)}</b></td><td>${esc(pred.role||'')}</td><td class="mono">${fmt(pred.x,3)}</td><td class="mono">${fmt(pred.y,3)}</td><td>${esc(pred.sectionName)}</td><td class="mono">${pred.roDist?fmt(pred.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(pred.radialMm)?fmt(pred.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(pred.foot.x,3)}</td><td class="mono">${fmt(pred.foot.y,3)}</td><td><b>${esc(pred.short||fmt(pred.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(pred.rank)}">${pred.rank}</span></td></tr>`;
   }
   results.forEach(r => {
     h += `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.role||'')}</td><td class="mono">${fmt(r.x,3)}</td><td class="mono">${fmt(r.y,3)}</td><td>${esc(r.sectionName)}</td><td class="mono">${r.roDist?fmt(r.roDist,3)+' m':'-'}</td><td class="mono">${Number.isFinite(r.radialMm)?fmt(r.radialMm,1)+' mm':'-'}</td><td class="mono">${fmt(r.foot.x,3)}</td><td class="mono">${fmt(r.foot.y,3)}</td><td><b>${esc(r.short||fmt(r.errorMm,1)+' mm')}</b></td><td><span class="pill ${rankClass(r.rank)}">${r.rank}</span></td></tr>`;
@@ -2891,7 +2898,7 @@ function calcSurvey() {
   const {kpPoints} = calculateSurveyTraverse();
   surveyResults = kpPoints.map(judgePoint);
   const predRaw = computeKpPrediction(surveyResults);
-  lastKpPrediction = predRaw ? { ...judgePoint({ x: predRaw.x, y: predRaw.y, name: '予測点', role: '' }), pipeLen: predRaw.pipeLen, bendDeg: predRaw.bendDeg } : null;
+  lastKpPrediction = predRaw ? { ...judgePoint({ x: predRaw.x, y: predRaw.y, name: predictionPipeLabel(), role: '予測' }), pipeLen: predRaw.pipeLen, bendDeg: predRaw.bendDeg } : null;
   renderSurveySummary(surveyResults, lastKpPrediction);
   renderSurveyTable(surveyResults, lastKpPrediction);
   renderSurveyProcess(surveyResults);
@@ -4780,7 +4787,7 @@ function exportSurveyXLSX() {
     const predXAddr = xlsxFormula(s4, r4, 3, `${kp1.xAddr}+${pipeLenAddr}*COS(${nextAzAddr})`, predXVal);
     const predYAddr = xlsxFormula(s4, r4, 4, `${kp1.yAddr}+${pipeLenAddr}*SIN(${nextAzAddr})`, predYVal);
     r4 += 2;
-    predKp = { name: '予測点', role: '次の1本', xAddr: predXAddr, yAddr: predYAddr, xVal: predXVal, yVal: predYVal };
+    predKp = { name: predictionPipeLabel(), role: '予測', xAddr: predXAddr, yAddr: predYAddr, xVal: predXVal, yVal: predYVal };
   }
 
   // ── 判定基準（現在のUI設定値をそのまま数値として反映） ──
