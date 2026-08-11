@@ -2812,25 +2812,27 @@ function judgePoint(p) {
 // ══════════════════════════════════════
 //  予測点：先頭4点（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後、常にこの並び順）の
 //  折れ角から、次の1本の着地点を推定する。役割欄の文字入力は不要——KPが4点以上あれば常に表示する。
-//  考え方: 2本目(前→後)の方向と1本目(前→後)の方向の差＝実測の折れ角。
-//  この折れ角がそのまま続くと仮定し、1本目の方向にもう一度同じ折れ角を適用した方向へ、
-//  1本目後(＝現時点の管列の先端)から管有効長l′だけ進んだ点を予測点とする。
-//  predDir = dir1 + (dir1-dir2) = 2*dir1-dir2　という式になるため、角度の正規化（-180〜180化）は
-//  表示用にのみ行い、予測点自体の計算（cos/sinに渡す角度）には不要。
+//  考え方（過去バージョン曲線Vr018\M_APP_001\05_measurement_horizontal_error.htmlのupdatePredictions()に
+//  準拠。以前の実装は方向ベクトルの向きと延長の起点を取り違えていたため、こちらを正として合わせ直した）:
+//  先頭管方向 = KP2→KP1（後ろから前へ、実際に管が向いている方向）
+//  後方管方向 = KP4→KP3（同上、1つ前の管）
+//  折れ角 = 先頭管方向 − 後方管方向
+//  次回方向 = 先頭管方向 + 折れ角
+//  予測点 = KP1（＝現時点の管列の最先端）+ 次回方向 × 管有効長l′
 // ══════════════════════════════════════
 function wrapDeg180(d) { let x = d % 360; if (x > 180) x -= 360; if (x < -180) x += 360; return x; }
 
 // points: {x,y}の配列（surveyResultsやkpPtRows相当）。先頭4点をKP1〜KP4として使う。4点未満ならnull。
 function computeKpPrediction(points) {
   if (!points || points.length < 4) return null;
-  const [front1, back1, front2, back2] = points;
-  const dir2 = Math.atan2(back2.y - front2.y, back2.x - front2.x);
-  const dir1 = Math.atan2(back1.y - front1.y, back1.x - front1.x);
-  const predDir = 2 * dir1 - dir2;
+  const [kp1, kp2, kp3, kp4] = points;
+  const frontAz = Math.atan2(kp1.y - kp2.y, kp1.x - kp2.x); // 先頭管方向 = KP2→KP1
+  const rearAz = Math.atan2(kp3.y - kp4.y, kp3.x - kp4.x);  // 後方管方向 = KP4→KP3
+  const nextAz = 2 * frontAz - rearAz; // = frontAz + (frontAz-rearAz)。正規化は表示用のbendDegにのみ必要
   const pipeLen = n('pipeLen') || 2.43;
   return {
-    x: back1.x + pipeLen * Math.cos(predDir), y: back1.y + pipeLen * Math.sin(predDir),
-    pipeLen, bendDeg: wrapDeg180(radToDeg(dir1) - radToDeg(dir2)), dir1Deg: radToDeg(dir1), dir2Deg: radToDeg(dir2)
+    x: kp1.x + pipeLen * Math.cos(nextAz), y: kp1.y + pipeLen * Math.sin(nextAz),
+    pipeLen, bendDeg: wrapDeg180(radToDeg(frontAz) - radToDeg(rearAz)), dir1Deg: radToDeg(frontAz), dir2Deg: radToDeg(rearAz)
   };
 }
 
@@ -4751,29 +4753,32 @@ function exportSurveyXLSX() {
   r4++;
 
   // ── 予測点：先頭4点（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後）の折れ角から次の1本の着地点を推定 ──
-  // 考え方はM_APP_005.htmlのcomputeKpPrediction()と同一（2本目→1本目の折れ角を1本目にもう一度適用し、
-  // 1本目後から管有効長l′だけ進んだ点を予測点とする）。役割欄の文字入力は不要、KPが4点以上あれば常に計算する。
+  // 考え方はM_APP_005.htmlのcomputeKpPrediction()と同一（過去バージョン曲線Vr018\M_APP_001の
+  // 05_measurement_horizontal_error.html・updatePredictions()に準拠）。役割欄の文字入力は不要、
+  // KPが4点以上あれば常に計算する。
+  // 先頭管方向=KP2→KP1、後方管方向=KP4→KP3、折れ角=先頭管方向−後方管方向、
+  // 次回方向=先頭管方向+折れ角、予測点=KP1（現時点の管列の最先端）+次回方向×管有効長l′
   let predKp = null;
   if (kpPtRows.length >= 4) {
-    const [front1, back1, front2, back2] = kpPtRows;
+    const [kp1, kp2, kp3, kp4] = kpPtRows;
     xlsxStr(s4, r4, 1, '予測点の計算（KP1=1本目前・KP2=1本目後・KP3=2本目前・KP4=2本目後）'); r4++;
     xlsxStr(s4, r4, 1, '管有効長 l′[m]');
     const pipeLenVal = n('pipeLen') || 2.43;
     const pipeLenAddr = xlsxNum(s4, r4, 2, pipeLenVal); r4++;
-    const dir2Val = Math.atan2(back2.yVal - front2.yVal, back2.xVal - front2.xVal);
-    const dir1Val = Math.atan2(back1.yVal - front1.yVal, back1.xVal - front1.xVal);
-    const predDirVal = 2 * dir1Val - dir2Val;
-    xlsxStr(s4, r4, 1, '2本目 方向角[rad]（前→後）');
-    const dir2Addr = xlsxFormula(s4, r4, 2, `ATAN2(${back2.xAddr}-${front2.xAddr},${back2.yAddr}-${front2.yAddr})`, dir2Val); r4++;
-    xlsxStr(s4, r4, 1, '1本目 方向角[rad]（前→後）');
-    const dir1Addr = xlsxFormula(s4, r4, 2, `ATAN2(${back1.xAddr}-${front1.xAddr},${back1.yAddr}-${front1.yAddr})`, dir1Val); r4++;
-    xlsxStr(s4, r4, 1, '予測方向角[rad]（=1本目方向角×2−2本目方向角）');
-    const predDirAddr = xlsxFormula(s4, r4, 2, `2*${dir1Addr}-${dir2Addr}`, predDirVal); r4++;
-    xlsxStr(s4, r4, 1, '予測点（1本目後から予測方向角へl′進んだ点）'); xlsxStr(s4, r4, 3, 'X'); xlsxStr(s4, r4, 4, 'Y'); r4++;
-    const predXVal = back1.xVal + pipeLenVal * Math.cos(predDirVal);
-    const predYVal = back1.yVal + pipeLenVal * Math.sin(predDirVal);
-    const predXAddr = xlsxFormula(s4, r4, 3, `${back1.xAddr}+${pipeLenAddr}*COS(${predDirAddr})`, predXVal);
-    const predYAddr = xlsxFormula(s4, r4, 4, `${back1.yAddr}+${pipeLenAddr}*SIN(${predDirAddr})`, predYVal);
+    const frontAzVal = Math.atan2(kp1.yVal - kp2.yVal, kp1.xVal - kp2.xVal);
+    const rearAzVal = Math.atan2(kp3.yVal - kp4.yVal, kp3.xVal - kp4.xVal);
+    const nextAzVal = 2 * frontAzVal - rearAzVal;
+    xlsxStr(s4, r4, 1, '後方管方向角[rad]（KP4→KP3）');
+    const rearAzAddr = xlsxFormula(s4, r4, 2, `ATAN2(${kp3.xAddr}-${kp4.xAddr},${kp3.yAddr}-${kp4.yAddr})`, rearAzVal); r4++;
+    xlsxStr(s4, r4, 1, '先頭管方向角[rad]（KP2→KP1）');
+    const frontAzAddr = xlsxFormula(s4, r4, 2, `ATAN2(${kp1.xAddr}-${kp2.xAddr},${kp1.yAddr}-${kp2.yAddr})`, frontAzVal); r4++;
+    xlsxStr(s4, r4, 1, '予測方向角[rad]（=先頭管方向角×2−後方管方向角）');
+    const nextAzAddr = xlsxFormula(s4, r4, 2, `2*${frontAzAddr}-${rearAzAddr}`, nextAzVal); r4++;
+    xlsxStr(s4, r4, 1, '予測点（KP1から予測方向角へl′進んだ点）'); xlsxStr(s4, r4, 3, 'X'); xlsxStr(s4, r4, 4, 'Y'); r4++;
+    const predXVal = kp1.xVal + pipeLenVal * Math.cos(nextAzVal);
+    const predYVal = kp1.yVal + pipeLenVal * Math.sin(nextAzVal);
+    const predXAddr = xlsxFormula(s4, r4, 3, `${kp1.xAddr}+${pipeLenAddr}*COS(${nextAzAddr})`, predXVal);
+    const predYAddr = xlsxFormula(s4, r4, 4, `${kp1.yAddr}+${pipeLenAddr}*SIN(${nextAzAddr})`, predYVal);
     r4 += 2;
     predKp = { name: '予測点', role: '次の1本', xAddr: predXAddr, yAddr: predYAddr, xVal: predXVal, yVal: predYVal };
   }
