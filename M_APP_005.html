@@ -381,9 +381,33 @@ tr.row-selected{background:#eff6ff}
     </div>
     <!-- 刃口専用 -->
     <div id="bladeRow" style="display:none">
+      <div class="field-row full">
+        <label>周面抵抗の算定式</label>
+        <select id="bladeFoFormula" onchange="onBladeFoFormulaChange()">
+          <option value="kyokai" selected>下水道協会式（2000年版指針・自立地山用）</option>
+          <option value="satoyamamoto">佐藤・山本改定式（実績ベース補正式）</option>
+        </select>
+      </div>
+      <div id="satoyamamotoSoilRow" class="field-row full" style="display:none">
+        <label>土質・自立性区分（α・β・Ca目安を自動入力）</label>
+        <select id="soilSelfSupport" onchange="onSoilSelfSupportChange()">
+          <option value="">-- 選択（自動入力） --</option>
+          <option value="loam">①関東ローム層（地山が自立する）</option>
+          <option value="clay">②粘土（地山が自立しない）</option>
+          <option value="gravel_support">③砂礫（補助工法等で地山が自立する）</option>
+          <option value="gravel_normal">③砂礫（通常の周囲荷重）</option>
+          <option value="gravel_tight">③砂礫（荷重で管が相当締め付けられる）</option>
+          <option value="sand_normal">④砂・シルト（通常の周囲荷重）</option>
+          <option value="sand_tight">④砂・シルト（荷重でひどく締め付けられる）</option>
+        </select>
+      </div>
       <div class="two-col">
-        <div class="field-row"><label>α 摩擦範囲係数</label><input id="soilAlpha" class="mono" type="number" step="0.001" value="0.625" oninput="autoSave()"><span class="unit">—</span></div>
-        <div class="field-row"><label>β 周辺荷重割増</label><input id="soilBeta" class="mono" type="number" step="0.01" value="1.20" oninput="autoSave()"><span class="unit">—</span></div>
+        <div class="field-row"><label>α 係数</label><input id="soilAlpha" class="mono" type="number" step="0.001" value="0.625" oninput="autoSave()"><span class="unit">—</span></div>
+        <div class="field-row"><label>β 係数</label><input id="soilBeta" class="mono" type="number" step="0.01" value="1.20" oninput="autoSave()"><span class="unit">—</span></div>
+      </div>
+      <div class="note-box" style="font-size:11px">
+        <b>下水道協会式</b>: f=α×π×Bc×τa+W×μ′, τa=β×q×μ′+C′（αは式全体、βはqにかかる）。α・βの初期値0.625/1.20は出典未確認の暫定値のため、可能な現場データがあれば見直してください。<br>
+        <b>佐藤・山本改定式</b>: f=π×Bc×τa, τa=β×Ca+σ′×μ′, σ′=α×q+2W/{π²(Bc-t)}（αはqのみ、βはCaのみにかかる点が下水道協会式と異なる）。出典: 佐藤直昭・山本稔「鉄筋コンクリート管を用いた推進工法実績から考えられる推進力算定式」（土木学会年次学術講演会概要集III-237）、望月崇「大中口径管推進工法の推進力算定式の変遷」（月刊推進技術2014年2月号）。土質・自立性区分を選ぶとα・β・Ca（付着力C′欄）に文献の目安値（範囲がある場合は中央値）を自動入力しますが、現場条件に応じて範囲内で手動調整してください（③④はCa=0のためβの値は計算に影響しません）。
       </div>
     </div>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
@@ -1122,7 +1146,7 @@ function showPage(idx) {
 // ══════════════════════════════════════
 let currentMethod = 'blade';
 const METHOD_NOTES = {
-  blade:  '刃口推進（下水道協会式）: fo = α×π×D×τa + W×μ′, Fo = 10×1.32×π×D×N  β=1.20',
+  blade:  '刃口推進: Fo = 10×1.32×π×Bs×N′（共通）。周面抵抗foは下水道協会式／佐藤・山本改定式から選択可（下の「周面抵抗の算定式」欄）',
   slurry: '泥水推進（泥水圧式）: fo = 0.4×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=clip(N×10,150,500) Pw=ΔH×10+20',
   epb:    '泥土圧推進（土圧式）: fo = 0.4×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=主働土圧式 Pw=ΔH×10',
   deinoh: '泥濃推進（礫率ベース式）: fo = f×πD, f={0.2+0.3(G/100)²+2.7(G/100)M²}×10, Fo=(Pe+Pw)×π(Bs/2)²  Pe=N×4.0'
@@ -1136,7 +1160,38 @@ function setMethod(m) {
   document.getElementById('waterRow').style.display = (m !== 'blade') ? '' : 'none';
   document.getElementById('deinohRow').style.display = (m === 'deinoh') ? '' : 'none';
   document.getElementById('bladeRow').style.display = (m === 'blade') ? '' : 'none';
+  if (m === 'blade') document.getElementById('satoyamamotoSoilRow').style.display = (v('bladeFoFormula') === 'satoyamamoto') ? '' : 'none';
   renderJackStages(computeWallBeff()); // ジャッキ配置（推力分散用）は刃口推進工法専用のため、工法切替時に即座に反映する
+  autoSave();
+}
+
+// ══════════════════════════════════════
+//  刃口推進: 周面抵抗の算定式選択
+// ══════════════════════════════════════
+// 出典: 佐藤直昭・山本稔「鉄筋コンクリート管を用いた推進工法実績から考えられる推進力算定式」
+// （土木学会年次学術講演会概要集III-237）／望月崇「大中口径管推進工法の推進力算定式の変遷」
+// （月刊推進技術2014年2月号）。α・Caは範囲がある場合は中央値。Ca(t/m²)→kN/m²は×9.8で換算。
+const SATO_YAMAMOTO_TABLE = {
+  loam:           { alpha: 0,     beta: 1/3, ca: 26.95 },  // 2.5〜3.0 t/m² の中央値2.75×9.8
+  clay:           { alpha: 0.5,   beta: 0.5, ca: 14.7 },   // 1.0〜2.0 t/m² の中央値1.5×9.8
+  gravel_support: { alpha: 0.5,   beta: null, ca: 0 },
+  gravel_normal:  { alpha: 0.875, beta: null, ca: 0 },     // 0.75〜1.0 の中央値
+  gravel_tight:   { alpha: 1.625, beta: null, ca: 0 },     // 1.25〜2.0 の中央値
+  sand_normal:    { alpha: 0.875, beta: null, ca: 0 },     // 0.75〜1.0 の中央値
+  sand_tight:     { alpha: 1.625, beta: null, ca: 0 },     // 1.5〜1.75 の中央値
+};
+function onBladeFoFormulaChange() {
+  const isSY = v('bladeFoFormula') === 'satoyamamoto';
+  document.getElementById('satoyamamotoSoilRow').style.display = isSY ? '' : 'none';
+  autoSave();
+}
+function onSoilSelfSupportChange() {
+  const key = v('soilSelfSupport');
+  const t = SATO_YAMAMOTO_TABLE[key];
+  if (!t) return;
+  setV('soilAlpha', t.alpha);
+  if (t.beta !== null) setV('soilBeta', t.beta);
+  setV('soilAdh', t.ca);
   autoSave();
 }
 
@@ -3304,17 +3359,28 @@ function calcTerzaghi(gamma, phi_deg, C, H, D) {
 //  工法別 Fo・fo 計算
 // ══════════════════════════════════════
 function calcFoFo(method, params) {
-  const { D, W, N, Nprime, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha, beta } = params;
+  const { D, W, N, Nprime, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha, beta, t, foFormula } = params;
   let Fo = 0, fo = 0, foDetail = {};
   if (method === 'blade') {
-    // 下水道協会式: F0=10×1.32π×Bs×N'（先導体外径・貫入抵抗設計値。管外径Dや実測N値ではない）
+    // F0=10×1.32π×Bs×N'（先導体外径・貫入抵抗設計値。管外径Dや実測N値ではない）は両式共通。
     Fo = 10 * 1.32 * Math.PI * Bs * Nprime;
     const phiRad = phi_soil * Math.PI / 180;
-    const sigma = beta * q_total;
     const mu = Math.tan(phiRad / 2);
-    const tau_a = adh + sigma * mu;
-    fo = alpha * Math.PI * D * tau_a + W * mu;
-    foDetail = { sigma, mu, tau_a, C_prime: adh };
+    if (foFormula === 'satoyamamoto') {
+      // 佐藤・山本改定式（実績ベース補正式。1993年、施工実績をクーロンの破壊基準で分析し提案）
+      // τa=β・Ca+σ'・μ', σ'=α・q+2W/{π²(Bc-t)}, F=F0+π・Bc・τa・L
+      // αはq（土圧）のみに、βはCa（付着力）のみにかかる点が下水道協会式（自立地山用）と異なる。
+      const sigma_prime = alpha * q_total + (2 * W) / (Math.pow(Math.PI, 2) * (D - t));
+      const tau_a = beta * adh + sigma_prime * mu;
+      fo = Math.PI * D * tau_a;
+      foDetail = { sigma_prime, mu, tau_a, C_prime: adh, formula: 'satoyamamoto' };
+    } else {
+      // 下水道協会式（2000年版指針・自立地山用）: ta=β・q・μ'+Ca, f=α・π・Bc・ta+W・μ'
+      const sigma = beta * q_total;
+      const tau_a = adh + sigma * mu;
+      fo = alpha * Math.PI * D * tau_a + W * mu;
+      foDetail = { sigma, mu, tau_a, C_prime: adh, formula: 'kyokai' };
+    }
   } else if (method === 'slurry') {
     const Pe = Math.min(Math.max(N * 10, 150), 500);
     const Pw = Math.max(0, (H - GL_wl)) * 10 + 20;
@@ -3468,6 +3534,7 @@ function calculate() {
   const m_gravel = n('soilGravelM');
   const alpha_coef = n('soilAlpha') || 0.625;
   const beta_coef = n('soilBeta') || 1.20;
+  const foFormula = v('bladeFoFormula') || 'kyokai';
 
   if (!D || !lp || !Hmax) {
     errEl.textContent = '必須入力: 外径 D, 有効長 l′, 土被り H最大 を入力してください';
@@ -3500,7 +3567,7 @@ function calculate() {
   function foForSpec(spec, hVal, distFromBP) {
     const zone = resolveSoilAt(distFromBP);
     const tzLocal = calcTerzaghi(zone.gamma, zone.phi, zone.C, hVal, spec.D);
-    const p = { D: spec.D, W: spec.W, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef };
+    const p = { D: spec.D, W: spec.W, t: spec.t, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef, foFormula };
     const r = calcFoFo(currentMethod, p);
     return { ...r, q_total: tzLocal.q_total, zone };
   }
@@ -3931,8 +3998,14 @@ function renderReport(res) {
       <tr><th>せん断抵抗 τa</th><td class="mono">${fmt(foDetail.tau_a,2)}</td><td>kN/m²</td><th>μ′=tan(φ/2)</th><td class="mono">${fmt(foDetail.mu,4)}</td><td>—</td></tr>
       <tr><th colspan="2">推進1m当たり抵抗 f（=fo）</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(fo,3)} kN/m</td></tr>
     </tbody></table>
-    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程</p>
-    ${calcSteps([
+    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程${foDetail.formula==='satoyamamoto' ? '（佐藤・山本改定式）' : foDetail.formula==='kyokai' ? '（下水道協会式・自立地山用）' : ''}</p>
+    ${foDetail.formula==='satoyamamoto' ? calcSteps([
+      stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
+      stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(foDetail.mu,4)),
+      stepRow("σ′ = α・q + 2W/{π²(Bc-t)}", `${fmt(alpha_coef,3)}×${fmt(q_total,2)}+2×${fmt(stdSpec.W,2)}/(π²×(${fmt(stdSpec.D,3)}-${fmt(stdSpec.t,3)}))`, `${fmt(foDetail.sigma_prime,2)} kN/m²`),
+      stepRow('τa = β・Ca + σ′・μ′', `${fmt(beta_coef,3)}×${fmt(adh,1)}+${fmt(foDetail.sigma_prime,2)}×${fmt(foDetail.mu,4)}`, `${fmt(foDetail.tau_a,2)} kN/m²`),
+      stepRow('f = π・Bc・τa', `π×${fmt(stdSpec.D,3)}×${fmt(foDetail.tau_a,2)}`, `<b>${fmt(fo,3)} kN/m</b>`),
+    ]) : calcSteps([
       stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
       stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(foDetail.mu,4)),
       stepRow('τa = β・q・μ′+C′', `${fmt(beta_coef,2)}×${fmt(q_total,2)}×${fmt(foDetail.mu,4)}+${fmt(adh,1)}`, `${fmt(foDetail.tau_a,2)} kN/m²`),
@@ -6932,6 +7005,7 @@ function getProjectData() {
       Hmin: n('soilHmin'), Hmax: n('soilHmax'), adh: n('soilAdh'), water: n('soilWater'),
       gravel: n('soilGravel'), gravelM: n('soilGravelM'),
       alpha: n('soilAlpha'), beta: n('soilBeta'),
+      foFormula: v('bladeFoFormula'), selfSupport: v('soilSelfSupport'),
       zones: soilZones.map(z => ({fromM:z.fromM, toM:z.toM, gamma:z.gamma, phi:z.phi, phiPipe:z.phiPipe, C:z.C, N:z.N, Nprime:z.Nprime, adh:z.adh}))
     },
     alignment: {
@@ -7032,6 +7106,8 @@ function setProjectData(d) {
     setV('soilAdh', d.soil.adh||10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
     setV('soilAlpha', d.soil.alpha||0.625); setV('soilBeta', d.soil.beta||1.20);
+    setV('bladeFoFormula', d.soil.foFormula||'kyokai'); setV('soilSelfSupport', d.soil.selfSupport||'');
+    document.getElementById('satoyamamotoSoilRow').style.display = (v('bladeFoFormula') === 'satoyamamoto') ? '' : 'none';
     soilZoneCounter = 0;
     soilZones = (d.soil.zones || []).map(z => ({
       id: ++soilZoneCounter, fromM: z.fromM||0, toM: z.toM||0,
