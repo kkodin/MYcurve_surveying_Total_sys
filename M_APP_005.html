@@ -3573,8 +3573,10 @@ function calculate() {
   const GL_wl = n('soilWater') || 0;
   const G = n('soilGravel');
   const m_gravel = n('soilGravelM');
-  const alpha_coef = n('soilAlpha') || 0.625;
-  const beta_coef = n('soilBeta') || 1.20;
+  // α・βは0が正当な入力値（関東ローム区分のα=0等）のため、`n()||既定値`は使わない
+  // （0はfalsyなので誤って既定値に化けてしまう）。未入力（空欄）の時だけ既定値を使う。
+  const alpha_coef = v('soilAlpha') === '' ? 0.625 : n('soilAlpha');
+  const beta_coef = v('soilBeta') === '' ? 1.20 : n('soilBeta');
   const foFormula = v('bladeFoFormula') || 'kyokai';
 
   if (!D || !lp || !Hmax) {
@@ -7144,9 +7146,11 @@ function setProjectData(d) {
     const cover = d.soil.cover;
     setV('soilHmin', d.soil.Hmin ?? (cover ? cover * 0.7 : 2.0));
     setV('soilHmax', d.soil.Hmax ?? (cover ?? 5.0));
-    setV('soilAdh', d.soil.adh||10); setV('soilWater', d.soil.water||2);
+    // adh・alpha・betaは0が正当な値（砂礫のCa=0、関東ロームのα=0等）のため、`||`ではなく
+    // `??`で「未保存（旧フォーマット等でキー自体が無い）の時だけ既定値」にする。
+    setV('soilAdh', d.soil.adh ?? 10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
-    setV('soilAlpha', d.soil.alpha||0.625); setV('soilBeta', d.soil.beta||1.20);
+    setV('soilAlpha', d.soil.alpha ?? 0.625); setV('soilBeta', d.soil.beta ?? 1.20);
     setV('bladeFoFormula', d.soil.foFormula||'kyokai'); setV('soilSelfSupport', d.soil.selfSupport||'');
     document.getElementById('satoyamamotoSoilRow').style.display = (v('bladeFoFormula') === 'satoyamamoto') ? '' : 'none';
     soilZoneCounter = 0;
