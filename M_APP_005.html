@@ -327,9 +327,20 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>クッション材厚 S4 [mm]</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
       <div class="field-row"><label>クッション材つぶれ代 [mm]</label><input id="pipeCrush" class="mono" value="0" type="number" step="1" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
       <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
+      <div class="field-row full"><label>推進力伝達材（クッション材）</label>
+        <select id="pipeCushionMaterial" onchange="autoSave();refreshForceIfCalculated()">
+          <option value="">未選択（BC点ごとに自動推奨のみ表示）</option>
+          <option value="PB">PB（パーティクルボード）標準品</option>
+          <option value="fj17">FJリング 1.7倍（プラトー応力21.0N/mm²）</option>
+          <option value="fj20">FJリング 2.0倍W（14.5N/mm²）</option>
+          <option value="fj25">FJリング 2.5倍G（9.5N/mm²）</option>
+          <option value="fj30">FJリング 3.0倍Y（7.5N/mm²）</option>
+        </select>
+      </div>
     </div>
     <div class="note-box" style="font-size:11px">つぶれ代: 推進荷重でクッション材が圧縮された後の厚さ減少分。1本毎の推進力計算表の距離には (クッション材厚－つぶれ代) を管長に加えて反映します。<br>
-    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。</div>
+    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。<br>
+    推進力伝達材: 実際に使用するクッション材を指定すると、BC点ごとにσ_allowとの適合判定（OK/NG）を表示します。未選択のままなら従来通り自動推奨のみ表示します。区間別個別仕様（下）で直線・曲線ごとに異なる材質を指定することもできます。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
@@ -544,14 +555,32 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>発進フレーム前端オフセット [m]</label><input id="launchOffset" class="mono" type="number" step="0.1" value="0.3" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div id="launchCircleIn" style="display:none">
-        <div class="field-row"><label>立坑内径 φ [m]</label><input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="onLaunchCircleDChange()"><span class="unit">m</span></div>
-        <p class="report-note" style="margin:2px 2px 8px">「支圧壁」タブの立坑内径と連動しています。どちらで編集しても両方に反映されます。</p>
         <div class="field-row full"><label>土留め工法</label>
-          <select id="launchCircleCasing" onchange="autoSave()">
+          <select id="launchCircleCasing" onchange="onCircleMaterialChange('launch')">
             <option value="steel">鋼製ケーシング</option>
             <option value="liner">ライナープレート</option>
           </select>
         </div>
+        <div id="launchLinerIn" style="display:none">
+          <div class="two-col">
+            <div class="field-row"><label>呼び径 φ [m]</label>
+              <select id="launchLinerNominalD" class="mono" onchange="updateCircleDerived('launch')"></select>
+            </div>
+            <div class="field-row"><label>板厚 t [mm]</label>
+              <select id="launchLinerThickness" class="mono" onchange="updateCircleDerived('launch')"></select>
+            </div>
+          </div>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログ準拠。板厚は内径には影響しません）。</p>
+        </div>
+        <div id="launchCasingIn" style="display:none">
+          <div class="two-col">
+            <div class="field-row"><label>外径 [m]</label><input id="launchCasingOD" class="mono" type="number" step="0.1" value="3.6" oninput="updateCircleDerived('launch')"><span class="unit">m</span></div>
+            <div class="field-row"><label>板厚 [mm]</label><input id="launchCasingThickness" class="mono" type="number" step="1" value="9" oninput="updateCircleDerived('launch')"><span class="unit">mm</span></div>
+          </div>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝外径−板厚×2。</p>
+        </div>
+        <div class="field-row"><label>立坑内径 φ [m]（自動）</label><input id="launchCircleD" class="mono" type="number" step="0.1" value="3.5" readonly><span class="unit">m</span></div>
+        <p class="report-note" style="margin:2px 2px 8px">「支圧壁」タブの立坑内径と連動しています。</p>
         <div class="field-row"><label>坑口〜ダボ点(BP) 距離 [m]</label><input id="launchCircleOff" class="mono" type="number" step="0.05" value="0.0" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div class="note-box" id="launchShapeNote" style="margin-top:8px"></div>
@@ -607,13 +636,31 @@ tr.row-selected{background:#eff6ff}
         </div>
       </div>
       <div id="arrivalCircleIn" style="display:none">
-        <div class="field-row"><label>立坑内径 φ [m]</label><input id="arrivalCircleD" class="mono" type="number" step="0.1" value="3.0" oninput="autoSave()"><span class="unit">m</span></div>
         <div class="field-row full"><label>土留め工法</label>
-          <select id="arrivalCircleCasing" onchange="autoSave()">
+          <select id="arrivalCircleCasing" onchange="onCircleMaterialChange('arrival')">
             <option value="steel">鋼製ケーシング</option>
             <option value="liner">ライナープレート</option>
           </select>
         </div>
+        <div id="arrivalLinerIn" style="display:none">
+          <div class="two-col">
+            <div class="field-row"><label>呼び径 φ [m]</label>
+              <select id="arrivalLinerNominalD" class="mono" onchange="updateCircleDerived('arrival')"></select>
+            </div>
+            <div class="field-row"><label>板厚 t [mm]</label>
+              <select id="arrivalLinerThickness" class="mono" onchange="updateCircleDerived('arrival')"></select>
+            </div>
+          </div>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログ準拠。板厚は内径には影響しません）。</p>
+        </div>
+        <div id="arrivalCasingIn" style="display:none">
+          <div class="two-col">
+            <div class="field-row"><label>外径 [m]</label><input id="arrivalCasingOD" class="mono" type="number" step="0.1" value="3.1" oninput="updateCircleDerived('arrival')"><span class="unit">m</span></div>
+            <div class="field-row"><label>板厚 [mm]</label><input id="arrivalCasingThickness" class="mono" type="number" step="1" value="9" oninput="updateCircleDerived('arrival')"><span class="unit">mm</span></div>
+          </div>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝外径−板厚×2。</p>
+        </div>
+        <div class="field-row"><label>立坑内径 φ [m]（自動）</label><input id="arrivalCircleD" class="mono" type="number" step="0.1" value="3.0" readonly><span class="unit">m</span></div>
         <div class="field-row"><label>到達芯〜立坑外面 距離 [m]</label><input id="arrivalCircleOff" class="mono" type="number" step="0.05" value="0.0" oninput="autoSave()"><span class="unit">m</span></div>
       </div>
       <div class="note-box" id="arrivalShapeNote" style="margin-top:8px"></div>
@@ -749,21 +796,24 @@ tr.row-selected{background:#eff6ff}
       </div>
     </div>
     <div id="wallCircleInputs" style="display:none;margin-top:8px">
-      <div class="field-row"><label>立坑内径 φ [m]</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" oninput="onWallCircleDChange()"><span class="unit">m</span></div>
-      <p class="report-note" style="margin:2px 2px 8px">「基本情報」タブの発進立坑（円形立坑）の立坑内径と連動しています。どちらで編集しても両方に反映されます。</p>
-      <div class="field-row full">
-        <label>ライナープレート補強リング</label>
-        <div style="display:flex;gap:8px">
-          <button type="button" id="wallRingBtn_off" class="mode-btn active" onclick="setWallRingUse(false)">なし</button>
-          <button type="button" id="wallRingBtn_on" class="mode-btn" onclick="setWallRingUse(true)">あり</button>
+      <div class="field-row"><label>立坑内径 φ [m]（自動）</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" readonly><span class="unit">m</span></div>
+      <p class="report-note" style="margin:2px 2px 8px">「基本情報」タブの発進立坑（円形立坑・土留め工法・呼び径/外径・板厚）から自動計算されます。編集は「基本情報」タブ側で行ってください。</p>
+      <div id="wallRingSection" style="display:none">
+        <div class="field-row full">
+          <label>ライナープレート補強リング</label>
+          <div style="display:flex;gap:8px">
+            <button type="button" id="wallRingBtn_off" class="mode-btn active" onclick="setWallRingUse(false)">なし</button>
+            <button type="button" id="wallRingBtn_on" class="mode-btn" onclick="setWallRingUse(true)">あり</button>
+          </div>
         </div>
+        <div id="wallRingHRow" class="field-row" style="display:none">
+          <label>補強リング H鋼 [mm]</label>
+          <input id="wallRingH" class="mono" type="number" step="5" value="100" oninput="calcBacklock()">
+          <span class="unit">mm</span>
+        </div>
+        <p class="report-note" id="wallRingNote" style="display:none;margin:2px 2px 0">補強リングがある場合、H鋼がライナープレートの波形部分（呼び径−50mm）より大きく内側に突出するため、有効半径を「（ライナープレート呼び径 − H鋼）/ 2」として計算します（通常の呼び径−50mm換算は使いません）。</p>
       </div>
-      <div id="wallRingHRow" class="field-row" style="display:none">
-        <label>補強リング H鋼 [mm]</label>
-        <input id="wallRingH" class="mono" type="number" step="5" value="100" oninput="calcBacklock()">
-        <span class="unit">mm</span>
-      </div>
-      <p class="report-note" id="wallRingNote" style="display:none;margin:2px 2px 0">補強リングがある場合、H鋼がライナープレートの波形部分（呼び径−50mm）より大きく内側に突出するため、有効半径を「（ライナープレート呼び径 − H鋼）/ 2」として計算します（通常の呼び径−50mm換算は使いません）。</p>
+      <p class="report-note" id="wallCasingNote" style="display:none;margin:2px 2px 0">鋼製ケーシングのため、補強リング（ライナープレート専用）は適用されません。</p>
     </div>
   </div>
 
@@ -1366,7 +1416,8 @@ function resolveSpec(override) {
     category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
     D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
     lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
-    S4: n('pipeCushion') || 0, crush: n('pipeCrush') || 0, jointAllowMm: n('pipeJointType') || 40
+    S4: n('pipeCushion') || 0, crush: n('pipeCrush') || 0, jointAllowMm: n('pipeJointType') || 40,
+    cushionMaterial: v('pipeCushionMaterial') || ''
   };
   if (!override || !override.on) return std;
   const category = override.category || std.category;
@@ -1393,7 +1444,8 @@ function resolveSpec(override) {
     lp: override.len > 0 ? override.len : std.lp,
     S4: Number.isFinite(override.cushion) ? override.cushion : std.S4,
     crush: Number.isFinite(override.crush) ? override.crush : std.crush,
-    jointAllowMm: override.jointType || std.jointAllowMm
+    jointAllowMm: override.jointType || std.jointAllowMm,
+    cushionMaterial: override.cushionMaterial || std.cushionMaterial
   };
 }
 
@@ -1410,6 +1462,7 @@ function segSpecFieldsHTML(kind, key, spec) {
     `<option value="${g.value}" ${spec.grade===g.value?'selected':''}>${g.label}</option>`).join('');
   const isSteel = cat === 'steel';
   const jt = spec.jointType || '40';
+  const cm = spec.cushionMaterial || '';
   return `
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:bold;cursor:pointer">
@@ -1454,6 +1507,18 @@ function segSpecFieldsHTML(kind, key, spec) {
             </select>
           </div>
         </div>
+        <div class="two-col">
+          <div class="field-row full"><label>推進力伝達材（クッション材）</label>
+            <select id="${prefix}_cushionMaterial" onchange="onSegSpecChange('${kind}','${key}')">
+              <option value="" ${!cm?'selected':''}>標準を使用</option>
+              <option value="PB" ${cm==='PB'?'selected':''}>PB（パーティクルボード）</option>
+              <option value="fj17" ${cm==='fj17'?'selected':''}>FJ 1.7倍</option>
+              <option value="fj20" ${cm==='fj20'?'selected':''}>FJ 2.0倍W</option>
+              <option value="fj25" ${cm==='fj25'?'selected':''}>FJ 2.5倍G</option>
+              <option value="fj30" ${cm==='fj30'?'selected':''}>FJ 3.0倍Y</option>
+            </select>
+          </div>
+        </div>
       </div>
     </div>`;
 }
@@ -1489,6 +1554,7 @@ function onSegSpecToggle(kind, key) {
     spec.cushion = std.S4;
     spec.crush = std.crush;
     spec.jointType = String(std.jointAllowMm);
+    spec.cushionMaterial = std.cushionMaterial;
     if (std.category === 'steel') {
       spec.steelD = std.D; spec.steelInner = std.Di; spec.steelThick = std.t;
       spec.steelW = std.W; spec.steelFa = std.Fa; spec.steelPext = std.Pext;
@@ -1522,6 +1588,7 @@ function onSegSpecChange(kind, key) {
   const crushEl = g('_crush'); const crushVal = crushEl ? parseFloat(crushEl.value) : NaN;
   spec.crush = Number.isFinite(crushVal) ? crushVal : null;
   if (g('_jointType')) spec.jointType = g('_jointType').value;
+  if (g('_cushionMaterial')) spec.cushionMaterial = g('_cushionMaterial').value;
   calcAlignment();
   refreshForceIfCalculated();
   autoSave();
@@ -3255,31 +3322,23 @@ function setShaftType(side, type, el) {
     showFor('launchRectIn', type === 'rect' || type === 'oval');
     showFor('launchCircleIn', type === 'circle');
     // 支圧壁は発進立坑内に構築するため、立坑種別が変わったら支圧壁タブの立坑種別チップも
-    // 追従させる（立坑内径の同期＝onLaunchCircleDChange/onWallCircleDChangeと同じ理由。
-    // ユーザー報告: 発進立坑を矩形に変えても支圧壁タブが円形のまま残り不整合になっていた）。
+    // 追従させる（ユーザー報告: 発進立坑を矩形に変えても支圧壁タブが円形のまま残り不整合になっていた）。
     // 支圧壁タブ側のチップは変更後も独立してクリック可能なので、手動で個別に上書きもできる。
-    const wallEl = document.querySelector(`#wallShaftChips [data-val="${type}"]`);
-    if (wallEl && typeof setWallShaft === 'function') setWallShaft(type, wallEl);
+    if (type === 'circle') {
+      // 円形の場合、支圧壁タブのチップは「ライナー=circle／鋼製ケーシング=casing」と土留め工法に
+      // 連動させる必要があるため、onCircleMaterialChange('launch')にまとめて行わせる（65章）。
+      onCircleMaterialChange('launch');
+    } else {
+      const wallEl = document.querySelector(`#wallShaftChips [data-val="${type}"]`);
+      if (wallEl && typeof setWallShaft === 'function') setWallShaft(type, wallEl);
+    }
   } else {
     showFor('arrivalManholeIn', type === 'manhole');
     showFor('arrivalRectIn', type === 'rect' || type === 'oval');
     showFor('arrivalCircleIn', type === 'circle');
+    if (type === 'circle') onCircleMaterialChange('arrival');
   }
   updateGroundLen();
-  autoSave();
-}
-
-// 「基本情報」タブの発進立坑（円形立坑内径 launchCircleD）と「支圧壁」タブの立坑内径
-// （wallCircleD）は同じ立坑を指すため、どちらかを編集したらもう片方にも反映する
-// （ユーザー指摘: 別々に入力すると立坑径がタブ間で食い違ってしまう）。
-function onLaunchCircleDChange() {
-  setV('wallCircleD', v('launchCircleD'));
-  autoSave();
-  calcBacklock();
-}
-function onWallCircleDChange() {
-  setV('launchCircleD', v('wallCircleD'));
-  calcBacklock();
   autoSave();
 }
 
@@ -3529,6 +3588,28 @@ function selectCushionMaterial(sigmaReq, sigmaAllow) {
   return { material:'NG', label:'規格品では対応不可', note:'最も柔らかいFJ 3.0倍Y（プラトー応力約7.5N/mm²）でも許容応力度を上回ります。特殊クッション材や多重積層等の個別検討が必要です。' };
 }
 
+// 67章: 「推進力伝達材」— 従来は上のselectCushionMaterial()による自動推奨のみだったが、
+// ユーザーが実際に使用する材質を管仕様タブ（区間別個別仕様含む）で選択できるようにし、
+// 選んだ材質がσ_allowに適合するかどうかを判定する。選択が無ければ従来通り自動推奨のみ表示する。
+const CUSHION_MATERIAL_LIST = [
+  { key:'PB', label:'PB（パーティクルボード）', plateau: null }, // 無潰れ（剛体接触）想定、応力-ひずみデータ未取得
+  ...FJ_GRADES
+];
+function cushionMaterialInfo(key) {
+  return CUSHION_MATERIAL_LIST.find(m => m.key === key) || null;
+}
+// materialKey: ユーザーが選択した材質キー（'PB'|'fj17'|'fj20'|'fj25'|'fj30'）
+function evaluateCushionMaterial(materialKey, sigmaReq, sigmaAllow) {
+  const info = cushionMaterialInfo(materialKey);
+  if (!info) return null;
+  if (!(sigmaAllow > 0)) return { material: info.key, label: info.label, ok: null, note: 'σ_allowを入力すると判定できます。' };
+  const ok = info.plateau == null ? (sigmaReq <= sigmaAllow) : (info.plateau <= sigmaAllow);
+  const note = info.plateau == null
+    ? (ok ? '無潰れ想定でも許容応力度以内です。' : '無潰れ想定では許容応力度を超えます。FJリングへの変更を検討してください。')
+    : (ok ? `プラトー応力${info.plateau}N/mm²は許容応力度以内です。` : `プラトー応力${info.plateau}N/mm²が許容応力度を超えます。より柔らかいグレードへの変更を検討してください。`);
+  return { material: info.key, label: info.label, ok, note };
+}
+
 // ══════════════════════════════════════
 //  外圧耐荷力 Mr/M
 // ══════════════════════════════════════
@@ -3767,7 +3848,8 @@ function calculate() {
     const A_mm2 = Math.PI / 4 * (Math.pow(spec.D * 1000, 2) - Math.pow(spec.Di * 1000, 2));
     const sigmaReq = A_mm2 > 0 ? (bc.F * 1000) / A_mm2 : 0;
     const sel = selectCushionMaterial(sigmaReq, sigmaAllowCushion);
-    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel };
+    const chosen = spec.cushionMaterial ? evaluateCushionMaterial(spec.cushionMaterial, sigmaReq, sigmaAllowCushion) : null;
+    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel, chosen };
   });
 
   lastCalcResult = {
@@ -3902,17 +3984,21 @@ function renderResults(res) {
   if (cushionResults && cushionResults.length > 0) {
     cushionCard.style.display = '';
     const cRows = cushionResults.map(c => {
-      const rowNG = c.sel.material === 'NG';
+      const rowNG = c.sel.material === 'NG' || c.chosen?.ok === false;
       const matPill = c.sel.material === 'unknown' ? '<span class="pill">未入力</span>'
         : c.sel.material === 'NG' ? '<span class="pill ng">対応不可</span>'
         : `<span class="pill ok">${c.sel.label}</span>`;
+      const chosenPill = !c.chosen ? '<span class="pill" style="font-size:10px">未選択</span>'
+        : c.chosen.ok == null ? `<span class="pill" style="font-size:10px">${c.chosen.label}</span>`
+        : `<span class="pill ${c.chosen.ok?'ok':'ng'}" style="font-size:10px">${c.chosen.label} ${c.chosen.ok?'OK':'NG'}</span>`;
+      const note = c.chosen ? c.chosen.note : c.sel.note;
       return `<tr class="${rowNG?'row-ng':''}"><td>${c.name}</td><td class="mono">${c.FBC.toFixed(0)}</td>
-        <td class="mono">${c.sigmaReq.toFixed(2)}</td><td>${matPill}</td>
-        <td class="left" style="font-size:11px">${c.sel.note}</td></tr>`;
+        <td class="mono">${c.sigmaReq.toFixed(2)}</td><td>${matPill}</td><td>${chosenPill}</td>
+        <td class="left" style="font-size:11px">${note}</td></tr>`;
     }).join('');
     document.getElementById('cushionTable').innerHTML =
-      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>σ_req(N/mm²)</th><th>推奨材質</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
-      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="5" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`);
+      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>σ_req(N/mm²)</th><th>推奨材質</th><th>指定材質の判定</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
+      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="6" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`);
   } else {
     cushionCard.style.display = 'none';
   }
@@ -5529,6 +5615,72 @@ let jackStageWidths = []; // 段ごとのジャッキ幅（推進中央線から
 let jackStageHeights = []; // 段ごとの設置高さ H（定規下面を0とした、その段のジャッキ底面の高さ）[m]（インデックス0=1段目）
 
 // ══════════════════════════════════════
+//  円形立坑（発進/到達）土留め工法 — ライナープレート／鋼製ケーシング（65章）
+//  ライナープレート: 呼び径φを第一産商カタログの規格値から選び、内径＝呼び径−50mm
+//  （片側25mm×2、ボルト孔芯からコルゲート波形内側までの離れ。板厚2.7〜7.0mmは内径に無関係の
+//  固定オフセットで、断面性能（強度）参照用として別途保持する）。
+//  鋼製ケーシング: 外径・板厚は現場ごとに異なり規格表が無いため自由入力。内径＝外径−板厚×2。
+// ══════════════════════════════════════
+const LINER_NOMINAL_DIAMETERS = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]; // m（呼称径、第一産商カタログ準拠）
+const LINER_THICKNESSES = [2.7, 3.2, 4.0, 4.5, 5.3, 6.0, 7.0]; // mm（板厚、同カタログ準拠）
+const CASING_DEFAULT_THICKNESS_MM = 9; // 鋼製ケーシングの板厚 既定値（旧保存データの逆算にも使用）
+function nearestFromList(val, list) {
+  return list.reduce((best, x) => Math.abs(x - val) < Math.abs(best - val) ? x : best, list[0]);
+}
+
+function populateCircleMaterialSelects() {
+  ['launch', 'arrival'].forEach(side => {
+    const dSel = document.getElementById(side + 'LinerNominalD');
+    if (dSel && !dSel.options.length) {
+      dSel.innerHTML = LINER_NOMINAL_DIAMETERS.map(d => `<option value="${d}">φ${d.toFixed(1)}m</option>`).join('');
+    }
+    const tSel = document.getElementById(side + 'LinerThickness');
+    if (tSel && !tSel.options.length) {
+      tSel.innerHTML = LINER_THICKNESSES.map(t => `<option value="${t}">${t.toFixed(1)}mm</option>`).join('');
+    }
+  });
+}
+
+// 土留め工法（ライナープレート/鋼製ケーシング）選択に応じて入力欄の表示を切替え、内径を再計算する。
+// side: 'launch'|'arrival'
+function onCircleMaterialChange(side) {
+  const mat = v(side + 'CircleCasing'); // 'liner'|'steel'
+  const showFor = (id, vis) => { const e = document.getElementById(id); if (e) e.style.display = vis ? '' : 'none'; };
+  showFor(side + 'LinerIn', mat === 'liner');
+  showFor(side + 'CasingIn', mat === 'steel');
+  updateCircleDerived(side);
+  if (side === 'launch') {
+    // 支圧壁は発進立坑内に構築するため、土留め工法（ライナー/ケーシング）が変わったら
+    // 支圧壁タブの立坑種別チップ（circle=ライナー、casing=鋼製ケーシング）も追従させる
+    // （setShaftTypeの立坑種別チップ連動＝64章と同じ理由）。
+    const wallVal = mat === 'liner' ? 'circle' : 'casing';
+    const wallEl = document.querySelector(`#wallShaftChips [data-val="${wallVal}"]`);
+    if (wallEl && typeof setWallShaft === 'function') setWallShaft(wallVal, wallEl);
+  }
+}
+
+// 選択済みの材料・寸法から内径を計算し、<side>CircleD（読取専用の表示欄）に反映する。
+// launch側はさらに支圧壁タブのwallCircleDにも同期する（従来のonLaunchCircleDChangeと同じ理由）。
+function updateCircleDerived(side) {
+  const mat = v(side + 'CircleCasing');
+  let d;
+  if (mat === 'liner') {
+    const nominal = n(side + 'LinerNominalD') || LINER_NOMINAL_DIAMETERS[0];
+    d = Math.max(0, nominal - 0.05);
+  } else {
+    const od = n(side + 'CasingOD') || 0;
+    const t = (n(side + 'CasingThickness') || 0) / 1000;
+    d = Math.max(0, od - 2 * t);
+  }
+  setV(side + 'CircleD', Math.round(d * 1000) / 1000);
+  if (side === 'launch') {
+    setV('wallCircleD', v('launchCircleD'));
+    calcBacklock();
+  }
+  autoSave();
+}
+
+// ══════════════════════════════════════
 //  バックロック（推進工法用分割式プレキャスト支圧壁、秩父コンクリート工業「バックロック」カタログ準拠）
 //  廃材が出ない・工期短縮等のメリットから、支圧壁は現場打ちではなくバックロックを
 //  使用する前提で計算する（ユーザー確認済み方針）。
@@ -5652,6 +5804,80 @@ function refreshBackrockModelOptions() {
 // wallBeffInfoはこの時点でまだ選定結果を反映していない値のため、選定後にcomputeWallBeff()を
 // もう一度呼び直して最終的なBeffを得る（テーパー形はwallThicknessを書き換えるため、この
 // 関数を呼んだ後でcomputeWallBeff()を呼び直す必要がある＝calcBacklock()側で行う）。
+// 選定/手動指定されたバックロック型番の寸法図（66章）。スクウェア形=矩形ブロック（幅W×厚さT×
+// 高さH/ピース）、テーパー形=台形ブロック（前面＝推進管側の広い辺W1、背面＝ライナー側の狭い辺W2、
+// 厚さT、高さH/ピース。47.11章のcomputeBackrockPlacement()と同じ「前面/背面」呼称に統一し、
+// 既存パラグラフの「幅1(下)/幅2(上)」という曖昧な呼称と混同しないようにする）。
+// 41章の方針（キャンバス/SVGには図形と最小限の寸法数値だけを描き、説明はHTML側に出す）に倣う。
+function dimLineH(x1, x2, y, label) {
+  const midX = (x1 + x2) / 2;
+  return `
+    <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="#64748b" stroke-width="1"/>
+    <line x1="${x1}" y1="${y - 4}" x2="${x1}" y2="${y + 4}" stroke="#64748b" stroke-width="1"/>
+    <line x1="${x2}" y1="${y - 4}" x2="${x2}" y2="${y + 4}" stroke="#64748b" stroke-width="1"/>
+    <text x="${midX}" y="${y - 6}" text-anchor="middle" font-size="11" fill="#334155">${label}</text>`;
+}
+function dimLineV(y1, y2, x, label) {
+  const midY = (y1 + y2) / 2;
+  return `
+    <line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="#64748b" stroke-width="1"/>
+    <line x1="${x - 4}" y1="${y1}" x2="${x + 4}" y2="${y1}" stroke="#64748b" stroke-width="1"/>
+    <line x1="${x - 4}" y1="${y2}" x2="${x + 4}" y2="${y2}" stroke="#64748b" stroke-width="1"/>
+    <text x="${x + 8}" y="${midY + 4}" text-anchor="start" font-size="11" fill="#334155">${label}</text>`;
+}
+function renderBackrockDimensionSVG(model, type) {
+  const isTaper = type === 'taper';
+  const Wfront = isTaper ? model.W1 : model.W; // 前面幅（推進管側）
+  const Wback = isTaper ? model.W2 : model.W;  // 背面幅（ライナー側。スクウェア形は前面=背面）
+  const T = model.T, H = model.H;
+
+  // 平面図（上から見た図）: 前面(推進管側)を下、背面(ライナー側)を上に描く
+  const pW = 300, pH = 150, pPad = 34;
+  const maxW = Math.max(Wfront, Wback);
+  const scaleP = Math.min((pW - pPad * 2) / maxW, (pH - pPad * 2 - 20) / T);
+  const cx = pW / 2;
+  const hf = (Wfront * scaleP) / 2, hb = (Wback * scaleP) / 2;
+  const tPx = T * scaleP;
+  const yFront = pH - pPad, yBack = yFront - tPx;
+  const shape = isTaper
+    ? `<polygon points="${cx-hf},${yFront} ${cx+hf},${yFront} ${cx+hb},${yBack} ${cx-hb},${yBack}" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>`
+    : `<rect x="${cx-hf}" y="${yBack}" width="${hf*2}" height="${tPx}" fill="#dbeafe" stroke="#2563eb" stroke-width="2"/>`;
+  const planSVG = `
+    <svg viewBox="0 0 ${pW} ${pH}" style="width:100%;max-width:340px;height:auto;display:block;margin:0 auto">
+      ${shape}
+      ${dimLineH(cx-hf, cx+hf, yFront+18, `前面(推進管側) ${Wfront.toFixed(2)}m`)}
+      ${isTaper ? dimLineH(cx-hb, cx+hb, yBack-10, `背面(ライナー側) ${Wback.toFixed(2)}m`) : ''}
+      ${dimLineV(yBack, yFront, cx+Math.max(hf,hb)+14, `厚さT ${T.toFixed(2)}m`)}
+    </svg>`;
+
+  // 正面図（推進方向から見た図）: 前面幅Wfront × 1ピース高さH
+  const eW = 220, eH = 120, ePad = 30;
+  const scaleE = Math.min((eW - ePad * 2) / Wfront, (eH - ePad * 2) / H);
+  const ecx = eW / 2;
+  const ehw = (Wfront * scaleE) / 2, ehH = H * scaleE;
+  const eyBot = eH - ePad, eyTop = eyBot - ehH;
+  const elevSVG = `
+    <svg viewBox="0 0 ${eW} ${eH}" style="width:100%;max-width:260px;height:auto;display:block;margin:0 auto">
+      <rect x="${ecx-ehw}" y="${eyTop}" width="${ehw*2}" height="${ehH}" fill="#fef3c7" stroke="#d97706" stroke-width="2"/>
+      ${dimLineH(ecx-ehw, ecx+ehw, eyBot+18, `${Wfront.toFixed(2)}m`)}
+      ${dimLineV(eyTop, eyBot, ecx+ehw+14, `H ${H.toFixed(2)}m/ピース`)}
+    </svg>`;
+
+  return `
+    <div class="two-col" style="margin-top:8px;align-items:start">
+      <div>
+        <p class="report-note" style="text-align:center;margin:0 0 2px;font-weight:600">平面図（上から見た図）</p>
+        ${planSVG}
+      </div>
+      <div>
+        <p class="report-note" style="text-align:center;margin:0 0 2px;font-weight:600">正面図（推進方向から見た図）</p>
+        ${elevSVG}
+      </div>
+    </div>
+    <p class="report-note" style="margin:6px 2px 0">${model.name}: ${isTaper ? `前面(推進管側)幅W1=${Wfront.toFixed(2)}m・背面(ライナー側)幅W2=${Wback.toFixed(2)}m` : `幅W=${Wfront.toFixed(2)}m`}・厚さT=${T.toFixed(2)}m・高さH=${H.toFixed(2)}m/ピース。${isTaper ? '背面(ライナー側)が前面より狭い台形のため、円形立坑の間詰めコンクリート量を削減できます。' : '前面・背面とも同じ幅の直方体ブロックです。'}</p>
+  `;
+}
+
 function applyBackrockSelection() {
   const el = document.getElementById('backrockResult');
   if (!el) return null;
@@ -5693,6 +5919,7 @@ function applyBackrockSelection() {
       <div class="metric-card"><div class="metric-label">総重量（参考）</div><div class="metric-value">${(model.weight * pieces).toFixed(1)}</div><div class="metric-sub">t</div></div>
     </div>
     <p class="report-note">対象標準推進管 φ${model.diaMin}〜φ${model.diaMax}mm（呼び径φ${dia}mm）${type === 'square' ? `　幅${model.W}m・厚さ${model.T}m` : `　幅1(下)${model.W1}m・幅2(上)${model.W2}m・厚さ${model.T}m`}${!manualModel && outOfRange ? '　<span style="color:var(--ng);font-weight:700">⚠ この呼び径はカタログの対象範囲外です。メーカーに確認してください。</span>' : ''}${outsideOwnRange ? `　<span style="color:var(--warn);font-weight:700">⚠ 呼び径φ${dia}mmは${model.name}の対象範囲外での採用です。下の③④照査で安全性を個別に確認してください（実例: BR-SST４台1350計算書.pdf も同様の範囲外採用）。</span>` : ''}</p>
+    ${renderBackrockDimensionSVG(model, type)}
   `;
 
   if (type === 'square' && isCircleShaftNow) {
@@ -5821,6 +6048,11 @@ function setWallShaft(type, el) {
   el.classList.add('active');
   document.getElementById('wallRectInputs').style.display = (type === 'rect' || type === 'open' || type === 'oval') ? '' : 'none';
   document.getElementById('wallCircleInputs').style.display = (type === 'circle' || type === 'casing') ? '' : 'none';
+  // 補強リングはライナープレート専用のため、鋼製ケーシング（casing）では非表示にする（65章）
+  const ringSectionEl = document.getElementById('wallRingSection');
+  if (ringSectionEl) ringSectionEl.style.display = (type === 'circle') ? '' : 'none';
+  const casingNoteEl = document.getElementById('wallCasingNote');
+  if (casingNoteEl) casingNoteEl.style.display = (type === 'casing') ? '' : 'none';
   const notes = {
     rect: '矩形立坑: 底版一体型・独立型どちらも可。立坑内法幅が支圧壁最大幅の制約となります。',
     circle: '円形立坑: 弦長が支圧壁最大幅の制約となります。管中心と立坑中心を合わせてください。',
@@ -6245,21 +6477,22 @@ function requiredWorkDepth() {
 }
 
 // 有効幅（立坑制約）の算出。calcBacklock()と寸法図（平面・断面）の両方から参照する共通ロジック
-// 円形立坑（circle/casing）の場合、支圧壁は矩形ではなく「ライナープレート内側の円」を
+// 円形立坑（circle/casing）の場合、支圧壁は矩形ではなく「立坑内径の円」を
 // 弦（Beff）で切り取った円弓形（弓形）になる（ユーザー提供の参考図で確認済み）。
-// ライナープレート内側径 = 立坑径（呼び径＝ボルト孔芯径）− 50mm。
-// 50mmは板厚（2.7〜7.0mmの数種類あり）とは無関係の固定値で、ボルト孔芯から波形（コルゲート）
-// 内側までの離れ25mm×2辺分。波形加工で強度を持たせる構造のため、有効内径は波形の内側同士の
-// 対面距離で決まる（第一産商カタログ準拠）。
+// wallCircleDは「基本情報」タブの発進立坑（土留め工法・呼び径/外径・板厚）から既に
+// 内径として導出済みの値（65章。ライナー: 呼び径−50mm／ケーシング: 外径−板厚×2）なので、
+// ここでは追加の差引きはしない（旧: 呼び径をここで直接入力させ、ここで一律−50mmしていた）。
 // 弦Beffに対する弓形の最大厚み（矢高、サジッタ）= R − √(R² − (Beff/2)²)。
 function computeWallBeff() {
   const Bw = n('wallBw');
   if (wallShaftType === 'circle' || wallShaftType === 'casing') {
-    const pitD = n('wallCircleD');
-    const linerD = Math.max(0, pitD - 0.05);
+    const linerD = Math.max(0, n('wallCircleD'));
     const maxBw = linerD;
     const R = linerD / 2;
-    const R_eff = effectiveLinerRadius(pitD, R); // 補強リング分を差し引いた有効半径（38章／47.12章）
+    // 補強リング式(R_eff=(呼び径−H鋼)/2、38章／47.12章)はライナープレートの呼び径基準のため、
+    // 呼び径＝内径+50mmを逆算して渡す（内径＝呼び径−50mmの関係を使うだけで数値的には従来と同じ）。
+    // 鋼製ケーシング（casing）には呼び径の概念も補強リングも無いため、常にR_eff=Rとする。
+    const R_eff = (wallShaftType === 'circle') ? effectiveLinerRadius(linerD + 0.05, R) : R;
     const offset = n('wallCenterOffset') || 0;
     const type = effectiveBackrockType();
     if (!backrockUse) {
@@ -7045,7 +7278,7 @@ function getProjectData() {
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
       jointType: n('pipeJointType'), cushion: n('pipeCushion'), crush: n('pipeCrush'),
-      cushionSigmaAllow: n('pipeCushionSigmaAllow'),
+      cushionSigmaAllow: n('pipeCushionSigmaAllow'), cushionMaterial: v('pipeCushionMaterial'),
       Pext: n('pipePext'), Bs: n('pipeBs')
     },
     soil: {
@@ -7068,10 +7301,14 @@ function getProjectData() {
       launchType: shaftTypes.launch, launchW: n('launchW'), launchL: n('launchLdim'),
       launchOffset: n('launchOffset'), launchCircleD: n('launchCircleD'),
       launchCircleOff: n('launchCircleOff'), launchCircleCasing: v('launchCircleCasing'),
+      launchLinerNominalD: n('launchLinerNominalD'), launchLinerThickness: n('launchLinerThickness'),
+      launchCasingOD: n('launchCasingOD'), launchCasingThickness: n('launchCasingThickness'),
       arrivalMode: shaftModes.arrival, arrivalDirect: n('arrivalDirect'),
       arrivalType: shaftTypes.arrival, manholeSize: v('manholeSize'), manholeGrade: v('manholeGrade'),
       arrivalW: n('arrivalW'), arrivalL: n('arrivalLdim'), arrivalCircleD: n('arrivalCircleD'),
-      arrivalCircleOff: n('arrivalCircleOff'), arrivalCircleCasing: v('arrivalCircleCasing')
+      arrivalCircleOff: n('arrivalCircleOff'), arrivalCircleCasing: v('arrivalCircleCasing'),
+      arrivalLinerNominalD: n('arrivalLinerNominalD'), arrivalLinerThickness: n('arrivalLinerThickness'),
+      arrivalCasingOD: n('arrivalCasingOD'), arrivalCasingThickness: n('arrivalCasingThickness')
     },
     wall: {
       shaftType: wallShaftType, pitW: n('wallPitW'), pitL: n('wallPitL'),
@@ -7131,6 +7368,7 @@ function setProjectData(d) {
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush);
     if (d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
+    setV('pipeCushionMaterial', d.pipe.cushionMaterial || '');
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
     // 継手種別: 旧フォーマットはJC/JB/JA表記、新フォーマットは許容mm値(60/40/30)
     const jointMap = {'JC':'60','JB':'40','JA':'30','60':'60','40':'40','30':'30'};
@@ -7245,6 +7483,18 @@ function setProjectData(d) {
     setV('launchOffset', sh.launchOffset||0.3); setV('launchCircleD', sh.launchCircleD||3.5);
     setV('launchCircleOff', sh.launchCircleOff||0);
     setV('launchCircleCasing', sh.launchCircleCasing||'steel');
+    // 65章: 土留め工法別の呼び径/板厚・外径/板厚。旧保存データ（材料内訳が無く、立坑内径のみ
+    // 保存されていた頃のもの＝当時の内部式は材料によらず一律「呼び径-50mm」だった）は、
+    // その立坑内径がそのまま呼び径だったとみなしてカタログ値に丸め込む（ライナー側）か、
+    // 板厚9mm仮定でOD=内径+18mmに逆算する（ケーシング側）ことで、読込直後の内径が
+    // 旧データの計算結果と数値的に一致するようにする。
+    {
+      const legacyLaunchD = sh.launchCircleD || 3.5;
+      setV('launchLinerNominalD', sh.launchLinerNominalD != null ? nearestFromList(sh.launchLinerNominalD, LINER_NOMINAL_DIAMETERS) : nearestFromList(legacyLaunchD, LINER_NOMINAL_DIAMETERS));
+      setV('launchLinerThickness', sh.launchLinerThickness != null ? nearestFromList(sh.launchLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[1]);
+      setV('launchCasingOD', sh.launchCasingOD != null ? sh.launchCasingOD : (legacyLaunchD + 2 * CASING_DEFAULT_THICKNESS_MM / 1000));
+      setV('launchCasingThickness', sh.launchCasingThickness != null ? sh.launchCasingThickness : CASING_DEFAULT_THICKNESS_MM);
+    }
     setV('arrivalDirect', sh.arrivalDirect||0.8);
     setV('manholeSize', sh.manholeSize||1.2);
     setV('manholeGrade', sh.manholeGrade||'1');
@@ -7252,6 +7502,13 @@ function setProjectData(d) {
     setV('arrivalCircleD', sh.arrivalCircleD||3);
     setV('arrivalCircleOff', sh.arrivalCircleOff||0);
     setV('arrivalCircleCasing', sh.arrivalCircleCasing||'steel');
+    {
+      const legacyArrivalD = sh.arrivalCircleD || 3;
+      setV('arrivalLinerNominalD', sh.arrivalLinerNominalD != null ? nearestFromList(sh.arrivalLinerNominalD, LINER_NOMINAL_DIAMETERS) : nearestFromList(legacyArrivalD, LINER_NOMINAL_DIAMETERS));
+      setV('arrivalLinerThickness', sh.arrivalLinerThickness != null ? nearestFromList(sh.arrivalLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[1]);
+      setV('arrivalCasingOD', sh.arrivalCasingOD != null ? sh.arrivalCasingOD : (legacyArrivalD + 2 * CASING_DEFAULT_THICKNESS_MM / 1000));
+      setV('arrivalCasingThickness', sh.arrivalCasingThickness != null ? sh.arrivalCasingThickness : CASING_DEFAULT_THICKNESS_MM);
+    }
     setShaftMode('launch', sh.launchMode||'direct');
     setShaftMode('arrival', sh.arrivalMode||'direct');
     // shaftTypes.launch/arrivalを直接書き換えるだけでは、選択中チップのハイライトや
@@ -7393,6 +7650,7 @@ function updateProjectSummary() {
 //  初期化
 // ══════════════════════════════════════
 (function init() {
+  populateCircleMaterialSelects(); // 円形立坑（発進/到達）のライナー呼び径・板厚セレクトの選択肢を準備（65章）
   // localStorage から復元
   const saved = localStorage.getItem('curvedJackingProjectDraft') || localStorage.getItem('curvedJackingProject');
   if (saved) {
