@@ -325,9 +325,11 @@ tr.row-selected{background:#eff6ff}
         </select>
       </div>
       <div class="field-row"><label>クッション材厚 S4 [mm]（自動）</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" readonly><span class="unit">mm</span></div>
+      <div class="field-row"><label>つぶれ代 [mm]（手入力）</label><input id="pipeCrush" class="mono" value="0" type="number" step="0.5" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
       <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
     </div>
     <div class="note-box" style="font-size:11px">S4: 下の「詳細: 推進力伝達材の層構成」カードで設定します（パルリング・角度帯別クッション層の合計厚さを「S4に反映」ボタンで反映）。ここでは直接編集できません。<br>
+    つぶれ代: 荷重でクッション材が圧縮された後の厚み減少分（実測・実績値を手入力）。1本毎推進力計算表のグラフ距離補正、および管本数・目地仕様集計の直線区間残留開口S1（＝S4−つぶれ代）に使います。未入力（0）なら無圧縮想定＝安全側の従来動作のままです。区間ごとに異なる場合は下の各直線・曲線カードの個別仕様で上書きできます。<br>
     σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。この判定は材質の圧縮強度に基づくものであり、S4の厚さそのものとは独立です。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
@@ -341,12 +343,10 @@ tr.row-selected{background:#eff6ff}
   </div>
 
   <div class="card accordion">
-    <div class="card-title" onclick="toggleAccordion(this)">🧊 詳細: 推進力伝達材の層構成（パルリング・角度帯別クッション層）</div>
+    <div class="card-title" onclick="toggleAccordion(this)">🧊 詳細: 推進力伝達材（パルリング・クッション層の初期値）</div>
     <div class="note-box" style="font-size:11px;margin-bottom:8px">
-      推進管には標準でパルリング（PB製、1枚）が付属します。目地の開き量は周方向の角度帯によって異なるため、パルリングに加えて角度帯ごとにクッション層を追加できます。層ごとに「分割数」（リングを何等分した切片で構成するか）と「枚数」（そのうち実際に据え付ける切片数。分割数と同じなら全周、少なければ開きが大きい側だけの部分施工）を指定します（参考: ご提供のExcel資料の「取付図と数量」シート）。クッション材厚S4はここで設定した合計厚さを「S4に反映」ボタンで反映する形に一本化しました（推進管仕様カードの直接入力欄は廃止）。
+      74章: パルリング（標準付属）の有無・厚さと、追加のクッション層（1〜4層目）は、実際には**曲線ごとに個別に指定**します（「線形・推進区間」の各曲線ブロック内）。直線区間は自動的に「直前の曲線（発進立坑側）と同じ仕様」を引き継ぎます（第1直線＝どの曲線も通過していない区間は、下記の初期値のみが使われます）。ここで設定する値は、新しく曲線を追加したときの初期値、および第1直線（曲線通過前）で使う基準値です。クッション材厚S4はもう手動反映不要で、各曲線・直線ごとに自動計算されます。
     </div>
-    <div id="cushionAngleDiagram"></div>
-    <p class="report-note" style="margin:6px 2px">「0～±22.5°」等は、管端を推進方向から見た正面図での据付位置（周方向）を表します。中心Y軸（曲線の曲げ平面）を基準に、目地が最も開く側を0°として左右に90°まで（計180°）を5帯に区切ります。反対側の90°～180°（内側・圧縮側）は目地が開かないためクッション不要です。※「0°=外側」の対応は、63〜69章で確認済みの「外側開口＞内側開口」の関係から妥当と判断した解釈で、一次資料に明記された図はありません。現場の実際の取付方向は必ず施工要領書・メーカー図で確認してください。</p>
     <div class="field-row full"><label>推進力伝達材（クッション材の材質）</label>
       <select id="pipeCushionMaterial" onchange="autoSave();refreshForceIfCalculated()">
         <option value="">未選択（BC点ごとに自動推奨のみ表示）</option>
@@ -359,19 +359,18 @@ tr.row-selected{background:#eff6ff}
     </div>
     <p class="report-note" style="margin:2px 2px 8px">実際に使用するクッション材を指定すると、BC点ごとにσ_allowとの適合判定（OK/NG）を推進力タブに表示します（未選択なら自動推奨のみ）。区間別個別仕様（下）で直線・曲線ごとに異なる材質を指定することもできます。</p>
     <div class="field-row full">
-      <label>パルリング（標準付属）</label>
-      <div style="display:flex;gap:8px">
+      <label>パルリング（標準付属・初期値）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="pulRingIcon" style="display:inline-flex;transition:opacity .15s"></span>
         <button type="button" id="pulRingBtn_on" class="mode-btn active" onclick="setPulRingUse(true)">あり（標準）</button>
         <button type="button" id="pulRingBtn_off" class="mode-btn" onclick="setPulRingUse(false)">なし</button>
       </div>
     </div>
     <div class="field-row" id="pulRingThicknessRow">
-      <label>パルリング厚さ [mm]</label>
-      <input id="pulRingThickness" class="mono" type="number" step="0.5" value="10" onchange="onCushionLayersChange(null,null)">
+      <label>パルリング厚さ [mm]（初期値）</label>
+      <input id="pulRingThickness" class="mono" type="number" step="0.5" value="10" onchange="autoSave();calcAlignment();refreshForceIfCalculated()">
       <span class="unit">mm</span>
     </div>
-    <div id="cushionLayerBands"></div>
-    <div id="cushionLayerSummary" style="margin-top:8px"></div>
   </div>
 
   <div class="card accordion">
@@ -394,8 +393,13 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>土被り H 最大 [m]</label><input id="soilHmax" class="mono" type="number" step="0.1" value="5.0" oninput="autoSave()"><span class="unit">m</span></div>
       <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="soilAdh" class="mono" type="number" step="0.5" value="10" oninput="autoSave()"><span class="unit">kN/m²</span></div>
     </div>
+    <div class="field-row full">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+        <input type="checkbox" id="shinnukiUse" onchange="onShinnukiToggle()"> 切羽心抜きを行う（N′を土質別標準値に自動設定）
+      </label>
+    </div>
     <div class="note-box" style="font-size:11px">
-      N′（貫入抵抗設計値）は先端抵抗F0の計算に使う値で、通常はN値（実測）をそのまま使いますが、切羽心抜き工法など施工方法によって先端抵抗が低減される場合は、その低減後の値に書き換えてください（例: 切羽心抜きでN′=1.0とする設計例あり）。既定値はN値と同じにしてあります。
+      N′（貫入抵抗設計値）は先端抵抗F0の計算に使う値で、通常はN値（実測）をそのまま使いますが、切羽心抜き工法など施工方法によって先端抵抗が低減される場合は、その低減後の値に書き換えてください。上のチェックを入れると、ヒューム管設計施工要覧の標準値（普通土＝1.0／砂質土＝2.5／硬質土＝3.0）から土質種別に応じて自動設定します（本アプリの「礫質土」区分は要覧の「硬質土」に近似対応）。チェックを外せば従来通り手入力できます。
     </div>
     <!-- 泥水/土圧/泥濃 共通: 地下水位 -->
     <div id="waterRow" style="display:none">
@@ -1219,8 +1223,8 @@ function showPage(idx) {
 let currentMethod = 'blade';
 const METHOD_NOTES = {
   blade:  '刃口推進: Fo = 10×1.32×π×Bs×N′（共通）。周面抵抗foは下水道協会式／佐藤・山本改定式から選択可（下の「周面抵抗の算定式」欄）',
-  slurry: '泥水推進（泥水圧式）: fo = 0.4×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=clip(N×10,150,500) Pw=ΔH×10+20',
-  epb:    '泥土圧推進（土圧式）: fo = 0.4×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=主働土圧式 Pw=ΔH×10',
+  slurry: '泥水推進（泥水圧式）: fo = β×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=clip(N×10,150,500) Pw=ΔH×10+20　β=土質別標準値(粘性土0.35/砂質土0.45/礫質土0.60)、C′=N<10なら8・N≧10なら5',
+  epb:    '泥土圧推進（土圧式）: fo = β×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=主働土圧式 Pw=ΔH×10　β=土質別標準値(粘性土0.35/砂質土0.45/礫質土0.60)、C′=N<10なら8・N≧10なら5',
   deinoh: '泥濃推進（礫率ベース式）: fo = f×πD, f={0.2+0.3(G/100)²+2.7(G/100)M²}×10, Fo=(Pe+Pw)×π(Bs/2)²  Pe=N×4.0'
 };
 
@@ -1275,6 +1279,12 @@ const SOIL_STD = {
   sand:   { gamma:18.0, phi:30, c:0,  N:15 },
   gravel: { gamma:19.0, phi:35, c:0,  N:30 }
 };
+// 76章: 切羽心抜き施工時のN′自動設定（ヒューム管設計施工要覧159頁、下水道協会式F0=10.0×1.32π・
+// Bs・N′における「N′：切羽心抜きをした場合の貫入抵抗値」の土質別標準値表）。
+// 普通土（粘性土）＝1.0、砂質土＝2.5、硬質土＝3.0。本アプリの土質区分は粘性土/砂質土/礫質土の
+// 3種のため、要覧の「硬質土」には最も近い「礫質土」を対応させている（要覧に礫質土の直接規定は
+// 無いための近似）。
+const SHINNUKI_NPRIME_BY_SOIL = { clay: 1.0, sand: 2.5, gravel: 3.0 };
 function onSoilTypeChange() {
   const t = v('soilType');
   const s = SOIL_STD[t];
@@ -1283,9 +1293,19 @@ function onSoilTypeChange() {
   setV('soilPhi', s.phi);
   setV('soilC', s.c);
   setV('soilN', s.N);
-  setV('soilNprime', s.N);
+  const shinnukiEl = document.getElementById('shinnukiUse');
+  setV('soilNprime', (shinnukiEl && shinnukiEl.checked) ? SHINNUKI_NPRIME_BY_SOIL[t] : s.N);
   setV('soilAdh', t === 'clay' ? 10 : 5);
   autoSave();
+}
+function onShinnukiToggle() {
+  const use = document.getElementById('shinnukiUse').checked;
+  const el = document.getElementById('soilNprime');
+  el.readOnly = use;
+  if (use) setV('soilNprime', SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? n('soilN') ?? 15);
+  autoSave();
+  calcAlignment();
+  refreshForceIfCalculated();
 }
 
 // ══════════════════════════════════════
@@ -1433,14 +1453,19 @@ function onPipeDiaChange() {
 //  呼び径（外径）は標準仕様に固定（掘削径が途中で変わることはないため）。
 //  鋼管を選んだ区間のみ、外径等も手入力できる。
 // ══════════════════════════════════════
-function resolveSpec(override) {
+// 74章: autoS4を渡すと、パルリング・クッション層から計算した値でS4を強制的に上書きする
+// （曲線・直線ごとの自動計算値。個別仕様のon/offに関わらず優先する）。呼び出し側は
+// computeCurveCushionS4(curveIdx)またはresolveStraightCushionS4(straightIdx)の結果を渡す。
+function resolveSpec(override, autoS4) {
   const std = {
     category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
     D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
     lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
     S4: n('pipeCushion') || 0, jointAllowMm: n('pipeJointType') || 40,
+    crush: n('pipeCrush') || 0,
     cushionMaterial: v('pipeCushionMaterial') || ''
   };
+  if (autoS4 != null) std.S4 = autoS4;
   if (!override || !override.on) return std;
   const category = override.category || std.category;
   let vals;
@@ -1464,7 +1489,8 @@ function resolveSpec(override) {
     grade: category === 'steel' ? null : (override.grade || (CATEGORY_GRADES[category]||[])[0]?.value),
     D: vals.D, Di: vals.Di, t: vals.t, W: vals.W, Fa: vals.Fa, Pext: vals.Pext,
     lp: override.len > 0 ? override.len : std.lp,
-    S4: Number.isFinite(override.cushion) ? override.cushion : std.S4,
+    S4: autoS4 != null ? autoS4 : (Number.isFinite(override.cushion) ? override.cushion : std.S4),
+    crush: Number.isFinite(override.crush) ? override.crush : std.crush,
     jointAllowMm: override.jointType || std.jointAllowMm,
     cushionMaterial: override.cushionMaterial || std.cushionMaterial
   };
@@ -1484,8 +1510,6 @@ function segSpecFieldsHTML(kind, key, spec) {
   const isSteel = cat === 'steel';
   const jt = spec.jointType || '40';
   const cm = spec.cushionMaterial || '';
-  const pulOn = spec.pulRingUse !== false;
-  const pulThickness = spec.pulRingThickness ?? 10;
   return `
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:bold;cursor:pointer">
@@ -1518,7 +1542,7 @@ function segSpecFieldsHTML(kind, key, spec) {
         </div>
         <div class="two-col">
           <div class="field-row"><label>管長l′ [m]</label><input id="${prefix}_len" class="mono" type="text" inputmode="decimal" placeholder="標準を使用" value="${spec.len ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"><span class="unit">m</span></div>
-          <div class="field-row"><label>クッション材厚 [mm]（自動）</label><input id="${prefix}_cushion" class="mono" type="text" inputmode="decimal" value="${spec.cushion ?? ''}" readonly><span class="unit">mm</span></div>
+          <div class="field-row"><label>つぶれ代 [mm]（手入力）</label><input id="${prefix}_crush" class="mono" type="text" inputmode="decimal" placeholder="標準を使用" value="${spec.crush ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"><span class="unit">mm</span></div>
         </div>
         <div class="two-col">
           <div class="field-row full"><label>継手種別</label>
@@ -1540,22 +1564,6 @@ function segSpecFieldsHTML(kind, key, spec) {
               <option value="fj30" ${cm==='fj30'?'selected':''}>FJ 3.0倍Y</option>
             </select>
           </div>
-        </div>
-        <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
-          <p class="report-note" style="margin:0 2px 6px;font-weight:600">パルリング・角度帯別クッション層構成（この区間専用）</p>
-          <div class="field-row full"><label>パルリング（標準付属）</label>
-            <div style="display:flex;gap:8px">
-              <button type="button" id="${prefix}_pulRingBtn_on" class="mode-btn ${pulOn?'active':''}" onclick="setPulRingUse(true,'${kind}','${key}')">あり（標準）</button>
-              <button type="button" id="${prefix}_pulRingBtn_off" class="mode-btn ${!pulOn?'active':''}" onclick="setPulRingUse(false,'${kind}','${key}')">なし</button>
-            </div>
-          </div>
-          <div class="field-row" id="${prefix}_pulRingThicknessRow" style="display:${pulOn?'':'none'}">
-            <label>パルリング厚さ [mm]</label>
-            <input id="${prefix}_pulRingThickness" class="mono" type="number" step="0.5" value="${pulThickness}" onchange="onPulRingThicknessChange(this,'${kind}','${key}')">
-            <span class="unit">mm</span>
-          </div>
-          <div id="${prefix}_cushionLayerBands">${spec.on ? cushionBandsHTML(kind, key) : ''}</div>
-          <div id="${prefix}_cushionLayerSummary" style="margin-top:8px">${spec.on ? cushionSummaryHTML(kind, key) : ''}</div>
         </div>
       </div>
     </div>`;
@@ -1590,13 +1598,11 @@ function onSegSpecToggle(kind, key) {
     spec.grade = std.grade;
     spec.len = std.lp;
     spec.cushion = std.S4;
+    spec.crush = std.crush;
     spec.jointType = String(std.jointAllowMm);
     spec.cushionMaterial = std.cushionMaterial;
-    // 69章: パルリング・角度帯別クッション層構成も基本仕様から複製する（参照ではなくコピー。
-    // 別オブジェクトにしないと、この区間での編集が基本仕様側の配列を直接書き換えてしまう）。
-    spec.pulRingUse = pulRingUse;
-    spec.pulRingThickness = n('pulRingThickness') || 10;
-    spec.cushionLayerData = JSON.parse(JSON.stringify(cushionLayerData));
+    // 74章: パルリング・クッション層は曲線ごとに個別管理する専用の仕組みに移ったため、
+    // ここ（区間別個別仕様の管種・継手など汎用オーバーライド）ではもう扱わない。
     if (std.category === 'steel') {
       spec.steelD = std.D; spec.steelInner = std.Di; spec.steelThick = std.t;
       spec.steelW = std.W; spec.steelFa = std.Fa; spec.steelPext = std.Pext;
@@ -1626,6 +1632,8 @@ function onSegSpecChange(kind, key) {
   const lenEl = g('_len'); const lenVal = lenEl ? parseFloat(lenEl.value) : NaN;
   spec.len = Number.isFinite(lenVal) && lenVal > 0 ? lenVal : null;
   // クッション材厚は読取専用（詳細:推進力伝達材パネルの「S4に反映」ボタン経由のみで更新、70章）
+  const crushEl = g('_crush'); const crushVal = crushEl ? parseFloat(crushEl.value) : NaN;
+  spec.crush = Number.isFinite(crushVal) && crushVal >= 0 ? crushVal : null;
   if (g('_jointType')) spec.jointType = g('_jointType').value;
   if (g('_cushionMaterial')) spec.cushionMaterial = g('_cushionMaterial').value;
   calcAlignment();
@@ -1657,7 +1665,10 @@ let curveCounter = 0;
 function addCurve() {
   const id = ++curveCounter;
   const Li = curves.length === 0 ? 0 : 50; // IP間距離（2本目以降のデフォルト）
-  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, spec:null});
+  // 74章: パルリング・クッション層は曲線ごとに個別管理。新規曲線は「詳細:推進力伝達材」カードの
+  // 初期値（pulRingUse・pulRingThickness入力欄）をコピーして作成し、以後は独立して編集できる。
+  curves.push({id, L:Li, R:30, dir:'R', deg:45, min:0, sec:0, spec:null,
+    pulRingUse, pulRingThickness: n('pulRingThickness') || 10, cushionLayers: []});
   renderCurves();
   syncStraightSpecsLength();
   calcAlignment();
@@ -1702,6 +1713,7 @@ function renderCurves() {
         <div class="field-row"><label>分</label><input id="cMin_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.min}" oninput="onCurveChange(${c.id})"><span class="unit">′</span></div>
         <div class="field-row"><label>秒</label><input id="cSec_${c.id}" class="mono" type="number" step="1" min="0" max="59" value="${c.sec}" oninput="onCurveChange(${c.id})"><span class="unit">″</span></div>
       </div>
+      <div id="curveCushionBlock_${c.id}">${curveCushionUIHTML(c.id)}</div>
       <div id="cCalc_${c.id}" style="background:#f0fdf4;border-radius:8px;padding:8px;font-size:12px;margin-top:4px;color:var(--ok)"></div>
     </div>
   `).join('');
@@ -1723,7 +1735,7 @@ function updateCurveJoint(id) {
   const c = curves.find(x => x.id === id);
   const el = document.getElementById('cJoint_'+id);
   if (!c || !el) return;
-  const pipeSpec = resolveSpec(c.spec);
+  const pipeSpec = resolveSpec(c.spec, computeCurveCushionS4(curves.indexOf(c)));
   const D = pipeSpec.D || 0.96;
   const lp = pipeSpec.lp || 2.43;
   const allowMm = pipeSpec.jointAllowMm || 40;
@@ -1771,7 +1783,8 @@ function addSoilZone() {
   soilZones.push({
     id, fromM: prevEnd, toM: prevEnd + 10,
     gamma: n('soilGamma') || 18, phi: n('soilPhi') || 30, phiPipe: n('soilPhiPipe') || 20,
-    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10
+    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10,
+    shinnukiUse: false
   });
   renderSoilZones();
   autoSave();
@@ -1798,6 +1811,17 @@ function onSoilZoneChange(id) {
   autoSave();
   refreshForceIfCalculated();
 }
+// 76章: 区間別土質は独自の土質区分（粘性土/砂質土/礫質土）を持たないため、共通の土質条件タブの
+// soilTypeを使ってN′標準値を引く（β（推進力低減係数）の土質連動と同じ考え方）。
+function onSoilZoneShinnukiToggle(id, checked) {
+  const z = soilZones.find(x => x.id === id);
+  if (!z) return;
+  z.shinnukiUse = checked;
+  if (checked) z.Nprime = SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? z.N ?? 15;
+  renderSoilZones();
+  autoSave();
+  refreshForceIfCalculated();
+}
 
 function renderSoilZones() {
   const el = document.getElementById('soilZoneList');
@@ -1820,8 +1844,13 @@ function renderSoilZones() {
         <div class="field-row"><label>φ 管体部 [°]</label><input id="sz_phip_${z.id}" class="mono" type="number" step="1" value="${z.phiPipe}" oninput="onSoilZoneChange(${z.id})"><span class="unit">°</span></div>
         <div class="field-row"><label>C [kN/m²]</label><input id="sz_c_${z.id}" class="mono" type="number" step="0.5" value="${z.C}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m²</span></div>
         <div class="field-row"><label>N値</label><input id="sz_n_${z.id}" class="mono" type="number" step="1" value="${z.N}" oninput="onSoilZoneChange(${z.id})"><span class="unit">—</span></div>
-        <div class="field-row"><label>N′（貫入抵抗設計値）</label><input id="sz_np_${z.id}" class="mono" type="number" step="0.1" value="${z.Nprime}" oninput="onSoilZoneChange(${z.id})"><span class="unit">—</span></div>
+        <div class="field-row"><label>N′（貫入抵抗設計値）</label><input id="sz_np_${z.id}" class="mono" type="number" step="0.1" value="${z.Nprime}" ${z.shinnukiUse?'readonly':''} oninput="onSoilZoneChange(${z.id})"><span class="unit">—</span></div>
         <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="sz_adh_${z.id}" class="mono" type="number" step="0.5" value="${z.adh}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m²</span></div>
+      </div>
+      <div class="field-row full">
+        <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
+          <input type="checkbox" ${z.shinnukiUse?'checked':''} onchange="onSoilZoneShinnukiToggle(${z.id},this.checked)"> 切羽心抜きを行う（N′を土質別標準値に自動設定）
+        </label>
       </div>
     </div>
   `).join('');
@@ -1858,31 +1887,31 @@ function calcAlignment() {
   if (curves.length === 0) {
     // 直線のみ
     totalLen = L0 + Lf;
-    segments.push({ label:'第1直線（BP→EP）', L: totalLen, kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
+    segments.push({ label:'第1直線（BP→EP）', L: totalLen, kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0)) });
   } else {
     // 第1直線: L0 - TL[0]
     const s0 = L0 - TLs[0];
     if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
-    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec) });
+    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0)) });
 
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
-      const cSpec = resolveSpec(c.spec);
+      const cSpec = resolveSpec(c.spec, computeCurveCushionS4(i));
       segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: cSpec.S4, kind:'curve', key:c.id, spec: cSpec });
-      // 次の直線
+      // 次の直線（直前の曲線=第i+1曲線と同じクッション仕様を自動継承。74章）
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
         const sMid = Lmid - TLs[i] - TLs[i+1];
         if (sMid < 0) { valid = false; warnMsg += `\n⚠ 第${i+2}直線(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
-        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), kind:'straight', key:i+1, spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec) });
+        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), kind:'straight', key:i+1, spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec, resolveStraightCushionS4(i+1)) });
       }
     });
 
-    // 最終直線: Lf - TL[last]
+    // 最終直線: Lf - TL[last]（直前＝最後の曲線と同じクッション仕様を自動継承）
     const sf = Lf - TLs[TLs.length-1];
     if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
-    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), kind:'straight', key:curves.length, spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec) });
+    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), kind:'straight', key:curves.length, spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec, resolveStraightCushionS4(curves.length)) });
 
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
@@ -2438,7 +2467,8 @@ function setupAlignmentVisualInteraction() {
 function getCurves() {
   return curves.map(c => ({
     R: c.R, dir: c.dir, CL: c.CL, spec: c.spec || null,
-    deg: c.deg, min: c.min, sec: c.sec, L: c.L
+    deg: c.deg, min: c.min, sec: c.sec, L: c.L,
+    pulRingUse: c.pulRingUse, pulRingThickness: c.pulRingThickness, cushionLayers: c.cushionLayers || []
   }));
 }
 
@@ -3153,7 +3183,7 @@ function updatePipeLenOpt() {
   }
   let html = '';
   curList.forEach((c, i) => {
-    const spec = resolveSpec(c.spec);
+    const spec = resolveSpec(c.spec, computeCurveCushionS4(i));
     const D = spec.D, lp = spec.lp, allowMm = spec.jointAllowMm, S4mm = spec.S4;
     const R = c.R;
     if (R <= D/2) return;
@@ -3199,7 +3229,7 @@ function calcSeismicJointCheck(pipeLen_m, S1_mm, pulloutOpenMm) {
 function updateSeismicJointCheck() {
   const resultEl = document.getElementById('seismicJointResult');
   if (!resultEl) return;
-  const stdSpec = resolveSpec(null);
+  const stdSpec = resolveSpec(null, resolveStraightCushionS4(0));
   const curList = getCurves();
 
   const rowHtml = (label, pipeLen, S1, pulloutOpenMm) => {
@@ -3219,7 +3249,7 @@ function updateSeismicJointCheck() {
 
   // 曲線区間（曲線通過による据付時残留開口S1あり）
   curList.forEach((c, i) => {
-    const spec = resolveSpec(c.spec);
+    const spec = resolveSpec(c.spec, computeCurveCushionS4(i));
     if (spec.D && c.R > spec.D / 2) {
       const S1 = calcS1(spec.D, spec.lp, c.R, spec.S4);
       rows += rowHtml(`第${i + 1}曲線 R=${c.R}m`, spec.lp, S1, spec.jointAllowMm);
@@ -3254,7 +3284,7 @@ function buildPipeSchedule(segments) {
     for (let j = 0; j < num; j++) {
       const start = seg.startDist + j * pipeLen;
       const end = seg.startDist + (j + 1) * pipeLen;
-      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen, ownS4: seg.spec.S4, ownJointAllowMm: seg.spec.jointAllowMm });
+      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen, ownS4: seg.spec.S4, ownCrush: seg.spec.crush, ownJointAllowMm: seg.spec.jointAllowMm });
     }
   });
   const N = pipes.length;
@@ -3275,10 +3305,9 @@ function buildPipeSchedule(segments) {
     // 目地開口S1は「推進完了後、その管が最終的に静止した状態」の値を表示する。
     // ・曲線内に留まる管はそのまま曲がった状態で完成するため、曲線通過時の幾何学的開口がそのまま残留値になる。
     // ・それ以外（直線区間で静止する管。曲線を通過済みかどうかを問わない）は、
-    //   クッション材厚S4（その管自身の区間仕様）がそのまま残留開口になる（70章: つぶれ代の概念は
-    //   廃止し、常に無圧縮想定＝安全側とした。旧実装はS4からつぶれ代を差し引いていたため、
-    //   本改修で残留開口は従来より大きく＝より安全側の判定になる）。
-    const S1 = inCurve ? bestCurveS1 : Math.max(0, pipe.ownS4);
+    //   クッション材厚S4からつぶれ代を差し引いた残り（その管自身の区間仕様）が残留開口になる
+    //   （70章で一旦廃止したが、74章でユーザー指示によりスパン毎の指定として復活）。
+    const S1 = inCurve ? bestCurveS1 : Math.max(0, pipe.ownS4 - (pipe.ownCrush || 0));
     // 必要継手は2つの条件を両方満たす、最も安いものを選ぶ：
     // ・推進完了後の残留開口S1が抜出し長(pulloutOpen)以内（完成後ずっと保持される条件）
     // ・曲線通過時（一度でも経験する最大値=bestCurveS1。曲線を通過しない管は0）の開口が
@@ -3503,8 +3532,13 @@ function calcTerzaghi(gamma, phi_deg, C, H, D) {
 // ══════════════════════════════════════
 //  工法別 Fo・fo 計算
 // ══════════════════════════════════════
+// 75章: ヒューム管設計施工要覧（全国ヒューム管協会）第3編2.4.1(3)「修正式(I)」（式3.2.4.1-5、
+// 泥水式・土圧式推進工法用）表3.2.4.1-2「土質別のβ標準値」。fo=β{(π・Bc・p+W)μ'+π・Bc・C'}の
+// β（推進力低減係数）は土質により異なり、固定値ではない。アプリの土質選択（clay/sand/gravel）に
+// 対応する3種（固結土は現状UIに区分が無いため対応外）。
+const SLURRY_BETA_BY_SOIL = { clay: 0.35, sand: 0.45, gravel: 0.60 };
 function calcFoFo(method, params) {
-  const { D, W, N, Nprime, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha, beta, t, foFormula } = params;
+  const { D, W, N, Nprime, phi_soil, phi_pipe, C, adh, q_total, GL_wl, H, Bs, G, m_gravel, alpha, beta, betaReduction, t, foFormula } = params;
   let Fo = 0, fo = 0, foDetail = {};
   if (method === 'blade') {
     // F0=10×1.32π×Bs×N'（先導体外径・貫入抵抗設計値。管外径Dや実測N値ではない）は両式共通。
@@ -3527,15 +3561,19 @@ function calcFoFo(method, params) {
       foDetail = { sigma, mu, tau_a, C_prime: adh, formula: 'kyokai' };
     }
   } else if (method === 'slurry') {
+    // 75章: fo=β{(π・Bc・p+W)μ'+π・Bc・C'}（要覧159頁）。C'は粘性土(N<10)=8, 固結土(N≧10)=5
+    // （旧実装は5.0/8.0が逆だった）。βは土質別標準値（表3.2.4.1-2、固定0.4は廃止）。
     const Pe = Math.min(Math.max(N * 10, 150), 500);
     const Pw = Math.max(0, (H - GL_wl)) * 10 + 20;
     Fo = (Pe + Pw) * Math.PI * Math.pow(Bs/2, 2);
     const phiRad = phi_pipe * Math.PI / 180;
     const mu = Math.tan(phiRad / 2);
-    const C_p = N < 10 ? 5.0 : 8.0;
-    fo = 0.4 * ((Math.PI*D*q_total + W)*mu + Math.PI*D*C_p);
-    foDetail = { Pe, Pw, mu, C_prime: C_p, beta: 0.4 };
+    const C_p = N < 10 ? 8.0 : 5.0;
+    const betaRed = betaReduction != null ? betaReduction : 0.4;
+    fo = betaRed * ((Math.PI*D*q_total + W)*mu + Math.PI*D*C_p);
+    foDetail = { Pe, Pw, mu, C_prime: C_p, beta: betaRed };
   } else if (method === 'epb') {
+    // 75章: 泥水式と同じ修正式(I)・表3.2.4.1-2を適用（C'のN分岐・β土質連動とも同様に修正）。
     const phiSoilRad = phi_soil * Math.PI / 180;
     const Ka = Math.pow(Math.tan(Math.PI/4 - phiSoilRad/2), 2);
     const Pe = Math.max(0, Ka * q_total - 2*C*Math.sqrt(Ka));
@@ -3543,9 +3581,10 @@ function calcFoFo(method, params) {
     Fo = (Pe + Pw) * Math.PI * Math.pow(Bs/2, 2);
     const phiPipeRad = phi_pipe * Math.PI / 180;
     const mu = Math.tan(phiPipeRad / 2);
-    const C_p = 5.0;
-    fo = 0.4 * ((Math.PI*D*q_total + W)*mu + Math.PI*D*C_p);
-    foDetail = { Ka, Pe, Pw, mu, C_prime: C_p, beta: 0.4 };
+    const C_p = N < 10 ? 8.0 : 5.0;
+    const betaRed = betaReduction != null ? betaReduction : 0.4;
+    fo = betaRed * ((Math.PI*D*q_total + W)*mu + Math.PI*D*C_p);
+    foDetail = { Ka, Pe, Pw, mu, C_prime: C_p, beta: betaRed };
   } else if (method === 'deinoh') {
     const M_ratio = m_gravel / D;
     const f = (0.2 + 0.3*Math.pow(G/100,2) + 2.7*(G/100)*Math.pow(M_ratio,2)) * 10;
@@ -3650,186 +3689,285 @@ function evaluateCushionMaterial(materialKey, sigmaReq, sigmaAllow) {
 }
 
 // ══════════════════════════════════════
-//  68・69章: パルリング・角度帯別クッション層構成
-//  推進管標準付属のパルリング（PB製1枚）に加え、目地の開き量が周方向の角度帯によって
-//  異なることに対応するため、角度帯（0～±22.5°／±22.5～30°／±30～45°／±45～60°／
-//  ±60～90°、ご提供のExcel「取付図と数量」シートと同じ5帯）ごとに、クッション層を
-//  複数追加できるようにする。層ごとに厚さ・分割数（リングを何等分するか）・枚数
-//  （実際に据え付ける切片数。全周なら分割数と同じ、部分施工ならそれ未満）を持つ。
-//  各帯の合計厚さ＝パルリング厚（使用時）＋層厚さの合計。この合計厚さは判定・計算には
+//  68・69章: パルリング・クッション層構成
+//  推進管標準付属のパルリング（PB製1枚）に加え、クッション層を最大4層まで追加できる。
+//  合計厚さ＝パルリング厚（使用時）＋層厚さの合計。この合計厚さは判定・計算には
 //  自動反映せず、「クッション材厚S4に反映」ボタンで明示的に反映する（既存のσ_allow
 //  適合判定は材質の圧縮強度に基づくものであり厚さとは独立のため、無関係な値を暗黙に
 //  結びつけない）。
 //  69章: 基本仕様（kind=null）に加えて、区間別個別仕様（kind='straight'|'curve', key=区間
-//  インデックス/曲線ID）でも同じ層構成を持てるようにした。ご提供のExcelが実際にL3/CL2/
-//  L2/CL1で別々の層構成テーブルを持っていたことに合わせている。区間別は既存の「個別仕様を
+//  インデックス/曲線ID）でも同じ層構成を持てるようにした。区間別は既存の「個別仕様を
 //  使う」チェック（spec.on）と同じ範囲に含める（別のON/OFFは設けない。個別仕様ONにした
 //  時点で、その区間はクッション層構成も含めて基本仕様から独立する）。
 //  kind/keyの組でスコープを表し、DOM idの接頭辞prefixは基本仕様=''、区間別=`seg_${kind}_${key}_`
 //  （4.6節の既存の区間別フィールドと同じ命名規則）。
+//  74章: 68〜73章では「角度帯（0～±22.5°等5帯）ごとに別々の層構成」を持てたが、実際の画面を
+//  見たユーザーから「角度帯と1層目〜4層目の掛け算の意味が分からない」と指摘があり、角度帯の
+//  次元を廃止した。層は角度帯に関係なく1系統・最大4層のみに統一する。
 // ══════════════════════════════════════
-const CUSHION_BANDS = [
-  { key: 'b0', label: '0～±22.5°' },
-  { key: 'b1', label: '±22.5～30°' },
-  { key: 'b2', label: '±30～45°' },
-  { key: 'b3', label: '±45～60°' },
-  { key: 'b4', label: '±60～90°' },
+const PULRING_COLOR = '#94a3b8'; // パルリング（PB製標準品）の表示色。追加層とは別扱いで固定色にする
+// 72章: 追加層（1〜4層目）ごとに「発泡倍数（材質グレード）」を指定できるようにし、層の色分けは
+// 角度帯ではなく発泡倍数で表す（ご提供の資料に合わせ、層ごとに何倍の材質が張られているかを一目で
+// わかるようにする狙い）。
+const CUSHION_MATERIAL_OPTS = [
+  { v: '', label: '未選択', color: '#cbd5e1' },
+  { v: 'PB', label: 'PB標準品', color: '#94a3b8' },
+  { v: 'fj17', label: 'FJ 1.7倍', color: '#38bdf8' },
+  { v: 'fj20', label: 'FJ 2.0倍W', color: '#22c55e' },
+  { v: 'fj25', label: 'FJ 2.5倍G', color: '#f59e0b' },
+  { v: 'fj30', label: 'FJ 3.0倍Y', color: '#ef4444' },
 ];
-let pulRingUse = true; // 標準付属パルリング（PB製1枚）の有無（基本仕様）
-let cushionLayerData = { b0: [], b1: [], b2: [], b3: [], b4: [] }; // 基本仕様。各帯: [{thickness,div,count}, ...]
-
-function cushionPrefix(kind, key) { return kind ? `seg_${kind}_${key}_` : ''; }
-// 区間別スコープのspec（無ければ既定値で初期化）。基本仕様(kind=null)ではnullを返す。
-function cushionSpecOf(kind, key) {
-  if (!kind) return null;
-  const ref = getSegRef(kind, key);
-  if (!ref) return null;
-  const spec = ensureSpec(ref);
-  if (spec.pulRingUse == null) spec.pulRingUse = true;
-  if (spec.pulRingThickness == null) spec.pulRingThickness = 10;
-  if (!spec.cushionLayerData) spec.cushionLayerData = { b0: [], b1: [], b2: [], b3: [], b4: [] };
-  return spec;
+function cushionMaterialOpt(v) { return CUSHION_MATERIAL_OPTS.find(o => o.v === v) || CUSHION_MATERIAL_OPTS[0]; }
+// 75章: 積水化成品工業FJリングのサイズ表（名称FJ-250〜FJ-3000、内径D1・外径D2・巾T・厚さt・
+// 分割枚数の実物カタログ値）を参考に、選択肢を実在する規格値に合わせた。
+//   厚さt: カタログ上は5/8/10mmの3種類のみ（3mmという規格は存在しない）。
+//   分割枚数: カタログ上は2/4/6/8/12枚（管径が大きいほど枚数が多い傾向）。角度に換算すると
+//   360÷枚数＝180°/90°/60°/45°/30°の5択になる（旧実装は45°/60°/90°の3択のみだった）。
+// ※カタログでは分割枚数は管径（呼び径）ごとに1つに決まっているが、本アプリでは呼び径ごとの
+// 対応表までは持たせず、5択から選べるようにするだけに留めている（呼び径との自動連動は未実装）。
+const CUSHION_THICKNESS_OPTS = [5, 8, 10];
+const CUSHION_ANGLE_OPTS = [30, 45, 60, 90, 180];
+// 層の「角度」（1切片の中心角）は上記5択。360÷角度が全周分割数になる
+// （180°→2分割、90°→4分割、60°→6分割、45°→8分割、30°→12分割）。「枚数」は2枚刻み（2,4,6...全面）で選択する。
+// 据付は常に上下対称（片側=枚数/2ピースを隣接させて連続させたブロック、もう片側にも同じ幅の
+// ブロック）とする。例: 60°ピースを2枚ずつ2箇所（枚数=4）にすると、片側120°のブロックが
+// 上下2箇所にできる（「60度を2枚並べて120度として使用するパターン」に対応）。枚数=全周分割数
+// になれば隙間なく全周を覆う（全面）。
+function cushionLayerFullCount(angle) { return Math.round(360 / angle); }
+function cushionLayerCountOptions(angle) {
+  const full = cushionLayerFullCount(angle);
+  const opts = [];
+  for (let c = 2; c <= full; c += 2) {
+    const half = c / 2, blockDeg = half * angle;
+    opts.push({ v: c, label: c >= full ? `${c}枚（全面）` : `${c}枚（上下${half}枚ずつ＝${blockDeg}°）` });
+  }
+  return opts;
 }
-function getCushionLayerData(kind, key) { const s = cushionSpecOf(kind, key); return s ? s.cushionLayerData : cushionLayerData; }
-function getPulRingUse(kind, key) { const s = cushionSpecOf(kind, key); return s ? s.pulRingUse : pulRingUse; }
-function getPulRingThickness(kind, key) { const s = cushionSpecOf(kind, key); return s ? s.pulRingThickness : (n('pulRingThickness') || 0); }
-
-function setPulRingUse(use, kind, key) {
-  const prefix = cushionPrefix(kind, key);
-  if (kind) { cushionSpecOf(kind, key).pulRingUse = use; } else { pulRingUse = use; }
-  const onBtn = document.getElementById(prefix + 'pulRingBtn_on'), offBtn = document.getElementById(prefix + 'pulRingBtn_off');
+// 旧バージョン（分割数・枚数を自由入力していた頃）の保存データを、角度3択・枚数2枚刻みの
+// 新形式に丸め込む。
+function normalizeCushionLayer(l) {
+  if (!CUSHION_ANGLE_OPTS.includes(l.angle)) {
+    const legacyDiv = l.div || 4;
+    let nearest = 90, bestDiff = Infinity;
+    CUSHION_ANGLE_OPTS.forEach(a => { const diff = Math.abs(360 / a - legacyDiv); if (diff < bestDiff) { bestDiff = diff; nearest = a; } });
+    l.angle = nearest;
+  }
+  const full = cushionLayerFullCount(l.angle);
+  let c = Math.round((l.count || 2) / 2) * 2;
+  c = Math.max(2, Math.min(full, c));
+  l.count = c;
+  if (l.material == null) l.material = '';
+  // 厚さは5/8/10mmの3択（FJリングのカタログ規格値）。旧データ等で他の値が入っていた場合は
+  // 最も近い規格値に丸める。
+  if (!CUSHION_THICKNESS_OPTS.includes(l.thickness)) {
+    const t = l.thickness || 0;
+    l.thickness = CUSHION_THICKNESS_OPTS.reduce((a, b) => Math.abs(b - t) < Math.abs(a - t) ? b : a);
+  }
+  return l;
+}
+let pulRingUse = true; // 標準付属パルリング（PB製1枚）の初期値（新規曲線の初期値・第1直線の基準値）
+// 「詳細:推進力伝達材」カードのパルリング初期値トグル（グローバル1つだけ。曲線ごとの
+// 個別トグルはsetCurvePulRingUse()）。
+function setPulRingUse(use) {
+  pulRingUse = use;
+  const onBtn = document.getElementById('pulRingBtn_on'), offBtn = document.getElementById('pulRingBtn_off');
   if (onBtn) onBtn.classList.toggle('active', use);
   if (offBtn) offBtn.classList.toggle('active', !use);
-  const row = document.getElementById(prefix + 'pulRingThicknessRow');
+  const row = document.getElementById('pulRingThicknessRow');
   if (row) row.style.display = use ? '' : 'none';
-  onCushionLayersChange(kind, key);
+  const icon = document.getElementById('pulRingIcon');
+  if (icon) { icon.style.opacity = use ? '1' : '0.3'; if (!icon.innerHTML) icon.innerHTML = pulRingIconSVG(); }
+  autoSave();
 }
-function onPulRingThicknessChange(el, kind, key) {
-  const val = parseFloat(el.value);
-  if (kind) cushionSpecOf(kind, key).pulRingThickness = Number.isFinite(val) ? val : 0;
-  onCushionLayersChange(kind, key);
-}
-function addCushionLayer(bandKey, kind, key) {
-  getCushionLayerData(kind, key)[bandKey].push({ thickness: 0, div: 4, count: 4 });
-  renderCushionLayerBands(kind, key);
-  onCushionLayersChange(kind, key);
-}
-function removeCushionLayer(bandKey, idx, kind, key) {
-  getCushionLayerData(kind, key)[bandKey].splice(idx, 1);
-  renderCushionLayerBands(kind, key);
-  onCushionLayersChange(kind, key);
-}
-function onCushionLayerFieldChange(bandKey, idx, field, el, kind, key) {
-  const val = parseFloat(el.value);
-  getCushionLayerData(kind, key)[bandKey][idx][field] = Number.isFinite(val) ? val : 0;
-  onCushionLayersChange(kind, key);
-}
-// スコープ(kind,key)の層編集UIをHTML文字列として返す（副作用なし）。基本仕様カードの初期表示にも、
-// 区間別個別仕様パネルの生成時にも、そのまま埋め込める。
-function cushionBandsHTML(kind, key) {
-  const layerData = getCushionLayerData(kind, key);
-  const kindArg = kind ? `'${kind}'` : 'null', keyArg = kind ? `'${key}'` : 'null';
-  return CUSHION_BANDS.map(band => {
-    const layers = layerData[band.key] || [];
-    const rows = layers.map((l, i) => `
-      <div class="two-col" style="align-items:end">
-        <div class="field-row"><label>${i+1}層目 厚さ[mm]</label><input class="mono" type="number" step="0.5" value="${l.thickness}" onchange="onCushionLayerFieldChange('${band.key}',${i},'thickness',this,${kindArg},${keyArg})"></div>
-        <div class="field-row"><label>分割数</label><input class="mono" type="number" step="1" min="1" value="${l.div}" onchange="onCushionLayerFieldChange('${band.key}',${i},'div',this,${kindArg},${keyArg})"></div>
-        <div class="field-row"><label>枚数（使用）</label><input class="mono" type="number" step="1" min="0" value="${l.count}" onchange="onCushionLayerFieldChange('${band.key}',${i},'count',this,${kindArg},${keyArg})"></div>
-        <button type="button" class="mode-btn" style="height:36px" onclick="removeCushionLayer('${band.key}',${i},${kindArg},${keyArg})">✕ 削除</button>
-      </div>`).join('');
-    return `
-      <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--line)">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <b style="font-size:13px">${band.label}</b>
-          <button type="button" class="mode-btn" onclick="addCushionLayer('${band.key}',${kindArg},${keyArg})">＋層を追加</button>
-        </div>
-        ${rows || '<p class="report-note" style="margin:4px 2px">パルリングのみ（追加層なし）</p>'}
-      </div>`;
-  }).join('');
-}
-function renderCushionLayerBands(kind, key) {
-  const el = document.getElementById(cushionPrefix(kind, key) + 'cushionLayerBands');
-  if (el) el.innerHTML = cushionBandsHTML(kind, key);
-}
-// 70章: 「0～±22.5°」等の角度帯が実際にどの位置を指すかを図示する。管端（推力伝達面）を
-// 推進方向から見た正面図として、中心Y軸（＝曲線の曲げ平面。上方向を最も目地が開く側＝
-// 外側とみなす。63〜69章で確認済みの「外側開口＞内側開口」の関係と整合させた解釈）を基準に、
-// 上（0°）から左右へそれぞれ90°まで（＝計180°、外側〜中立点）を5帯に分けて色分けする。
-// 反対側の下半分（90～180°、内側＝圧縮側）は、目地が開かずクッション不要な範囲として
-// グレーで示す。この「上=外側」の対応は一次資料（PADシート）に明記された図が無いため、
-// 63〜69章で検証済みの外側/内側開口の大小関係から妥当と判断した解釈である旨を明記する。
-function cushionAngleDiagramSVG() {
-  const cx = 130, cy = 130, R = 100;
-  const bounds = [0, 22.5, 30, 45, 60, 90];
-  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#3b82f6'];
-  const toXY = (deg) => {
+
+// 73章: 層1枚分の「角度」（1切片の中心角）と「枚数」（2枚刻み。片側=枚数/2ピースを隣接させた
+// 連続ブロックを、上（0°＝角度帯図と同じく目地が開く側）と下（180°）の対称2箇所に配置し、
+// 枚数が全周分割数と同じになれば全面塗りつぶしにする）を視覚化する小さなドーナツ図。
+// 実データは「片側何枚か」という枚数だけを持ち、切片の実際の据付方位までは持たないため、
+// この上下対称配置はご提供の参考図（60°ピース2枚で120°ブロックにする例を含む）に合わせた
+// 模式的な表現である。色は角度帯ではなく発泡倍数（材質グレード）で塗り分ける。
+function layerCoverageDiagramSVG(angleDeg, count, color) {
+  const cx = 26, cy = 26, R = 22, Rin = 12;
+  const full = cushionLayerFullCount(angleDeg);
+  if (count >= full) {
+    return `<svg viewBox="0 0 52 52" width="44" height="44" style="flex-shrink:0">
+      <circle cx="${cx}" cy="${cy}" r="${R}" fill="${color}" fill-opacity="0.85" stroke="#64748b" stroke-width="0.75"/>
+      <circle cx="${cx}" cy="${cy}" r="${Rin}" fill="var(--card-bg,#fff)" stroke="#64748b" stroke-width="0.75"/>
+    </svg>`;
+  }
+  const toXY = (deg, r) => {
     const rad = deg * Math.PI / 180;
-    return [cx + R * Math.sin(rad), cy - R * Math.cos(rad)];
+    return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
   };
-  const wedge = (a1, a2) => {
-    const [x1, y1] = toXY(a1), [x2, y2] = toXY(a2);
+  const ringSeg = (a1, a2, filled) => {
+    const [ox1, oy1] = toXY(a1, R), [ox2, oy2] = toXY(a2, R);
+    const [ix2, iy2] = toXY(a2, Rin), [ix1, iy1] = toXY(a1, Rin);
     const large = Math.abs(a2 - a1) > 180 ? 1 : 0;
-    return `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${R},${R} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
+    const d = `M${ox1.toFixed(1)},${oy1.toFixed(1)} A${R},${R} 0 ${large} 1 ${ox2.toFixed(1)},${oy2.toFixed(1)} L${ix2.toFixed(1)},${iy2.toFixed(1)} A${Rin},${Rin} 0 ${large} 0 ${ix1.toFixed(1)},${iy1.toFixed(1)} Z`;
+    return `<path d="${d}" fill="${filled ? color : 'none'}" fill-opacity="${filled ? '0.85' : '1'}" stroke="#64748b" stroke-width="0.75" stroke-dasharray="${filled ? 'none' : '2,1.5'}"/>`;
   };
-  let wedges = `<path d="${wedge(90, 270)}" fill="#cbd5e1" fill-opacity="0.5" stroke="#334155" stroke-width="0.5"/>`; // 圧縮側（下半分）
-  for (let i = 0; i < 5; i++) {
-    wedges += `<path d="${wedge(bounds[i], bounds[i+1])}" fill="${colors[i]}" fill-opacity="0.6" stroke="#334155" stroke-width="0.5"/>`;
-    wedges += `<path d="${wedge(-bounds[i+1], -bounds[i])}" fill="${colors[i]}" fill-opacity="0.6" stroke="#334155" stroke-width="0.5"/>`;
-  }
-  const legend = CUSHION_BANDS.map((b, i) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span style="width:10px;height:10px;background:${colors[i]};display:inline-block;border-radius:2px"></span>${b.label}</span>`).join('');
-  return `
-    <svg viewBox="0 0 260 260" style="width:100%;max-width:280px;height:auto;display:block;margin:0 auto">
-      ${wedges}
-      <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#1f2937" stroke-width="2"/>
-      <line x1="${cx}" y1="${cy-R-10}" x2="${cx}" y2="${cy-R+6}" stroke="#1f2937" stroke-width="2"/>
-      <text x="${cx}" y="${cy-R-14}" text-anchor="middle" font-size="11" fill="#1f2937">外側（目地が開く側）</text>
-      <text x="${cx}" y="${cy+R+16}" text-anchor="middle" font-size="11" fill="#64748b">内側（圧縮側・クッション不要）</text>
-    </svg>
-    <p style="text-align:center;font-size:11px;margin-top:4px">${legend}</p>
-  `;
+  const half = (count / 2) * angleDeg / 2; // 片側ブロックの半幅（枚数/2ピース分の合計角度の半分）
+  const segs = ringSeg(-half, half, true) + ringSeg(180 - half, 180 + half, true)
+    + ringSeg(half, 180 - half, false) + ringSeg(180 + half, 360 - half, false);
+  return `<svg viewBox="0 0 52 52" width="44" height="44" style="flex-shrink:0">${segs}</svg>`;
 }
-function computeCushionBandTotal(bandKey, kind, key) {
-  const pul = getPulRingUse(kind, key) ? getPulRingThickness(kind, key) : 0;
-  const layers = getCushionLayerData(kind, key)[bandKey] || [];
-  return pul + layers.reduce((s, l) => s + (l.thickness || 0), 0);
+// パルリング（PB製標準品）は据付枚数の指定がなく常に全周1枚のため、満タンのリングで固定表示する。
+function pulRingIconSVG() {
+  return `<svg viewBox="0 0 52 52" width="34" height="34" style="flex-shrink:0"><circle cx="26" cy="26" r="22" fill="${PULRING_COLOR}" fill-opacity="0.85" stroke="#64748b" stroke-width="1.25"/><circle cx="26" cy="26" r="12" fill="var(--card-bg,#fff)" stroke="#64748b" stroke-width="1"/></svg>`;
 }
-function cushionSummaryHTML(kind, key) {
-  const totals = CUSHION_BANDS.map(band => ({ label: band.label, total: computeCushionBandTotal(band.key, kind, key) }));
-  const maxEntry = totals.reduce((a, b) => b.total > a.total ? b : a, totals[0]);
-  const kindArg = kind ? `'${kind}'` : 'null', keyArg = kind ? `'${key}'` : 'null';
-  const currentS4 = kind ? (cushionSpecOf(kind, key).cushion ?? n('pipeCushion')) : n('pipeCushion');
-  return `
-    <div class="metrics-grid">
-      ${totals.map(t => `<div class="metric-card"><div class="metric-label">${t.label}</div><div class="metric-value">${t.total.toFixed(1)}</div><div class="metric-sub">mm</div></div>`).join('')}
-    </div>
-    <p class="report-note" style="margin-top:6px">最大合計厚さ: <b>${maxEntry.label} = ${maxEntry.total.toFixed(1)}mm</b>（現在のクッション材厚S4 = ${(currentS4||0).toFixed(1)}mm）
-      <button type="button" class="mode-btn" style="margin-left:8px" onclick="applyCushionThicknessToS4(${maxEntry.total},${kindArg},${keyArg})">この値をS4に反映</button></p>
-    ${kind ? '' : '<p class="report-note" style="margin-top:2px">σ_allow適合判定（クッション材選定）は材質の圧縮強度に基づく判定であり、この合計厚さとは独立です。厚さは目地開口の残留量計算（クッション材厚S4）にのみ関係します。</p>'}
-  `;
+// 74章: パルリング・追加クッション層は「区間別個別仕様」の枠組みから外し、曲線ごとに直接
+// 持たせる（curves[i].pulRingUse/pulRingThickness/cushionLayers）。直線区間は編集UIを持たず、
+// 「直前の曲線（発進立坑側）と同じ」を自動的に引き継ぐ（resolveStraightCushionS4()参照）。
+// S4はもう手動反映ボタンを介さず、これらの値から常に自動計算する（computeCurveCushionS4()）。
+function getCurveById(curveId) { return curves.find(c => c.id === curveId); }
+function ensureCurveCushionFields(c) {
+  if (c.pulRingUse == null) c.pulRingUse = pulRingUse;
+  if (c.pulRingThickness == null) c.pulRingThickness = n('pulRingThickness') || 10;
+  if (!c.cushionLayers) c.cushionLayers = [];
+  return c;
 }
-function renderCushionLayerSummary(kind, key) {
-  const el = document.getElementById(cushionPrefix(kind, key) + 'cushionLayerSummary');
-  if (el) el.innerHTML = cushionSummaryHTML(kind, key);
+function computeCurveCushionS4(curveIdx) {
+  const c = curves[curveIdx];
+  if (!c) return 0;
+  ensureCurveCushionFields(c);
+  const pul = c.pulRingUse !== false ? (c.pulRingThickness || 0) : 0;
+  return pul + c.cushionLayers.reduce((s, l) => s + (l.thickness || 0), 0);
 }
-function applyCushionThicknessToS4(val, kind, key) {
-  const rounded = Math.round(val * 10) / 10;
-  if (kind) {
-    const spec = cushionSpecOf(kind, key);
-    spec.cushion = rounded;
-    const el = document.getElementById(`seg_${kind}_${key}_cushion`);
-    if (el) el.value = rounded;
-    afterSegSpecChange(kind);
+// 第1直線（どの曲線も通過していない区間）は初期値のパルリングのみ・追加層なし。
+// それ以外の直線は「直前の曲線（発進立坑側、curves[idx-1]）と同じクッション仕様」を自動的に
+// 引き継ぐ（曲線を通過した管は、その曲線用に施工したクッションのまま次の曲線まで進むため）。
+function resolveStraightCushionS4(straightIdx) {
+  if (straightIdx <= 0) return pulRingUse ? (n('pulRingThickness') || 0) : 0;
+  return computeCurveCushionS4(straightIdx - 1);
+}
+function setCurvePulRingUse(curveId, use) {
+  const c = getCurveById(curveId); if (!c) return;
+  ensureCurveCushionFields(c);
+  c.pulRingUse = use;
+  onCurveCushionChange(curveId);
+}
+function onCurvePulRingThicknessChange(curveId, el) {
+  const c = getCurveById(curveId); if (!c) return;
+  ensureCurveCushionFields(c);
+  const val = parseFloat(el.value);
+  c.pulRingThickness = Number.isFinite(val) ? val : 0;
+  onCurveCushionChange(curveId);
+}
+function setCurveCushionLayerCount(curveId, val) {
+  const c = getCurveById(curveId); if (!c) return;
+  ensureCurveCushionFields(c);
+  const target = Math.max(0, Math.min(4, parseInt(val, 10) || 0));
+  const arr = c.cushionLayers;
+  while (arr.length < target) arr.push({ thickness: 0, angle: 90, count: 4, material: '' });
+  while (arr.length > target) arr.pop();
+  onCurveCushionChange(curveId);
+}
+function onCurveCushionLayerFieldChange(curveId, idx, field, el) {
+  const c = getCurveById(curveId); if (!c) return;
+  ensureCurveCushionFields(c);
+  const layer = c.cushionLayers[idx];
+  if (!layer) return;
+  if (field === 'material') {
+    layer.material = el.value;
+  } else if (field === 'angle') {
+    const val = parseInt(el.value, 10);
+    layer.angle = CUSHION_ANGLE_OPTS.includes(val) ? val : 90;
+    layer.count = cushionLayerFullCount(layer.angle); // 角度を変えたら「全面」相当にリセット（旧角度の枚数のままだと不整合になるため）
+  } else if (field === 'count') {
+    layer.count = parseInt(el.value, 10) || 2;
   } else {
-    setV('pipeCushion', rounded);
-    autoSave();
-    calcAlignment();
-    refreshForceIfCalculated();
+    const val = parseFloat(el.value);
+    layer[field] = Number.isFinite(val) ? val : 0;
   }
-  showToast('クッション材厚S4に反映しました');
+  onCurveCushionChange(curveId);
 }
-function onCushionLayersChange(kind, key) {
-  renderCushionLayerSummary(kind, key);
+// 曲線1本ぶんのパルリング・層構成編集UIをHTML文字列として返す（副作用なし）。renderCurves()から
+// 各曲線ブロックのR/方向/IA入力の直後に埋め込む。
+function curveCushionUIHTML(curveId) {
+  const c = getCurveById(curveId);
+  if (!c) return '';
+  ensureCurveCushionFields(c);
+  const pulOn = c.pulRingUse !== false;
+  const layers = c.cushionLayers.map(normalizeCushionLayer);
+  const legend = `<p style="margin:6px 2px 0;font-size:11px">発泡倍数（材質グレード）の色分け: ${CUSHION_MATERIAL_OPTS.filter(o => o.v).map(o => `<span style="display:inline-flex;align-items:center;gap:3px;margin-right:10px"><span style="width:9px;height:9px;background:${o.color};display:inline-block;border-radius:2px"></span>${o.label}</span>`).join('')}</p>`;
+  const rows = [1, 2, 3, 4].map(i => {
+    const checked = layers.length >= i;
+    const disabled = !checked && layers.length < i - 1;
+    const fields = checked ? curveCushionLayerFieldsHTML(layers[i - 1], i - 1, curveId) : '';
+    return `
+    <div style="margin-top:6px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled?'0.4':'1'}">
+        <input type="checkbox" ${checked?'checked':''} ${disabled?'disabled':''} onchange="setCurveCushionLayerCount(${curveId},${checked?i-1:i})">
+        ${i}層目
+      </label>
+      ${fields}
+    </div>`;
+  }).join('');
+  const total = computeCurveCushionS4(curves.indexOf(c));
+  return `
+    <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
+      <p class="report-note" style="margin:0 2px 6px;font-weight:600">パルリング・クッション層構成（この曲線専用）</p>
+      <div class="field-row full"><label>パルリング（標準付属）</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span style="display:inline-flex;opacity:${pulOn?'1':'0.3'}">${pulRingIconSVG()}</span>
+          <button type="button" class="mode-btn ${pulOn?'active':''}" onclick="setCurvePulRingUse(${curveId},true)">あり（標準）</button>
+          <button type="button" class="mode-btn ${!pulOn?'active':''}" onclick="setCurvePulRingUse(${curveId},false)">なし</button>
+        </div>
+      </div>
+      ${pulOn ? `<div class="field-row">
+        <label>パルリング厚さ [mm]</label>
+        <input class="mono" type="number" step="0.5" value="${c.pulRingThickness}" onchange="onCurvePulRingThicknessChange(${curveId},this)">
+        <span class="unit">mm</span>
+      </div>` : ''}
+      ${legend}
+      ${layers.length === 0 ? '<p class="report-note" style="margin:4px 2px">パルリングのみ（追加層なし）</p>' : ''}
+      ${rows}
+      <p class="report-note" style="margin-top:6px">この曲線の合計クッション厚さ（S4・自動計算）: <b>${total.toFixed(1)}mm</b></p>
+    </div>`;
+}
+function curveCushionLayerFieldsHTML(l, i, curveId) {
+  const matOpt = cushionMaterialOpt(l.material);
+  const countOpts = cushionLayerCountOptions(l.angle);
+  return `
+  <div style="display:flex;gap:10px;align-items:flex-start;margin-top:4px;padding:6px;border:1px solid var(--line);border-radius:6px">
+    <div style="text-align:center">
+      ${layerCoverageDiagramSVG(l.angle, l.count, matOpt.color)}
+      <div style="font-size:10px;color:var(--sub);margin-top:2px;white-space:nowrap">${l.angle}° ${l.count}枚${l.count >= cushionLayerFullCount(l.angle) ? '(全面)' : `(上下${l.count/2}枚ずつ)`}</div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div class="two-col" style="align-items:end">
+        <div class="field-row"><label>厚さ[mm]</label>
+          <select onchange="onCurveCushionLayerFieldChange(${curveId},${i},'thickness',this)">
+            ${CUSHION_THICKNESS_OPTS.map(t => `<option value="${t}" ${l.thickness===t?'selected':''}>${t}mm</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row"><label>ピース角度（1切片幅）</label>
+          <select onchange="onCurveCushionLayerFieldChange(${curveId},${i},'angle',this)">
+            ${CUSHION_ANGLE_OPTS.map(a => `<option value="${a}" ${l.angle===a?'selected':''}>${a}°（${cushionLayerFullCount(a)}分割）</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row"><label>枚数</label>
+          <select onchange="onCurveCushionLayerFieldChange(${curveId},${i},'count',this)">
+            ${countOpts.map(o => `<option value="${o.v}" ${l.count===o.v?'selected':''}>${o.label}</option>`).join('')}
+          </select>
+        </div>
+        <div class="field-row"><label>発泡倍数（材質）</label>
+          <select onchange="onCurveCushionLayerFieldChange(${curveId},${i},'material',this)">
+            ${CUSHION_MATERIAL_OPTS.map(o => `<option value="${o.v}" ${l.material===o.v?'selected':''}>${o.label}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function renderCurveCushionUI(curveId) {
+  const el = document.getElementById(`curveCushionBlock_${curveId}`);
+  if (el) el.innerHTML = curveCushionUIHTML(curveId);
+}
+function onCurveCushionChange(curveId) {
+  renderCurveCushionUI(curveId); // 合計厚さ表示を反映
+  updateCurveJoint(curveId); // 継手判定もS4変化を反映して再計算
+  calcAlignment(); // 直線側の自動継承・下流のS4計算をすべて再計算
   autoSave();
 }
 
@@ -3920,7 +4058,11 @@ function calculate() {
   function foForSpec(spec, hVal, distFromBP) {
     const zone = resolveSoilAt(distFromBP);
     const tzLocal = calcTerzaghi(zone.gamma, zone.phi, zone.C, hVal, spec.D);
-    const p = { D: spec.D, W: spec.W, t: spec.t, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef, foFormula };
+    // 75章: 泥水式・土圧式のfo計算に使う推進力低減係数β（表3.2.4.1-2、土質別）。
+    // 区間別土質ゾーンは土質区分（粘性土/砂質土/礫質土）を持たないため、土質条件タブの
+    // 共通の土質区分（soilType）を使う。
+    const betaReduction = SLURRY_BETA_BY_SOIL[v('soilType')] != null ? SLURRY_BETA_BY_SOIL[v('soilType')] : 0.4;
+    const p = { D: spec.D, W: spec.W, t: spec.t, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef, betaReduction, foFormula };
     const r = calcFoFo(currentMethod, p);
     return { ...r, q_total: tzLocal.q_total, zone };
   }
@@ -3978,7 +4120,7 @@ function calculate() {
 
   // 最終直線（到達側）＝直線区間の個別仕様カードの「最終直線」パネルに対応
   if (epStraight > 0) {
-    const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec);
+    const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec, resolveStraightCushionS4(N_curves));
     const { fo: segFo, q_total: segQ } = foForSpec(segSpec, H, bpCursor - epStraight/2);
     const dF = segFo * epStraight;
     F_cum += dF;
@@ -3997,7 +4139,7 @@ function calculate() {
   const intermediateStraightFallback = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
-    const cSpec = resolveSpec(c.spec);
+    const cSpec = resolveSpec(c.spec, computeCurveCushionS4(curveNo - 1));
     const curveZone = resolveSoilAt(bpCursor - c.CL/2);
     const { fo: curveFo } = foForSpec(cSpec, H, bpCursor - c.CL/2);
     const { alpha, K, k: kConst } = calcCurveK(c.R, cSpec.D, cSpec.lp, curveZone.phi);
@@ -4015,7 +4157,7 @@ function calculate() {
     if (i < reversedCurves.length - 1) {
       const midLen = useRealLengths ? straightLenAt(curveNo - 1) : intermediateStraightFallback;
       if (midLen > 0) {
-        const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec);
+        const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec, resolveStraightCushionS4(curveNo - 1));
         const { fo: midFo, q_total: midQ } = foForSpec(midSpec, H, bpCursor - midLen/2);
         const dF = midFo * midLen;
         F_cum += dF;
@@ -4030,7 +4172,7 @@ function calculate() {
     ? straightLenAt(0)
     : (reversedCurves.length > 0 ? spStraight - intermediateStraightFallback * (reversedCurves.length - 1) : spStraight);
   if (spRemain > 0) {
-    const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec);
+    const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0));
     const { fo: firstFo, q_total: firstQ } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
     const dF = firstFo * spRemain;
     F_cum += dF;
@@ -4620,8 +4762,8 @@ function computeProgressiveTrace(segments, Fo) {
   ordered.forEach(seg => {
     if (!(seg.L > 0) || !seg.spec) return;
     const lp = seg.spec.lp || 2.43;
-    // クッション材厚を、管1本ごとの距離に加える（70章: つぶれ代は廃止し無圧縮想定）
-    const netCushionM = Math.max(0, seg.spec.S4 || 0) / 1000;
+    // クッション材厚からつぶれ代を差し引いた残り分を、管1本ごとの距離に加える（74章でつぶれ代を復活）
+    const netCushionM = Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0)) / 1000;
     if (seg.type === 'curve') markers.push({ label:`BC${seg.curveNo}`, x });
     if (seg.type === 'straight') {
       // 端数を最後の1本に寄せず、区間内で均等割りする（曲線側と同じ考え方）。
@@ -7500,19 +7642,20 @@ function getProjectData() {
       category: v('pipeCategory'), dia: v('pipeDia'), grade: v('pipeGrade'),
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
-      jointType: n('pipeJointType'), cushion: n('pipeCushion'),
+      jointType: n('pipeJointType'), cushion: n('pipeCushion'), crush: n('pipeCrush'),
       cushionSigmaAllow: n('pipeCushionSigmaAllow'), cushionMaterial: v('pipeCushionMaterial'),
-      pulRingUse, pulRingThickness: n('pulRingThickness'), cushionLayerData,
+      pulRingUse, pulRingThickness: n('pulRingThickness'),
       Pext: n('pipePext'), Bs: n('pipeBs')
     },
     soil: {
       type: v('soilType'), gamma: n('soilGamma'), phi: n('soilPhi'),
       phiPipe: n('soilPhiPipe'), C: n('soilC'), N: n('soilN'), Nprime: n('soilNprime'),
+      shinnukiUse: !!document.getElementById('shinnukiUse').checked,
       Hmin: n('soilHmin'), Hmax: n('soilHmax'), adh: n('soilAdh'), water: n('soilWater'),
       gravel: n('soilGravel'), gravelM: n('soilGravelM'),
       alpha: n('soilAlpha'), beta: n('soilBeta'),
       foFormula: v('bladeFoFormula'), selfSupport: v('soilSelfSupport'),
-      zones: soilZones.map(z => ({fromM:z.fromM, toM:z.toM, gamma:z.gamma, phi:z.phi, phiPipe:z.phiPipe, C:z.C, N:z.N, Nprime:z.Nprime, adh:z.adh}))
+      zones: soilZones.map(z => ({fromM:z.fromM, toM:z.toM, gamma:z.gamma, phi:z.phi, phiPipe:z.phiPipe, C:z.C, N:z.N, Nprime:z.Nprime, adh:z.adh, shinnukiUse:!!z.shinnukiUse}))
     },
     alignment: {
       totalLength: n('totalLength'), curves: getCurves(),
@@ -7590,6 +7733,7 @@ function setProjectData(d) {
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
     if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
+    if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush); // 70章で一度削除された際、pipe.cushionだけ復元してpipe.crushの復元を書き忘れるバグがあった（74章で復活時、!=nullでの明示チェックを踏襲）
     if (d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
     setV('pipeCushionMaterial', d.pipe.cushionMaterial || '');
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
@@ -7597,18 +7741,10 @@ function setProjectData(d) {
     const jointMap = {'JC':'60','JB':'40','JA':'30','60':'60','40':'40','30':'30'};
     const joint = d.pipe.jointType || d.pipe.joint;
     if (joint) setV('pipeJointType', jointMap[joint] || joint);
-    // 68章: パルリング・角度帯別クッション層構成
+    // 68章/74章: パルリングの初期値（新規曲線・第1直線の基準値）。追加クッション層は74章より
+    // 曲線ごと（d.alignment.curves[].cushionLayers）に保存されるため、ここでは読まない。
     setV('pulRingThickness', d.pipe.pulRingThickness != null ? d.pipe.pulRingThickness : 10);
-    setPulRingUse(d.pipe.pulRingUse !== false);
-    cushionLayerData = { b0: [], b1: [], b2: [], b3: [], b4: [] };
-    if (d.pipe.cushionLayerData) {
-      CUSHION_BANDS.forEach(band => {
-        const saved = d.pipe.cushionLayerData[band.key];
-        if (Array.isArray(saved)) cushionLayerData[band.key] = saved.map(l => ({ thickness: l.thickness||0, div: l.div||4, count: l.count||0 }));
-      });
-    }
-    renderCushionLayerBands();
-    renderCushionLayerSummary();
+    pulRingUse = d.pipe.pulRingUse !== false;
   }
   if (d.soil) {
     // 土質種別: 旧フォーマットは日本語表記、新フォーマットは英字キー
@@ -7621,6 +7757,8 @@ function setProjectData(d) {
     setV('soilN', d.soil.N||15);
     // N′: 旧保存データには無いため、未保存ならN値と同じにする（後方互換）
     setV('soilNprime', d.soil.Nprime ?? d.soil.N ?? 15);
+    // 76章: 切羽心抜きチェック状態を復元（保存済みN′値はそのまま使い、再計算はしない）
+    { const shEl = document.getElementById('shinnukiUse'); if (shEl) { shEl.checked = !!d.soil.shinnukiUse; document.getElementById('soilNprime').readOnly = shEl.checked; } }
     // 土被り: 旧フォーマット(cover単一値)→Hmin=Hmax=cover
     const cover = d.soil.cover;
     setV('soilHmin', d.soil.Hmin ?? (cover ? cover * 0.7 : 2.0));
@@ -7636,7 +7774,8 @@ function setProjectData(d) {
     soilZones = (d.soil.zones || []).map(z => ({
       id: ++soilZoneCounter, fromM: z.fromM||0, toM: z.toM||0,
       gamma: z.gamma||18, phi: z.phi||30, phiPipe: z.phiPipe||20,
-      C: z.C||0, N: z.N||15, Nprime: z.Nprime ?? z.N ?? 15, adh: z.adh||10
+      C: z.C||0, N: z.N||15, Nprime: z.Nprime ?? z.N ?? 15, adh: z.adh||10,
+      shinnukiUse: !!z.shinnukiUse
     }));
     renderSoilZones();
   }
@@ -7650,8 +7789,12 @@ function setProjectData(d) {
       // spec: 旧保存（cushionのみ）からの後方互換も兼ねる
       let spec = c.spec || null;
       if (!spec && Number.isFinite(c.cushion)) spec = { on:true, category:'hume', grade:'1shu', cushion:c.cushion };
+      // 74章: パルリング・クッション層は曲線ごとに個別保存。旧保存データ（曲線に無い）は
+      // 未設定のままにしておき、ensureCurveCushionFields()が描画・計算時に初期値で補う。
       curves.push({ id, L: c.L||50, R: c.R||30, dir: c.dir||'R',
-                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0, spec });
+                    deg: c.deg||0, min: c.min||0, sec: c.sec||0, CL: c.CL||0, spec,
+                    pulRingUse: c.pulRingUse, pulRingThickness: c.pulRingThickness,
+                    cushionLayers: Array.isArray(c.cushionLayers) ? c.cushionLayers.map(l => ({...l})) : [] });
     });
     renderCurves();
     straightSpecs = (d.alignment.straightSpecs || []).map(s => ({ spec: s && s.spec ? s.spec : null }));
@@ -7886,7 +8029,7 @@ function updateProjectSummary() {
 // ══════════════════════════════════════
 (function init() {
   populateCircleMaterialSelects(); // 円形立坑（発進/到達）のライナー呼び径・板厚セレクトの選択肢を準備（65章）
-  { const dEl = document.getElementById('cushionAngleDiagram'); if (dEl) dEl.innerHTML = cushionAngleDiagramSVG(); } // 70章: 角度帯の据付位置図
+  { const iEl = document.getElementById('pulRingIcon'); if (iEl) iEl.innerHTML = pulRingIconSVG(); } // 71章: パルリングのリングアイコン初期表示
   // localStorage から復元
   const saved = localStorage.getItem('curvedJackingProjectDraft') || localStorage.getItem('curvedJackingProject');
   if (saved) {
@@ -7897,8 +8040,6 @@ function updateProjectSummary() {
     onSoilTypeChange();
     onPipeCategoryChange(); // 自動項目の読取専用化・シールド機外径の初期値設定
     document.getElementById('siteDate').value = new Date().toISOString().slice(0,10);
-    renderCushionLayerBands();
-    renderCushionLayerSummary();
     renderCurves();
     renderSoilZones();
     calcAlignment(); // 線形計算結果（区間ごとの個別仕様パネルを含む）を初期表示する
