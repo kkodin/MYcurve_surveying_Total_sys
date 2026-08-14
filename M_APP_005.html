@@ -324,13 +324,11 @@ tr.row-selected{background:#eff6ff}
           <option value="30">JA型 — 許容30mm</option>
         </select>
       </div>
-      <div class="field-row"><label>クッション材厚 S4 [mm]（自動）</label><input id="pipeCushion" class="mono" value="20" type="number" step="1" readonly><span class="unit">mm</span></div>
-      <div class="field-row"><label>つぶれ代 [mm]（手入力）</label><input id="pipeCrush" class="mono" value="0" type="number" step="0.5" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()"><span class="unit">mm</span></div>
       <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
     </div>
-    <div class="note-box" style="font-size:11px">S4: 下の「詳細: 推進力伝達材の層構成」カードで設定します（パルリング・角度帯別クッション層の合計厚さを「S4に反映」ボタンで反映）。ここでは直接編集できません。<br>
-    つぶれ代: 荷重でクッション材が圧縮された後の厚み減少分（実測・実績値を手入力）。1本毎推進力計算表のグラフ距離補正、および管本数・目地仕様集計の直線区間残留開口S1（＝S4−つぶれ代）に使います。未入力（0）なら無圧縮想定＝安全側の従来動作のままです。区間ごとに異なる場合は下の各直線・曲線カードの個別仕様で上書きできます。<br>
-    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。この判定は材質の圧縮強度に基づくものであり、S4の厚さそのものとは独立です。</div>
+    <div class="note-box" style="font-size:11px">
+    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。この判定は材質の圧縮強度に基づくものであり、S4の厚さそのものとは独立です。<br>
+    クッション材厚S4・つぶれ代は、下の「詳細: 推進力伝達材」カードで設定します（77章）。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
@@ -371,6 +369,12 @@ tr.row-selected{background:#eff6ff}
       <input id="pulRingThickness" class="mono" type="number" step="0.5" value="10" onchange="autoSave();calcAlignment();refreshForceIfCalculated()">
       <span class="unit">mm</span>
     </div>
+    <div class="field-row" id="pipeCrushRow">
+      <label>つぶれ代 [mm]（手入力・標準付属クッション材のみ）</label>
+      <input id="pipeCrush" class="mono" value="0" type="number" step="0.5" min="0" oninput="autoSave();calcAlignment();refreshForceIfCalculated()">
+      <span class="unit">mm</span>
+    </div>
+    <p class="report-note" style="margin:2px 2px 8px">つぶれ代: 荷重でクッション材が圧縮された後の厚み減少分（実測・実績値を手入力）。1本毎推進力計算表のグラフ距離補正、および管本数・目地仕様集計の直線区間残留開口S1（＝S4−つぶれ代）に使います。未入力（0）なら無圧縮想定＝安全側の従来動作のままです。区間ごとに異なる場合は下の各直線・曲線カードの個別仕様で上書きできます。パルリングを「なし」にした場合、標準付属クッション材自体が存在しないためグレーアウトします。</p>
   </div>
 
   <div class="card accordion">
@@ -908,11 +912,13 @@ tr.row-selected{background:#eff6ff}
         図面に水準高（標高）が記載されている場合はこちらを使うと、H_w・h_cを自動計算します（基礎コンクリート天端を基準に換算）。管底水準高は管内側下端（フローライン、下水道の慣例）を想定しており、管中心高さは「管底水準高＋管内径/2」から求めます。
       </div>
       <div class="two-col">
+        <div class="field-row"><label>立坑地盤高 水準高 [m]（任意・図表示用）</label><input id="wallElGround" class="mono" type="number" step="0.001" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row"><label>基礎コンクリート天端 水準高 [m]</label><input id="wallElBase" class="mono" type="number" step="0.001" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row"><label>管底 水準高 [m]</label><input id="wallElPipeInvert" class="mono" type="number" step="0.001" value="0.5" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row"><label>支圧壁天端 水準高 [m]</label><input id="wallElWallTop" class="mono" type="number" step="0.001" value="2.5" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row"><label>立坑中心と推進中心のオフセット [m]</label><input id="wallCenterOffset" class="mono" type="number" step="0.01" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
       </div>
+      <p class="report-note" style="margin:4px 2px 0">立坑地盤高は縦断面図・標高一覧表への表示のみに使用します（H_w・h_cの計算には影響しません）。未入力（0）の場合は地盤高の行を表示しません。</p>
       <p class="report-note" style="margin:4px 2px 0">オフセットは立坑の幾何中心から見た推進管中心のずれ（通常0）。円形立坑のジャッキ配置（推力分散用）の局所厚さ計算にも反映されます。</p>
       <p class="report-note" id="wallLevelTopActualNote" style="margin:4px 2px 0"></p>
     </div>
@@ -961,8 +967,9 @@ tr.row-selected{background:#eff6ff}
     <canvas id="wallPlanView" style="width:100%;height:230px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
     <div id="wallPlanViewCaption" class="report-note" style="margin:4px 2px 0;line-height:1.7"></div>
     <div style="font-size:13px;font-weight:bold;color:var(--navy);margin:10px 0 4px">縦断面図（推進方向から見た図）</div>
-    <canvas id="wallSectionView" style="width:100%;height:230px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
+    <canvas id="wallSectionView" style="width:100%;height:300px;border-radius:8px;display:block;border:1px solid var(--line);background:#fff"></canvas>
     <div id="wallSectionViewCaption" class="report-note" style="margin:4px 2px 0;line-height:1.7"></div>
+    <div id="wallSectionElevTable" style="margin:8px 2px 0"></div>
   </div>
 
   <div id="backlockResult"></div>
@@ -1477,7 +1484,7 @@ function resolveSpec(override, autoS4) {
     category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
     D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
     lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
-    S4: n('pipeCushion') || 0, jointAllowMm: n('pipeJointType') || 40,
+    S4: 0, jointAllowMm: n('pipeJointType') || 40, // 77章: グローバルなS4入力欄は廃止。実際のS4は常にautoS4（曲線/直線ごとの自動計算値）で上書きされる
     crush: n('pipeCrush') || 0,
     cushionMaterial: v('pipeCushionMaterial') || ''
   };
@@ -3795,6 +3802,10 @@ function setPulRingUse(use) {
   if (row) row.style.display = use ? '' : 'none';
   const icon = document.getElementById('pulRingIcon');
   if (icon) { icon.style.opacity = use ? '1' : '0.3'; if (!icon.innerHTML) icon.innerHTML = pulRingIconSVG(); }
+  // 77章: 標準付属クッション材（パルリング）が無い場合、そのつぶれ代欄は意味を持たないためグレーアウト＋入力無効にする。
+  const crushEl = document.getElementById('pipeCrush'), crushRow = document.getElementById('pipeCrushRow');
+  if (crushEl) crushEl.disabled = !use;
+  if (crushRow) crushRow.style.opacity = use ? '1' : '0.4';
   autoSave();
 }
 
@@ -6700,6 +6711,15 @@ function drawWallPlanView() {
   setWallPlanCaption(caption);
 }
 
+// 79.x章: ユーザー提供のCAD参考図（支圧壁正面図.pdf）にならい、水準高モードでは絶対標高(▽)を
+// 地盤高から基礎天端まで一本の断面図で表示する。地盤高〜支圧壁天端は現場ごとに数mになり得るため、
+// 縮尺のまま描くと下の壁・管の詳細が小さくなりすぎる。CAD図同様、この区間は「破断（省略）」記号で
+// 縮尺を無視した固定高さに圧縮し、実際の距離は数値のみで示す。
+// 79.x章: ユーザー提供のCAD参考図「支圧壁正面図.pdf」に忠実な構成で描く。
+// 骨子: 左右の土留め壁（ライナープレート、波線）＋3本の一点鎖線の中心線（左端・中央・右端）を
+// 全高に通し、地盤高〜支圧壁天端間は破断記号で縮尺を無視して圧縮する。壁は塗りつぶし矩形ではなく
+// 土留め壁の線のみで表現し、水平の標高ライン（▽ラベル、左側）と管の外径・内径円、右側に
+// 入れ子状の寸法線（CAD同様、数値のみを縦書きで示す）を配置する。
 function drawWallSectionView() {
   const canvas = document.getElementById('wallSectionView');
   if (!canvas) return;
@@ -6712,89 +6732,177 @@ function drawWallSectionView() {
   ctx.clearRect(0, 0, w, h);
 
   const capEl = document.getElementById('wallSectionViewCaption');
+  const tableEl = document.getElementById('wallSectionElevTable');
   const Bw = n('wallBw'), HwDesign = n('wallHw'), Hw = effectiveWallHw(), hc = n('wallHc');
   if (!Bw || !Hw) {
     ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('支圧壁の諸元を入力すると表示されます', w / 2, h / 2);
     if (capEl) capEl.innerHTML = '';
+    if (tableEl) tableEl.innerHTML = '';
     return;
   }
   const pipeOuter = n('pipeOuter') || 0.96;
-  const pipeInner = n('pipeInner') || 0; // 内径（41章：外径だけでなく内径の線も描く）
-  const { Beff, sagitta } = computeWallBeff(); // 円形立坑では弦Beff＜Bwになりうるため、実際の幅はBeffを使う
+  const pipeInner = n('pipeInner') || 0;
+  const { Beff, sagitta } = computeWallBeff();
 
-  const dimGutter = 76; // 左側に寸法線を描くための余白
-  const margin = 30;
-  const worldW = Beff, worldH = Math.max(Hw, hc + pipeOuter / 2) * 1.2;
-  const scale = Math.min((w - margin * 2 - dimGutter) / worldW, (h - margin * 2) / worldH);
+  const isLevelMode = wallLevelMode === 'level';
+  const elBase = n('wallElBase');
+  const elInvert = n('wallElPipeInvert');
+  const elGround = n('wallElGround');
+  const elTopActual = elBase + Hw;
+  const elCenter = elBase + hc;
+  const hasGround = isLevelMode && elGround > elTopActual + 1e-6;
+  const invertY = pipeInner > 0 ? hc - pipeInner / 2 : null; // 管底（内側下端・フローライン）
+
+  const leftGutter = 116; // 標高ラベル用
+  const rightGutter = 96; // 寸法線用
+  const margin = 18;
+  const groundZoneH = hasGround ? 36 : 0;
+  const breakH = hasGround ? 14 : 0;
+  const drawTop = groundZoneH + breakH;
+  const worldW = Beff, worldH = Math.max(Hw, hc + pipeOuter / 2) * 1.15;
+  const scale = Math.min((w - leftGutter - rightGutter - margin * 2) / worldW, (h - drawTop - margin * 2) / worldH);
   const baseY = h - margin; // y=0（基礎コンクリート上面）
-  const offX = dimGutter + margin + ((w - margin * 2 - dimGutter) - worldW * scale) / 2;
+  const offX = leftGutter + margin + ((w - leftGutter - rightGutter - margin * 2) - worldW * scale) / 2;
   const tx = (x) => offX + x * scale;
   const ty = (y) => baseY - y * scale;
+  const xL = tx(0), xR = tx(Beff), xC = tx(Beff / 2);
 
-  // 基礎コンクリート上面(y=0)ライン
-  ctx.strokeStyle = '#cbd5e1';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(0, ty(0)); ctx.lineTo(w, ty(0)); ctx.stroke();
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '10px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('基礎コンクリート上面（y=0）', dimGutter, ty(0) - 4);
+  // 3本の一点鎖線（左端・中央・右端）。CAD図にならい全高に通す。
+  [xL, xC, xR].forEach(x => {
+    ctx.save();
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+    ctx.setLineDash([9, 3, 1.5, 3]);
+    ctx.beginPath(); ctx.moveTo(x, 3); ctx.lineTo(x, h - 3); ctx.stroke();
+    ctx.restore();
+  });
 
-  // 支圧壁本体（幅は実際に有効なBeffを使う。円形立坑ではBwより狭くなりうる）
-  ctx.fillStyle = 'rgba(148,163,184,0.25)';
-  ctx.fillRect(tx(0), ty(Hw), Beff * scale, Hw * scale);
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(tx(0), ty(Hw), Beff * scale, Hw * scale);
+  // 左右の土留め壁（ライナープレート、波線）。地盤高ラインのすぐ下〜図の下端まで連続して描く
+  // （物理的に連続する壁のため、地盤高〜支圧壁天端間の破断があっても線自体は途切れさせない）。
+  const linerTop = hasGround ? groundZoneH * 0.6 + 6 : 3;
+  const drawLiner = (x) => {
+    ctx.strokeStyle = '#2563eb'; ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    const amp = 2.2, period = 11;
+    for (let y = linerTop; y <= h - 3; y += 1.5) {
+      const dx = amp * Math.sin((y - linerTop) / period * Math.PI * 2);
+      if (y === linerTop) ctx.moveTo(x + dx, y); else ctx.lineTo(x + dx, y);
+    }
+    ctx.stroke();
+  };
+  drawLiner(xL); drawLiner(xR);
 
-  // 推進管芯高さ線＋管断面（外径・内径の両方を描く。41章）
-  ctx.save();
-  ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
-  ctx.setLineDash([5, 4]);
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.moveTo(tx(-0.15), ty(hc)); ctx.lineTo(tx(Beff + 0.15), ty(hc)); ctx.stroke();
-  ctx.restore();
-  // 外径
+  // 地盤高ゾーン＋破断記号（CAD図の「地盤高 ▽164.700」〜支圧壁天端間の省略表現にならう）
+  if (hasGround) {
+    const groundLineY = groundZoneH * 0.6;
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, groundLineY); ctx.lineTo(w, groundLineY); ctx.stroke();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(leftGutter, groundLineY, w - leftGutter, groundZoneH - groundLineY); ctx.clip();
+    ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 1;
+    for (let hx = leftGutter - 40; hx < w + 20; hx += 9) {
+      ctx.beginPath(); ctx.moveTo(hx, groundZoneH + 6); ctx.lineTo(hx + 14, groundLineY); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#334155'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText(`地盤高　▽${elGround.toFixed(3)}`, 4, groundLineY - 4);
+
+    // 破断記号（斜め二重線のみ。CAD図同様、説明文は付けない）
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.5;
+    [xC - 6, xC + 4].forEach(bx => {
+      ctx.beginPath(); ctx.moveTo(bx - 8, groundZoneH); ctx.lineTo(bx + 8, groundZoneH + breakH); ctx.stroke();
+    });
+
+    // 地盤高〜支圧壁天端の距離（縦書き、CAD図の「7145」相当）
+    const gapMM = Math.round((elGround - elTopActual) * 1000);
+    ctx.save();
+    ctx.translate(xR + rightGutter - 10, drawTop - 4);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#334155'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(gapMM), 0, 0);
+    ctx.restore();
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(xR + rightGutter - 10, 3); ctx.lineTo(xR + rightGutter - 10, drawTop); ctx.stroke();
+    [3, drawTop].forEach(yy => { ctx.beginPath(); ctx.moveTo(xR + rightGutter - 14, yy); ctx.lineTo(xR + rightGutter - 6, yy); ctx.stroke(); });
+  }
+
+  // 水平の標高ライン（土留め壁の内側幅ぶんだけ描き、ラベルは左側の一点鎖線の外に出す。
+  // 標高値が近いと文字が重なるため、先に位置を集めてから13px間隔を強制する簡易衝突回避を行う）。
+  const elevLine = (yWorld, dash) => {
+    const yPix = ty(yWorld);
+    ctx.save();
+    ctx.strokeStyle = '#334155'; ctx.lineWidth = 1;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(xL - 8, yPix); ctx.lineTo(xR + 8, yPix); ctx.stroke();
+    ctx.restore();
+    return yPix;
+  };
+  const yTopWall = elevLine(Hw);
+  const yCenter = elevLine(hc, [2, 3]);
+  const yInvert = invertY != null ? elevLine(invertY, [2, 3]) : null;
+  const yBase = elevLine(0);
+
+  const leftLabels = [
+    { y: yTopWall, text: isLevelMode ? `支圧壁天端　▽${elTopActual.toFixed(3)}` : '支圧壁天端' },
+    { y: yCenter, text: isLevelMode ? `管芯高　▽${elCenter.toFixed(3)}` : `推進管芯（hc=${hc.toFixed(2)}m）` },
+  ];
+  if (yInvert != null) leftLabels.push({ y: yInvert, text: isLevelMode ? `管底高　▽${elInvert.toFixed(3)}` : '管底高（内側下端）' });
+  leftLabels.push({ y: yBase, text: isLevelMode ? `基礎コンクリート天端　▽${elBase.toFixed(3)}` : '基礎コンクリート天端（y=0）' });
+  const sorted = leftLabels.slice().sort((a, b) => a.y - b.y);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].y - sorted[i - 1].y < 14) sorted[i].y = sorted[i - 1].y + 14;
+  }
+  ctx.fillStyle = '#1f2937'; ctx.font = '11px sans-serif'; ctx.textAlign = 'left';
+  sorted.forEach(item => ctx.fillText(item.text, 4, item.y - 4));
+
+  // 管断面（外径=実線、内径=一点鎖線・青。CAD図の表現にならう）
   ctx.beginPath();
-  ctx.arc(tx(Beff / 2), ty(hc), (pipeOuter / 2) * scale, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(29,111,216,0.12)';
-  ctx.fill();
-  ctx.strokeStyle = FORCE_GRAPH_COLOR.curve;
-  ctx.lineWidth = 1.5;
+  ctx.arc(xC, yCenter, (pipeOuter / 2) * scale, 0, Math.PI * 2);
+  ctx.strokeStyle = '#475569';
+  ctx.lineWidth = 1.3;
   ctx.stroke();
-  // 内径（外径と区別できるよう破線・別色）
   if (pipeInner > 0) {
     ctx.save();
     ctx.beginPath();
-    ctx.arc(tx(Beff / 2), ty(hc), (pipeInner / 2) * scale, 0, Math.PI * 2);
-    ctx.strokeStyle = '#64748b';
-    ctx.setLineDash([3, 2]);
+    ctx.arc(xC, yCenter, (pipeInner / 2) * scale, 0, Math.PI * 2);
+    ctx.strokeStyle = '#2563eb';
+    ctx.setLineDash([8, 2, 2, 2]);
     ctx.lineWidth = 1.2;
     ctx.stroke();
     ctx.restore();
   }
-  ctx.fillStyle = FORCE_GRAPH_COLOR.curve;
-  ctx.font = 'bold 11px sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText(`推進管芯 hc=${hc.toFixed(2)}m`, tx(Beff + 0.2), ty(hc) + 4);
+  // ⌀ラベル（管の外径と壁右端の間の空きに表示。CAD図の「⌀1350」同様、寸法線列とは重ならない位置）
+  const outerEdgeX = xC + (pipeOuter / 2) * scale;
+  ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(xC, yCenter); ctx.lineTo(outerEdgeX + 4, yCenter); ctx.stroke();
+  ctx.fillStyle = '#1f2937'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+  ctx.fillText(`⌀${Math.round((pipeInner || pipeOuter) * 1000)}`, outerEdgeX + 6, yCenter - 4);
 
-  // 寸法線（管芯を基準に天端・下端までの距離を左側に表示）
-  const drawDim = (xPix, yA, yB, label) => {
+  // 寸法線（右側、CAD図同様の入れ子式・縦書き数値のみ）
+  const drawVDim = (xPix, yA, yB, mmLabel) => {
     const yTop = Math.min(yA, yB), yBot = Math.max(yA, yB);
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1;
+    if (yBot - yTop < 2) return;
+    ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(xPix, yTop); ctx.lineTo(xPix, yBot); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(xPix - 4, yTop); ctx.lineTo(xPix + 4, yTop); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(xPix - 4, yBot); ctx.lineTo(xPix + 4, yBot); ctx.stroke();
-    ctx.fillStyle = '#0f172a';
-    ctx.font = '10px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(label, xPix - 6, (yTop + yBot) / 2 + 3);
+    ctx.save();
+    ctx.translate(xPix - 3, (yTop + yBot) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = '#0f172a'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(mmLabel, 0, 0);
+    ctx.restore();
   };
-  drawDim(dimGutter * 0.35, ty(Hw), ty(0), `Hw=${Hw.toFixed(2)}m`);
-  drawDim(dimGutter * 0.65, ty(Hw), ty(hc), `天端まで ${(Hw - hc).toFixed(2)}m`);
-  drawDim(dimGutter * 0.65, ty(hc), ty(0), `下端まで ${hc.toFixed(2)}m`);
+  const col1 = xR + 16, col2 = xR + 32, col3 = xR + 48, colTotal = xR + 68;
+  drawVDim(col1, yTopWall, yCenter, String(Math.round((Hw - hc) * 1000)));
+  if (yInvert != null) {
+    drawVDim(col2, yCenter, yInvert, String(Math.round((hc - invertY) * 1000)));
+    drawVDim(col2, yInvert, yBase, String(Math.round(invertY * 1000)));
+    drawVDim(col3, yCenter, yBase, String(Math.round(hc * 1000)));
+  } else {
+    drawVDim(col2, yCenter, yBase, String(Math.round(hc * 1000)));
+  }
+  drawVDim(colTotal, yTopWall, yBase, String(Math.round(Hw * 1000)));
 
   // キャプション（41章：以前はキャンバス上に文字を積み重ねて描いており、支圧壁幅・厚さ・
   // 施工高さの注記が同じ場所に重なって読めなくなっていた。キャンバスは図形のみにし、
@@ -6802,11 +6910,34 @@ function drawWallSectionView() {
   const caption = [];
   caption.push(`<span style="color:#334155">■</span> 支圧壁幅 ${Beff.toFixed(2)}m${Beff < Bw - 1e-6 ? `（指定Bw=${Bw.toFixed(2)}mから低減）` : ''}`);
   if (sagitta > 0) caption.push(`支圧壁厚(中心、平面図参照) = ${(sagitta * 1000).toFixed(0)}mm`);
-  caption.push(`<span style="color:${FORCE_GRAPH_COLOR.curve}">━</span> 推進管外径 φ${pipeOuter.toFixed(2)}m　<span style="color:#64748b">┈</span> 内径 φ${pipeInner.toFixed(2)}m`);
+  caption.push(`<span style="color:#475569">━</span> 推進管外径 φ${pipeOuter.toFixed(2)}m　<span style="color:#2563eb">－・－</span> 内径 φ${pipeInner.toFixed(2)}m`);
   if (backrockUse && Math.abs(Hw - HwDesign) > 1e-6) {
     caption.push(`<b style="color:#b45309">設計高さ${HwDesign.toFixed(2)}m→プレキャストは0.5m単位のため施工高さHw=${Hw.toFixed(2)}mに切り上げ</b>`);
   }
   if (capEl) capEl.innerHTML = caption.map(l => `<div>${l}</div>`).join('');
+
+  // 77章: 標高・寸法を表形式でも表示する（水準高モードのみ。CAD参考図の「地盤高／支圧壁天端／
+  // 管芯高／管底高／基礎天端」の並びと同じ項目を、図と合わせて数値で確認できるようにする）。
+  if (tableEl) {
+    if (!isLevelMode) {
+      tableEl.innerHTML = '<p class="report-note" style="margin:2px 2px 0">「水準高で指定」モードにすると、標高（▽）の一覧表がここに表示されます。</p>';
+    } else {
+      const rows = [];
+      if (hasGround) rows.push({ label: '立坑地盤高', el: elGround });
+      rows.push({ label: '支圧壁天端', el: elTopActual });
+      rows.push({ label: '推進管芯（中心）', el: elCenter });
+      if (invertY != null) rows.push({ label: '管底高（内側下端・フローライン）', el: elInvert });
+      rows.push({ label: '基礎コンクリート天端', el: elBase });
+      const trs = rows.map((r, i) => {
+        const gapMM = i > 0 ? Math.round((rows[i - 1].el - r.el) * 1000) : null;
+        return `<tr><td>${r.label}</td><td class="mono">▽${r.el.toFixed(3)}</td><td class="mono">${gapMM != null ? gapMM.toLocaleString() : '—'}</td></tr>`;
+      }).join('');
+      tableEl.innerHTML = `<div class="tbl-wrap"><table class="report-table">
+        <thead><tr><th>項目</th><th>標高 [m]</th><th>上の項目との差 [mm]</th></tr></thead>
+        <tbody>${trs}</tbody>
+      </table></div>`;
+    }
+  }
 }
 
 // 支圧壁の「施工高さ」の算出（39章）。バックロック使用時、支圧壁はプレキャストブロックを
@@ -6901,9 +7032,15 @@ function computeWallBeff() {
       return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter: placement.hCenter, placementOk: placement.ok };
     }
     // バックロック使用時・スクウェア形（矩形立坑向けブロックを円形立坑に強制適用する例外ケース、
-    // または型番未選定）: 幅(Bw)はカタログの型番幅をそのまま使う（幾何学的な逆算はしない）。
-    const Beff = Math.min(Bw, maxBw);
+    // または型番未選定）: 厚さ(sagitta)はカタログの型番厚さをそのまま使う（幾何学的な逆算はしない）。
+    // 77章: 有効幅Beffは、バックロック本体の幅(Bw)ではなく立坑いっぱい(maxBw=linerD)を使う。
+    // バックロックとライナー内面の隙間は間詰めコンクリートで充填され、支圧壁として地山の
+    // 受働土圧に抵抗する幅は間詰め分も含めた全幅になるため（ユーザー指摘）。①②⑤も同じBeffを
+    // 共有するため同時に反映される。④（バックロック自体の曲げ照査）だけはジャッキが本体
+    // （カタログ幅W1）に直接反力を伝える前提のため、Beffではなく別途backrockCurrentModel.W1を使う
+    // （下のcalcBacklock()参照、変更なし）。
     const sagitta = n('wallThickness') || 0;
+    const Beff = maxBw;
     const hCenter = R_eff - sagitta;
     return { Bw, maxBw, Beff, linerD, sagitta, R_eff, offset, hCenter, placementOk: true };
   }
@@ -6911,7 +7048,12 @@ function computeWallBeff() {
   if (wallShaftType === 'rect' || wallShaftType === 'open' || wallShaftType === 'oval') {
     maxBw = n('wallPitW') || Bw;
   }
-  const Beff = Math.min(Bw, maxBw);
+  // 77章: バックロック使用時は、支圧壁幅Bw（バックロック本体の幅）と立坑内法幅maxBwの隙間が
+  // 間詰めコンクリートで充填される前提のため、受働土圧等の照査に使う有効幅Beffは立坑内法幅
+  // いっぱい(maxBw)まで含める（ユーザー指摘。①②③⑤で共有。④は別途backrockCurrentModel.W1を使う）。
+  // 現場打ち（backrockUse=false）の場合は、Bw自体が既に施工する壁の全幅の設計値のため、
+  // 従来通りBwとmaxBwの小さい方（安全側の頭打ち）をそのまま使う。
+  const Beff = backrockUse ? maxBw : Math.min(Bw, maxBw);
   return { Bw, maxBw, Beff, linerD: null, sagitta: 0, R_eff: null, offset: 0, hCenter: null, placementOk: true };
 }
 
@@ -7418,7 +7560,7 @@ function calcBacklock() {
       if (thicknessNoteEl) thicknessNoteEl.textContent = '矩形・小判型等では厚さは幾何学的に一意に決まらないため、設計値を入力してください（幅B_wは直接指定します）。';
     }
   } else if (thicknessNoteEl) {
-    thicknessNoteEl.textContent = `バックロック使用のため、選定型番（${backrockModel ? backrockModel.name : '—'}）の幅・厚さをそのまま反映しています（上の「バックロック」カード参照）。`;
+    thicknessNoteEl.textContent = `支圧壁幅B_w＝${n('wallBw').toFixed(2)}mは選定型番（${backrockModel ? backrockModel.name : '—'}）の幅・厚さをそのまま反映しています（上の「バックロック」カード参照）。ただし①②③⑤の照査に使う有効幅は、B_wとライナー/立坑内面との隙間を間詰めコンクリートで充填する前提で、立坑いっぱいのBeff＝${Beff.toFixed(2)}mを使用します（④のバックロック自体の曲げ照査のみ、ジャッキが直接反力を伝えるB_w基準のまま）。`;
   }
   const Bw = n('wallBw');
 
@@ -7474,9 +7616,17 @@ function calcBacklock() {
     // 47.7章: ①③⑤の支圧壁幅Beffは間詰めコンクリートまで含めた全体の弦幅に変更したが、
     // ④（プレキャスト支圧壁バックロック自体の曲げ照査）は、ジャッキがバックロック本体
     // （カタログのW1、間詰め部分を含まない実際の梁スパン）に直接反力を伝える前提のため、
-    // Beffではなくバックロック自体の幅W1をBoとして使う（他案件の検討書「バックロック検討.xls」
+    // Beffではなくバックロック自体の幅をBoとして使う（他案件の検討書「バックロック検討.xls」
     // でも、周辺の間詰め・立坑寸法から逆算した幅ではなく、型番自体の幅を使っていた）。
-    const Bo4 = (backrockCurrentModel && backrockCurrentModel.W1) || Beff;
+    // 77章: model.W1はテーパー形にしか無いプロパティで、スクウェア形はmodel.W（幅短辺ではなく
+    // 幅そのもの）を使うため、旧コードのbackrockCurrentModel.W1直接参照はスクウェア形で常に
+    // undefinedになり、意図せずBeff（間詰め込みの全幅、77章でBw超えに変更）へフォールバックする
+    // バグになっていた。円形立坑・テーパー形（isBackrockTaperCircle）だけはwallBw自体がBeffで
+    // 上書きされる特殊ケースなので従来通りmodel.W1を直接参照し、それ以外はwallBw欄（square形は
+    // model.W、taper形はmodel.W1がsetV('wallBw',...)で同期済み）をそのまま使う。
+    const Bo4 = isBackrockTaperCircle
+      ? (backrockCurrentModel && backrockCurrentModel.W1) || Beff
+      : n('wallBw') || (backrockCurrentModel && (backrockCurrentModel.W1 ?? backrockCurrentModel.W)) || Beff;
     const q4 = F / (Bo4 * Hw); // q=F/(Bo×H0)。①のf（Beff基準）とは分母のBoが異なることに注意
     const jackHalfWidth = (jackStageWidths.length && jackStageWidths[0] > 0) ? jackStageWidths[0] : Bo4 / 4;
     const L = 2 * jackHalfWidth; // ジャッキ2点の間隔（対称配置と仮定）
@@ -7659,7 +7809,7 @@ function getProjectData() {
       category: v('pipeCategory'), dia: v('pipeDia'), grade: v('pipeGrade'),
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
-      jointType: n('pipeJointType'), cushion: n('pipeCushion'), crush: n('pipeCrush'),
+      jointType: n('pipeJointType'), crush: n('pipeCrush'),
       cushionSigmaAllow: n('pipeCushionSigmaAllow'), cushionMaterial: v('pipeCushionMaterial'),
       pulRingUse, pulRingThickness: n('pulRingThickness'),
       Pext: n('pipePext'), Bs: n('pipeBs')
@@ -7700,7 +7850,7 @@ function getProjectData() {
       hc: n('wallHc'), fa: n('wallFa'), force: n('wallForce'),
       jackPlateW: n('jackPlateW'), jackPlateH: n('jackPlateH'), fc: n('wallFc'),
       levelMode: wallLevelMode, elBase: n('wallElBase'), elPipeInvert: n('wallElPipeInvert'),
-      elWallTop: n('wallElWallTop'), centerOffset: n('wallCenterOffset'),
+      elWallTop: n('wallElWallTop'), elGround: n('wallElGround'), centerOffset: n('wallCenterOffset'),
       thickness: n('wallThickness'), jackStageWidths: jackStageWidths.slice(),
       jackStageHeights: jackStageHeights.slice(),
       railDrop: n('railDrop'), railSize: v('railSize'),
@@ -7749,7 +7899,6 @@ function setProjectData(d) {
     // 有効長・クッション・Bs・継手 は保存値を優先（標準値再計算の後に上書きしないと消えてしまうため最後に適用）
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
-    if (d.pipe.cushion) setV('pipeCushion', d.pipe.cushion);
     if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush); // 70章で一度削除された際、pipe.cushionだけ復元してpipe.crushの復元を書き忘れるバグがあった（74章で復活時、!=nullでの明示チェックを踏襲）
     if (d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
     setV('pipeCushionMaterial', d.pipe.cushionMaterial || '');
@@ -7762,6 +7911,20 @@ function setProjectData(d) {
     // 曲線ごと（d.alignment.curves[].cushionLayers）に保存されるため、ここでは読まない。
     setV('pulRingThickness', d.pipe.pulRingThickness != null ? d.pipe.pulRingThickness : 10);
     pulRingUse = d.pipe.pulRingUse !== false;
+    // 77章: パルリングON/OFFボタン・つぶれ代欄のグレーアウトも、保存値どおりに同期する
+    // （setPulRingUse()本体はautoSave()等の副作用を持つため、復元時は直接DOM同期のみ行う）。
+    {
+      const onBtn = document.getElementById('pulRingBtn_on'), offBtn = document.getElementById('pulRingBtn_off');
+      if (onBtn) onBtn.classList.toggle('active', pulRingUse);
+      if (offBtn) offBtn.classList.toggle('active', !pulRingUse);
+      const thickRow = document.getElementById('pulRingThicknessRow');
+      if (thickRow) thickRow.style.display = pulRingUse ? '' : 'none';
+      const crushEl = document.getElementById('pipeCrush'), crushRow = document.getElementById('pipeCrushRow');
+      if (crushEl) crushEl.disabled = !pulRingUse;
+      if (crushRow) crushRow.style.opacity = pulRingUse ? '1' : '0.4';
+      const icon = document.getElementById('pulRingIcon');
+      if (icon) { icon.style.opacity = pulRingUse ? '1' : '0.3'; if (!icon.innerHTML) icon.innerHTML = pulRingIconSVG(); }
+    }
   }
   if (d.soil) {
     // 土質種別: 旧フォーマットは日本語表記、新フォーマットは英字キー
@@ -7938,7 +8101,8 @@ function setProjectData(d) {
     setV('jackPlateW', wl.jackPlateW||0.5); setV('jackPlateH', wl.jackPlateH||0.5);
     setV('wallFc', wl.fc||24);
     setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
-    setV('wallElWallTop', wl.elWallTop||2.5); setV('wallCenterOffset', wl.centerOffset||0);
+    setV('wallElWallTop', wl.elWallTop||2.5); setV('wallElGround', wl.elGround||0);
+    setV('wallCenterOffset', wl.centerOffset||0);
     setV('wallThickness', wl.thickness||0.8);
     setV('wallRemainingStub', wl.remainingStub!=null ? wl.remainingStub : 300);
     setV('wallPressRingLen', wl.pressRingLen!=null ? wl.pressRingLen : 300);
