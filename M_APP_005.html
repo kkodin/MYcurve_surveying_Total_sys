@@ -394,9 +394,12 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="soilAdh" class="mono" type="number" step="0.5" value="10" oninput="autoSave()"><span class="unit">kN/m²</span></div>
     </div>
     <div class="field-row full">
-      <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
-        <input type="checkbox" id="shinnukiUse" onchange="onShinnukiToggle()"> 切羽心抜きを行う（N′を土質別標準値に自動設定）
-      </label>
+      <label>切羽心抜き</label>
+      <div style="display:flex;gap:8px">
+        <button type="button" id="shinnukiBtn_off" class="mode-btn active" onclick="setShinnukiUse(false)">行わない</button>
+        <button type="button" id="shinnukiBtn_on" class="mode-btn" onclick="setShinnukiUse(true)">行う（N′を土質別標準値に自動設定）</button>
+      </div>
+      <input type="checkbox" id="shinnukiUse" style="display:none">
     </div>
     <div class="note-box" style="font-size:11px">
       N′（貫入抵抗設計値）は先端抵抗F0の計算に使う値で、通常はN値（実測）をそのまま使いますが、切羽心抜き工法など施工方法によって先端抵抗が低減される場合は、その低減後の値に書き換えてください。上のチェックを入れると、ヒューム管設計施工要覧の標準値（普通土＝1.0／砂質土＝2.5／硬質土＝3.0）から土質種別に応じて自動設定します（本アプリの「礫質土」区分は要覧の「硬質土」に近似対応）。チェックを外せば従来通り手入力できます。
@@ -590,13 +593,13 @@ tr.row-selected{background:#eff6ff}
         <div id="launchLinerIn" style="display:none">
           <div class="two-col">
             <div class="field-row"><label>呼び径 φ [m]</label>
-              <select id="launchLinerNominalD" class="mono" onchange="updateCircleDerived('launch')"></select>
+              <input id="launchLinerNominalD" class="mono" type="number" step="0.1" value="3.5" oninput="updateCircleDerived('launch')"><span class="unit">m</span>
             </div>
             <div class="field-row"><label>板厚 t [mm]</label>
               <select id="launchLinerThickness" class="mono" onchange="updateCircleDerived('launch')"></select>
             </div>
           </div>
-          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログ準拠。板厚は内径には影響しません）。</p>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログの規格値目安：呼び径1.5〜6.0m、板厚2.7〜7.0mm。板厚は内径には影響しません）。</p>
         </div>
         <div id="launchCasingIn" style="display:none">
           <div class="two-col">
@@ -671,13 +674,13 @@ tr.row-selected{background:#eff6ff}
         <div id="arrivalLinerIn" style="display:none">
           <div class="two-col">
             <div class="field-row"><label>呼び径 φ [m]</label>
-              <select id="arrivalLinerNominalD" class="mono" onchange="updateCircleDerived('arrival')"></select>
+              <input id="arrivalLinerNominalD" class="mono" type="number" step="0.1" value="3.0" oninput="updateCircleDerived('arrival')"><span class="unit">m</span>
             </div>
             <div class="field-row"><label>板厚 t [mm]</label>
               <select id="arrivalLinerThickness" class="mono" onchange="updateCircleDerived('arrival')"></select>
             </div>
           </div>
-          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログ準拠。板厚は内径には影響しません）。</p>
+          <p class="report-note" style="margin:2px 2px 8px">内径＝呼び径−50mm（片側25mm×2、コルゲート波形内側同士の対面距離。第一産商カタログの規格値目安：呼び径1.5〜6.0m、板厚2.7〜7.0mm。板厚は内径には影響しません）。</p>
         </div>
         <div id="arrivalCasingIn" style="display:none">
           <div class="two-col">
@@ -1168,6 +1171,9 @@ function toggleAccordion(titleEl) {
       const fn = CANVAS_REFRESH_FNS[cv.id];
       if (typeof fn === 'function') { try { fn(); } catch (e) {} }
     });
+    // 開いたカードの中身が画面より長いと、末尾が表示された状態のまま開いてしまい
+    // タイトルまで手動で上スクロールする必要があった。タイトルを画面上部に合わせる。
+    titleEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
@@ -1306,6 +1312,16 @@ function onShinnukiToggle() {
   autoSave();
   calcAlignment();
   refreshForceIfCalculated();
+}
+// 76章のチェックボックスUI（視認性が低いとの指摘）をon/offボタン化。旧来の非表示チェックボックスは
+// 状態保持用に残し、onShinnukiToggle()以下のロジックはそのまま再利用する。
+function setShinnukiUse(use) {
+  const el = document.getElementById('shinnukiUse');
+  el.checked = use;
+  const onBtn = document.getElementById('shinnukiBtn_on'), offBtn = document.getElementById('shinnukiBtn_off');
+  if (onBtn) onBtn.classList.toggle('active', use);
+  if (offBtn) offBtn.classList.toggle('active', !use);
+  onShinnukiToggle();
 }
 
 // ══════════════════════════════════════
@@ -1848,9 +1864,11 @@ function renderSoilZones() {
         <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="sz_adh_${z.id}" class="mono" type="number" step="0.5" value="${z.adh}" oninput="onSoilZoneChange(${z.id})"><span class="unit">kN/m²</span></div>
       </div>
       <div class="field-row full">
-        <label style="display:flex;align-items:center;gap:6px;font-weight:normal;cursor:pointer">
-          <input type="checkbox" ${z.shinnukiUse?'checked':''} onchange="onSoilZoneShinnukiToggle(${z.id},this.checked)"> 切羽心抜きを行う（N′を土質別標準値に自動設定）
-        </label>
+        <label>切羽心抜き</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" class="mode-btn${z.shinnukiUse?'':' active'}" onclick="onSoilZoneShinnukiToggle(${z.id},false)">行わない</button>
+          <button type="button" class="mode-btn${z.shinnukiUse?' active':''}" onclick="onSoilZoneShinnukiToggle(${z.id},true)">行う（N′を土質別標準値に自動設定）</button>
+        </div>
       </div>
     </div>
   `).join('');
@@ -5981,24 +5999,23 @@ let jackStageHeights = []; // 段ごとの設置高さ H（定規下面を0と�
 
 // ══════════════════════════════════════
 //  円形立坑（発進/到達）土留め工法 — ライナープレート／鋼製ケーシング（65章）
-//  ライナープレート: 呼び径φを第一産商カタログの規格値から選び、内径＝呼び径−50mm
-//  （片側25mm×2、ボルト孔芯からコルゲート波形内側までの離れ。板厚2.7〜7.0mmは内径に無関係の
-//  固定オフセットで、断面性能（強度）参照用として別途保持する）。
+//  ライナープレート: 呼び径φを数値入力（第一産商カタログの規格値目安：1.5〜6.0m）、内径＝呼び径−50mm
+//  （片側25mm×2、ボルト孔芯からコルゲート波形内側までの離れ）。板厚は内径に無関係の固定
+//  オフセットで、断面性能（強度）参照用として別途保持する。
 //  鋼製ケーシング: 外径・板厚は現場ごとに異なり規格表が無いため自由入力。内径＝外径−板厚×2。
+//  （77章: 呼び径・板厚は当初カタログ規格値のプルダウン選択式だったが、規格表にない中間寸法を
+//  使う現場があり選びづらいとの指摘で呼び径のみ数値入力に変更。板厚は直後にカタログ選択式へ
+//  差し戻し（既定値2.7mm）。）
 // ══════════════════════════════════════
-const LINER_NOMINAL_DIAMETERS = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]; // m（呼称径、第一産商カタログ準拠）
-const LINER_THICKNESSES = [2.7, 3.2, 4.0, 4.5, 5.3, 6.0, 7.0]; // mm（板厚、同カタログ準拠）
+const LINER_NOMINAL_DIAMETERS = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0]; // m（呼称径、第一産商カタログ準拠。既定値の目安）
+const LINER_THICKNESSES = [2.7, 3.2, 4.0, 4.5, 5.3, 6.0, 7.0]; // mm（板厚、同カタログ準拠。既定値2.7mm=先頭）
 const CASING_DEFAULT_THICKNESS_MM = 9; // 鋼製ケーシングの板厚 既定値（旧保存データの逆算にも使用）
 function nearestFromList(val, list) {
   return list.reduce((best, x) => Math.abs(x - val) < Math.abs(best - val) ? x : best, list[0]);
 }
 
-function populateCircleMaterialSelects() {
+function populateLinerThicknessSelects() {
   ['launch', 'arrival'].forEach(side => {
-    const dSel = document.getElementById(side + 'LinerNominalD');
-    if (dSel && !dSel.options.length) {
-      dSel.innerHTML = LINER_NOMINAL_DIAMETERS.map(d => `<option value="${d}">φ${d.toFixed(1)}m</option>`).join('');
-    }
     const tSel = document.getElementById(side + 'LinerThickness');
     if (tSel && !tSel.options.length) {
       tSel.innerHTML = LINER_THICKNESSES.map(t => `<option value="${t}">${t.toFixed(1)}mm</option>`).join('');
@@ -7758,7 +7775,14 @@ function setProjectData(d) {
     // N′: 旧保存データには無いため、未保存ならN値と同じにする（後方互換）
     setV('soilNprime', d.soil.Nprime ?? d.soil.N ?? 15);
     // 76章: 切羽心抜きチェック状態を復元（保存済みN′値はそのまま使い、再計算はしない）
-    { const shEl = document.getElementById('shinnukiUse'); if (shEl) { shEl.checked = !!d.soil.shinnukiUse; document.getElementById('soilNprime').readOnly = shEl.checked; } }
+    { const shEl = document.getElementById('shinnukiUse'); if (shEl) {
+      const use = !!d.soil.shinnukiUse;
+      shEl.checked = use;
+      document.getElementById('soilNprime').readOnly = use;
+      const onBtn = document.getElementById('shinnukiBtn_on'), offBtn = document.getElementById('shinnukiBtn_off');
+      if (onBtn) onBtn.classList.toggle('active', use);
+      if (offBtn) offBtn.classList.toggle('active', !use);
+    } }
     // 土被り: 旧フォーマット(cover単一値)→Hmin=Hmax=cover
     const cover = d.soil.cover;
     setV('soilHmin', d.soil.Hmin ?? (cover ? cover * 0.7 : 2.0));
@@ -7868,8 +7892,8 @@ function setProjectData(d) {
     // 旧データの計算結果と数値的に一致するようにする。
     {
       const legacyLaunchD = sh.launchCircleD || 3.5;
-      setV('launchLinerNominalD', sh.launchLinerNominalD != null ? nearestFromList(sh.launchLinerNominalD, LINER_NOMINAL_DIAMETERS) : nearestFromList(legacyLaunchD, LINER_NOMINAL_DIAMETERS));
-      setV('launchLinerThickness', sh.launchLinerThickness != null ? nearestFromList(sh.launchLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[1]);
+      setV('launchLinerNominalD', sh.launchLinerNominalD != null ? sh.launchLinerNominalD : legacyLaunchD + 0.05);
+      setV('launchLinerThickness', sh.launchLinerThickness != null ? nearestFromList(sh.launchLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[0]);
       setV('launchCasingOD', sh.launchCasingOD != null ? sh.launchCasingOD : (legacyLaunchD + 2 * CASING_DEFAULT_THICKNESS_MM / 1000));
       setV('launchCasingThickness', sh.launchCasingThickness != null ? sh.launchCasingThickness : CASING_DEFAULT_THICKNESS_MM);
     }
@@ -7882,8 +7906,8 @@ function setProjectData(d) {
     setV('arrivalCircleCasing', sh.arrivalCircleCasing||'steel');
     {
       const legacyArrivalD = sh.arrivalCircleD || 3;
-      setV('arrivalLinerNominalD', sh.arrivalLinerNominalD != null ? nearestFromList(sh.arrivalLinerNominalD, LINER_NOMINAL_DIAMETERS) : nearestFromList(legacyArrivalD, LINER_NOMINAL_DIAMETERS));
-      setV('arrivalLinerThickness', sh.arrivalLinerThickness != null ? nearestFromList(sh.arrivalLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[1]);
+      setV('arrivalLinerNominalD', sh.arrivalLinerNominalD != null ? sh.arrivalLinerNominalD : legacyArrivalD + 0.05);
+      setV('arrivalLinerThickness', sh.arrivalLinerThickness != null ? nearestFromList(sh.arrivalLinerThickness, LINER_THICKNESSES) : LINER_THICKNESSES[0]);
       setV('arrivalCasingOD', sh.arrivalCasingOD != null ? sh.arrivalCasingOD : (legacyArrivalD + 2 * CASING_DEFAULT_THICKNESS_MM / 1000));
       setV('arrivalCasingThickness', sh.arrivalCasingThickness != null ? sh.arrivalCasingThickness : CASING_DEFAULT_THICKNESS_MM);
     }
@@ -8028,7 +8052,7 @@ function updateProjectSummary() {
 //  初期化
 // ══════════════════════════════════════
 (function init() {
-  populateCircleMaterialSelects(); // 円形立坑（発進/到達）のライナー呼び径・板厚セレクトの選択肢を準備（65章）
+  populateLinerThicknessSelects(); // 円形立坑（発進/到達）のライナー板厚セレクトの選択肢を準備（65章、77章で呼び径のみ数値入力化）
   { const iEl = document.getElementById('pulRingIcon'); if (iEl) iEl.innerHTML = pulRingIconSVG(); } // 71章: パルリングのリングアイコン初期表示
   // localStorage から復元
   const saved = localStorage.getItem('curvedJackingProjectDraft') || localStorage.getItem('curvedJackingProject');
