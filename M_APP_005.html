@@ -1479,13 +1479,16 @@ function onPipeDiaChange() {
 // 74章: autoS4を渡すと、パルリング・クッション層から計算した値でS4を強制的に上書きする
 // （曲線・直線ごとの自動計算値。個別仕様のon/offに関わらず優先する）。呼び出し側は
 // computeCurveCushionS4(curveIdx)またはresolveStraightCushionS4(straightIdx)の結果を渡す。
-function resolveSpec(override, autoS4) {
+// 80.x章: autoCrushも同じ仕組みで、曲線・直線ごとに層別つぶれ代の合計値を渡す。ただしS4と異なり、
+// 区間別個別仕様（segSpecFieldsHTML）の「つぶれ代」欄に手入力がある場合はそちらを優先する
+// （個別仕様が無い区間の既定値としてのみautoCrushを使う。手入力の既存機能を殺さないため）。
+function resolveSpec(override, autoS4, autoCrush) {
   const std = {
     category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
     D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
     lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
     S4: 0, jointAllowMm: n('pipeJointType') || 40, // 77章: グローバルなS4入力欄は廃止。実際のS4は常にautoS4（曲線/直線ごとの自動計算値）で上書きされる
-    crush: n('pipeCrush') || 0,
+    crush: autoCrush != null ? autoCrush : (n('pipeCrush') || 0),
     cushionMaterial: v('pipeCushionMaterial') || ''
   };
   if (autoS4 != null) std.S4 = autoS4;
@@ -1758,7 +1761,7 @@ function updateCurveJoint(id) {
   const c = curves.find(x => x.id === id);
   const el = document.getElementById('cJoint_'+id);
   if (!c || !el) return;
-  const pipeSpec = resolveSpec(c.spec, computeCurveCushionS4(curves.indexOf(c)));
+  const pipeSpec = resolveSpec(c.spec, computeCurveCushionS4(curves.indexOf(c)), computeCurveCushionCrush(curves.indexOf(c)));
   const D = pipeSpec.D || 0.96;
   const lp = pipeSpec.lp || 2.43;
   const allowMm = pipeSpec.jointAllowMm || 40;
@@ -1912,31 +1915,31 @@ function calcAlignment() {
   if (curves.length === 0) {
     // 直線のみ
     totalLen = L0 + Lf;
-    segments.push({ label:'第1直線（BP→EP）', L: totalLen, kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0)) });
+    segments.push({ label:'第1直線（BP→EP）', L: totalLen, kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0), resolveStraightCushionCrush(0)) });
   } else {
     // 第1直線: L0 - TL[0]
     const s0 = L0 - TLs[0];
     if (s0 < 0) { valid = false; warnMsg = `⚠ 第1直線(${L0}m) < TL₁(${TLs[0].toFixed(2)}m) — R・角度を見直してください`; }
-    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0)) });
+    segments.push({ label:`第1直線（BP→BC1）`, L: Math.max(0, s0), kind:'straight', key:0, spec: resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0), resolveStraightCushionCrush(0)) });
 
     curves.forEach((c, i) => {
       const e = elems[i];
       // 曲線
-      const cSpec = resolveSpec(c.spec, computeCurveCushionS4(i));
+      const cSpec = resolveSpec(c.spec, computeCurveCushionS4(i), computeCurveCushionCrush(i));
       segments.push({ label:`第${i+1}曲線 (R=${c.R}m, IA=${e.IA_deg.toFixed(4)}°)`, L: e.CL, isCurve:true, curveNo:i+1, R:c.R, CL:e.CL, TL:e.TL, IA_deg:e.IA_deg, cushion: cSpec.S4, kind:'curve', key:c.id, spec: cSpec });
       // 次の直線（直前の曲線=第i+1曲線と同じクッション仕様を自動継承。74章）
       if (i < curves.length - 1) {
         const Lmid = curves[i+1].L;
         const sMid = Lmid - TLs[i] - TLs[i+1];
         if (sMid < 0) { valid = false; warnMsg += `\n⚠ 第${i+2}直線(${Lmid}m) < TL${i+1}+TL${i+2}(${(TLs[i]+TLs[i+1]).toFixed(2)}m)`; }
-        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), kind:'straight', key:i+1, spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec, resolveStraightCushionS4(i+1)) });
+        segments.push({ label:`第${i+2}直線（EC${i+1}→BC${i+2}）`, L: Math.max(0, sMid), kind:'straight', key:i+1, spec: resolveSpec(straightSpecs[i+1] && straightSpecs[i+1].spec, resolveStraightCushionS4(i+1), resolveStraightCushionCrush(i+1)) });
       }
     });
 
     // 最終直線: Lf - TL[last]（直前＝最後の曲線と同じクッション仕様を自動継承）
     const sf = Lf - TLs[TLs.length-1];
     if (sf < 0) { valid = false; warnMsg += `\n⚠ 最終直線(${Lf}m) < TL_最終(${TLs[TLs.length-1].toFixed(2)}m)`; }
-    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), kind:'straight', key:curves.length, spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec, resolveStraightCushionS4(curves.length)) });
+    segments.push({ label:`最終直線（EC${curves.length}→EP）`, L: Math.max(0, sf), kind:'straight', key:curves.length, spec: resolveSpec(straightSpecs[curves.length] && straightSpecs[curves.length].spec, resolveStraightCushionS4(curves.length), resolveStraightCushionCrush(curves.length)) });
 
     totalLen = segments.reduce((s, seg) => s + seg.L, 0);
   }
@@ -3208,7 +3211,7 @@ function updatePipeLenOpt() {
   }
   let html = '';
   curList.forEach((c, i) => {
-    const spec = resolveSpec(c.spec, computeCurveCushionS4(i));
+    const spec = resolveSpec(c.spec, computeCurveCushionS4(i), computeCurveCushionCrush(i));
     const D = spec.D, lp = spec.lp, allowMm = spec.jointAllowMm, S4mm = spec.S4;
     const R = c.R;
     if (R <= D/2) return;
@@ -3254,7 +3257,7 @@ function calcSeismicJointCheck(pipeLen_m, S1_mm, pulloutOpenMm) {
 function updateSeismicJointCheck() {
   const resultEl = document.getElementById('seismicJointResult');
   if (!resultEl) return;
-  const stdSpec = resolveSpec(null, resolveStraightCushionS4(0));
+  const stdSpec = resolveSpec(null, resolveStraightCushionS4(0), resolveStraightCushionCrush(0));
   const curList = getCurves();
 
   const rowHtml = (label, pipeLen, S1, pulloutOpenMm) => {
@@ -3274,7 +3277,7 @@ function updateSeismicJointCheck() {
 
   // 曲線区間（曲線通過による据付時残留開口S1あり）
   curList.forEach((c, i) => {
-    const spec = resolveSpec(c.spec, computeCurveCushionS4(i));
+    const spec = resolveSpec(c.spec, computeCurveCushionS4(i), computeCurveCushionCrush(i));
     if (spec.D && c.R > spec.D / 2) {
       const S1 = calcS1(spec.D, spec.lp, c.R, spec.S4);
       rows += rowHtml(`第${i + 1}曲線 R=${c.R}m`, spec.lp, S1, spec.jointAllowMm);
@@ -3782,6 +3785,7 @@ function normalizeCushionLayer(l) {
   c = Math.max(2, Math.min(full, c));
   l.count = c;
   if (l.material == null) l.material = '';
+  if (l.crush == null) l.crush = 0; // 80.x章: 層ごとのつぶれ代（手入力、未入力=0）
   // 厚さは5/8/10mmの3択（FJリングのカタログ規格値）。旧データ等で他の値が入っていた場合は
   // 最も近い規格値に丸める。
   if (!CUSHION_THICKNESS_OPTS.includes(l.thickness)) {
@@ -3862,12 +3866,26 @@ function computeCurveCushionS4(curveIdx) {
   const pul = c.pulRingUse !== false ? (c.pulRingThickness || 0) : 0;
   return pul + c.cushionLayers.reduce((s, l) => s + (l.thickness || 0), 0);
 }
+// 80.x章: つぶれ代もS4と同じ考え方で、曲線ごとに層の合計として自動計算する。パルリング分は
+// 78章のグローバルつぶれ代欄（pipeCrush、全区間の標準付属クッション材用）をそのまま使い、
+// 追加層（FJリング等）は層ごとに個別入力できるつぶれ代（layer.crush）を合計する。
+function computeCurveCushionCrush(curveIdx) {
+  const c = curves[curveIdx];
+  if (!c) return 0;
+  ensureCurveCushionFields(c);
+  const pul = c.pulRingUse !== false ? (n('pipeCrush') || 0) : 0;
+  return pul + c.cushionLayers.reduce((s, l) => s + (l.crush || 0), 0);
+}
 // 第1直線（どの曲線も通過していない区間）は初期値のパルリングのみ・追加層なし。
 // それ以外の直線は「直前の曲線（発進立坑側、curves[idx-1]）と同じクッション仕様」を自動的に
 // 引き継ぐ（曲線を通過した管は、その曲線用に施工したクッションのまま次の曲線まで進むため）。
 function resolveStraightCushionS4(straightIdx) {
   if (straightIdx <= 0) return pulRingUse ? (n('pulRingThickness') || 0) : 0;
   return computeCurveCushionS4(straightIdx - 1);
+}
+function resolveStraightCushionCrush(straightIdx) {
+  if (straightIdx <= 0) return pulRingUse ? (n('pipeCrush') || 0) : 0;
+  return computeCurveCushionCrush(straightIdx - 1);
 }
 function setCurvePulRingUse(curveId, use) {
   const c = getCurveById(curveId); if (!c) return;
@@ -3887,7 +3905,7 @@ function setCurveCushionLayerCount(curveId, val) {
   ensureCurveCushionFields(c);
   const target = Math.max(0, Math.min(4, parseInt(val, 10) || 0));
   const arr = c.cushionLayers;
-  while (arr.length < target) arr.push({ thickness: 0, angle: 90, count: 4, material: '' });
+  while (arr.length < target) arr.push({ thickness: 0, angle: 90, count: 4, material: '', crush: 0 });
   while (arr.length > target) arr.pop();
   onCurveCushionChange(curveId);
 }
@@ -3933,6 +3951,7 @@ function curveCushionUIHTML(curveId) {
     </div>`;
   }).join('');
   const total = computeCurveCushionS4(curves.indexOf(c));
+  const totalCrush = computeCurveCushionCrush(curves.indexOf(c));
   return `
     <div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line)">
       <p class="report-note" style="margin:0 2px 6px;font-weight:600">パルリング・クッション層構成（この曲線専用）</p>
@@ -3951,7 +3970,7 @@ function curveCushionUIHTML(curveId) {
       ${legend}
       ${layers.length === 0 ? '<p class="report-note" style="margin:4px 2px">パルリングのみ（追加層なし）</p>' : ''}
       ${rows}
-      <p class="report-note" style="margin-top:6px">この曲線の合計クッション厚さ（S4・自動計算）: <b>${total.toFixed(1)}mm</b></p>
+      <p class="report-note" style="margin-top:6px">この曲線の合計クッション厚さ（S4・自動計算）: <b>${total.toFixed(1)}mm</b>　／　合計つぶれ代（自動計算・パルリング分含む）: <b>${totalCrush.toFixed(1)}mm</b></p>
     </div>`;
 }
 function curveCushionLayerFieldsHTML(l, i, curveId) {
@@ -3984,6 +4003,10 @@ function curveCushionLayerFieldsHTML(l, i, curveId) {
           <select onchange="onCurveCushionLayerFieldChange(${curveId},${i},'material',this)">
             ${CUSHION_MATERIAL_OPTS.map(o => `<option value="${o.v}" ${l.material===o.v?'selected':''}>${o.label}</option>`).join('')}
           </select>
+        </div>
+        <div class="field-row"><label>つぶれ代[mm]（手入力）</label>
+          <input class="mono" type="number" step="0.5" min="0" value="${l.crush || 0}" onchange="onCurveCushionLayerFieldChange(${curveId},${i},'crush',this)">
+          <span class="unit">mm</span>
         </div>
       </div>
     </div>
@@ -4149,7 +4172,7 @@ function calculate() {
 
   // 最終直線（到達側）＝直線区間の個別仕様カードの「最終直線」パネルに対応
   if (epStraight > 0) {
-    const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec, resolveStraightCushionS4(N_curves));
+    const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec, resolveStraightCushionS4(N_curves), resolveStraightCushionCrush(N_curves));
     const { fo: segFo, q_total: segQ } = foForSpec(segSpec, H, bpCursor - epStraight/2);
     const dF = segFo * epStraight;
     F_cum += dF;
@@ -4168,7 +4191,7 @@ function calculate() {
   const intermediateStraightFallback = reversedCurves.length > 1 ? spStraight / (reversedCurves.length) : spStraight;
   reversedCurves.forEach((c, i) => {
     const curveNo = curList.length - i;
-    const cSpec = resolveSpec(c.spec, computeCurveCushionS4(curveNo - 1));
+    const cSpec = resolveSpec(c.spec, computeCurveCushionS4(curveNo - 1), computeCurveCushionCrush(curveNo - 1));
     const curveZone = resolveSoilAt(bpCursor - c.CL/2);
     const { fo: curveFo } = foForSpec(cSpec, H, bpCursor - c.CL/2);
     const { alpha, K, k: kConst } = calcCurveK(c.R, cSpec.D, cSpec.lp, curveZone.phi);
@@ -4186,7 +4209,7 @@ function calculate() {
     if (i < reversedCurves.length - 1) {
       const midLen = useRealLengths ? straightLenAt(curveNo - 1) : intermediateStraightFallback;
       if (midLen > 0) {
-        const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec, resolveStraightCushionS4(curveNo - 1));
+        const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec, resolveStraightCushionS4(curveNo - 1), resolveStraightCushionCrush(curveNo - 1));
         const { fo: midFo, q_total: midQ } = foForSpec(midSpec, H, bpCursor - midLen/2);
         const dF = midFo * midLen;
         F_cum += dF;
@@ -4201,7 +4224,7 @@ function calculate() {
     ? straightLenAt(0)
     : (reversedCurves.length > 0 ? spStraight - intermediateStraightFallback * (reversedCurves.length - 1) : spStraight);
   if (spRemain > 0) {
-    const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0));
+    const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0), resolveStraightCushionCrush(0));
     const { fo: firstFo, q_total: firstQ } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
     const dF = firstFo * spRemain;
     F_cum += dF;
