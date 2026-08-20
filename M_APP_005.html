@@ -333,10 +333,10 @@ tr.row-selected{background:#eff6ff}
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
       <div style="font-size:12px;font-weight:bold;color:var(--sub);margin-bottom:6px">外圧耐荷力照査（Mr/M≥1.2）</div>
       <div class="two-col">
-        <div class="field-row"><label>外圧強さ P_ext [kN/m²]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="1273.7" readonly oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN/m²</span></div>
+        <div class="field-row"><label>外圧強さ P_ext [kN/m]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="47.1" readonly oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN/m</span></div>
         <div class="field-row"><label>シールド機外径 Bs [m]（刃口推進は刃口外径）</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">m</span></div>
       </div>
-      <div class="note-box" style="font-size:11px">P_ext: JSWAS A-1表より (φ800 1種管=1273.7 kN/m²)。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
+      <div class="note-box" style="font-size:11px">P_ext: 外圧強さ（曲げ強度）のひび割れ荷重。全国ヒューム管協会『ヒューム管設計施工要覧』表1.4.2-1／ベルテクス『ヒューム管カタログ』より（例 推進管φ1350 1種=47.1 kN/m）。呼び径250〜700は小口径推進管(JSWAS A-6)、800〜2400は推進管(JSWAS A-2)の表を使用。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
     </div>
   </div>
 
@@ -1342,35 +1342,48 @@ const PIPE_DB = (() => {
   //   継手部の埋め込みカラー・目地溝・クッション材で断面が欠けるため、管壁の全断面
   //   π/4(D²−Di²) より小さい（例 φ1350: 全断面0.5792 に対し Ae=0.47996＝約83%）。
   //   全24径で Fa5=1000×13×Ae が資料の値と一致することを確認済み。
+  // 88章: Pext＝外圧強さ（曲げ強度）の**ひび割れ荷重**[kN/m]。一次資料は
+  //   全国ヒューム管協会『ヒューム管設計施工要覧』第1編 第4章 表1.4.2-1（推進管）と、
+  //   ベルテクス『ヒューム管カタログ』外圧強さ表（両者の値は完全一致）。単位は両表とも kN/m。
+  //   備考に「試験機が示す荷重を有効長Lで除した値」とあるとおり管長1mあたりの線荷重で、
+  //   Mr=0.318×Pext×r+0.239×W×r の W[kN/m] と次元が揃う。
+  //   ・呼び径250〜700 は小口径推進管（JSWAS A-6）の表、800〜2400 は推進管（JSWAS A-2）の表。
+  //     規格が変わるので φ700=48.1 → φ800=35.4 と下がるが、管厚も 82mm→80mm と薄くなるため
+  //     実際の不連続であって誤記ではない。
   const h1 = {
-    250:{outer:0.360,inner:0.250,t:0.055,W:1.26,Fa:521,Ae:0.04011,Pext:421.7},
-    300:{outer:0.414,inner:0.300,t:0.057,W:1.53,Fa:642,Ae:0.04939,Pext:421.7},
-    350:{outer:0.470,inner:0.350,t:0.060,W:1.85,Fa:789,Ae:0.06072,Pext:421.7},
-    400:{outer:0.526,inner:0.400,t:0.063,W:2.20,Fa:950,Ae:0.07305,Pext:421.7},
-    450:{outer:0.584,inner:0.450,t:0.067,W:2.61,Fa:1146,Ae:0.08814,Pext:421.7},
-    500:{outer:0.640,inner:0.500,t:0.070,W:3.01,Fa:1334,Ae:0.10264,Pext:421.7},
-    600:{outer:0.752,inner:0.600,t:0.076,W:4.10,Fa:1780,Ae:0.13694,Pext:421.7},
-    700:{outer:0.864,inner:0.700,t:0.082,W:5.36,Fa:2391,Ae:0.18394,Pext:636.4},
-    800:{outer:0.960,inner:0.800,t:0.080,W:5.31,Fa:2296,Ae:0.17664,Pext:1273.7},
-    900:{outer:1.080,inner:0.900,t:0.090,W:6.72,Fa:2986,Ae:0.22973,Pext:1273.7},
-    1000:{outer:1.200,inner:1.000,t:0.100,W:8.29,Fa:3766,Ae:0.28973,Pext:1273.7},
-    1100:{outer:1.310,inner:1.100,t:0.105,W:9.54,Fa:4374,Ae:0.33646,Pext:1273.7},
-    1200:{outer:1.430,inner:1.200,t:0.115,W:11.40,Fa:5309,Ae:0.40841,Pext:1273.7},
-    1350:{outer:1.600,inner:1.350,t:0.125,W:13.90,Fa:6239,Ae:0.47996,Pext:1273.7},
-    1500:{outer:1.780,inner:1.500,t:0.140,W:17.31,Fa:7939,Ae:0.61073,Pext:1273.7},
-    1650:{outer:1.950,inner:1.650,t:0.150,W:20.36,Fa:9450,Ae:0.72696,Pext:1273.7},
-    1800:{outer:2.120,inner:1.800,t:0.160,W:23.64,Fa:11092,Ae:0.85326,Pext:1273.7},
-    2000:{outer:2.350,inner:2.000,t:0.175,W:28.70,Fa:13642,Ae:1.04937,Pext:1273.7},
-    2200:{outer:2.580,inner:2.200,t:0.190,W:34.24,Fa:16455,Ae:1.26575,Pext:1273.7},
-    2400:{outer:2.810,inner:2.400,t:0.205,W:40.26,Fa:18966,Ae:1.45896,Pext:1273.7},
+    250:{outer:0.360,inner:0.250,t:0.055,W:1.26,Fa:521,Ae:0.04011,Pext:32.4},
+    300:{outer:0.414,inner:0.300,t:0.057,W:1.53,Fa:642,Ae:0.04939,Pext:34.4},
+    350:{outer:0.470,inner:0.350,t:0.060,W:1.85,Fa:789,Ae:0.06072,Pext:37.3},
+    400:{outer:0.526,inner:0.400,t:0.063,W:2.20,Fa:950,Ae:0.07305,Pext:39.3},
+    450:{outer:0.584,inner:0.450,t:0.067,W:2.61,Fa:1146,Ae:0.08814,Pext:42.2},
+    500:{outer:0.640,inner:0.500,t:0.070,W:3.01,Fa:1334,Ae:0.10264,Pext:44.2},
+    600:{outer:0.752,inner:0.600,t:0.076,W:4.10,Fa:1780,Ae:0.13694,Pext:46.1},
+    700:{outer:0.864,inner:0.700,t:0.082,W:5.36,Fa:2391,Ae:0.18394,Pext:48.1},
+    800:{outer:0.960,inner:0.800,t:0.080,W:5.31,Fa:2296,Ae:0.17664,Pext:35.4},
+    900:{outer:1.080,inner:0.900,t:0.090,W:6.72,Fa:2986,Ae:0.22973,Pext:38.3},
+    1000:{outer:1.200,inner:1.000,t:0.100,W:8.29,Fa:3766,Ae:0.28973,Pext:41.2},
+    1100:{outer:1.310,inner:1.100,t:0.105,W:9.54,Fa:4374,Ae:0.33646,Pext:42.7},
+    1200:{outer:1.430,inner:1.200,t:0.115,W:11.40,Fa:5309,Ae:0.40841,Pext:44.2},
+    1350:{outer:1.600,inner:1.350,t:0.125,W:13.90,Fa:6239,Ae:0.47996,Pext:47.1},
+    1500:{outer:1.780,inner:1.500,t:0.140,W:17.31,Fa:7939,Ae:0.61073,Pext:50.1},
+    1650:{outer:1.950,inner:1.650,t:0.150,W:20.36,Fa:9450,Ae:0.72696,Pext:53.0},
+    1800:{outer:2.120,inner:1.800,t:0.160,W:23.64,Fa:11092,Ae:0.85326,Pext:55.9},
+    2000:{outer:2.350,inner:2.000,t:0.175,W:28.70,Fa:13642,Ae:1.04937,Pext:58.9},
+    2200:{outer:2.580,inner:2.200,t:0.190,W:34.24,Fa:16455,Ae:1.26575,Pext:61.8},
+    2400:{outer:2.810,inner:2.400,t:0.205,W:40.26,Fa:18966,Ae:1.45896,Pext:64.8},
   };
   // ヒューム管 2種(70N/mm²): 外形はσmeanが違うだけで1種と同一。Faは推進管耐荷力表のFa7列（σmean=17.5）を使用
   const FA7 = {250:702,300:864,350:1063,400:1278,450:1542,500:1796,600:2396,700:3219,800:3091,
                900:4020,1000:5070,1100:5888,1200:7147,1350:8399,1500:10688,1650:12722,1800:14932,
                2000:18364,2200:22151,2400:25532};
+  // 88章: 2種のPextも一次資料の表そのままの値を使う（従来は1種×1.40の推定値だった）。
+  //   実表は 2種＝1種のほぼ倍（丸めの分だけ厳密な2倍ではない）で、1.40倍とは合わない。
+  const PEXT2 = {250:64.8,300:68.7,350:74.6,400:78.5,450:84.4,500:88.3,600:92.2,700:96.2,
+                 800:70.7,900:76.5,1000:82.4,1100:85.4,1200:88.3,1350:94.2,1500:101,1650:106,
+                 1800:112,2000:118,2200:124,2400:130};
   const h2 = {};
   for (const [d,b] of Object.entries(h1)) {
-    h2[d] = {...b, Fa: FA7[d] || Math.round(b.Fa*1.40), Pext:+(b.Pext*1.40).toFixed(1)};
+    h2[d] = {...b, Fa: FA7[d] || Math.round(b.Fa*1.40), Pext: PEXT2[d]};
   }
   // ── レジンコンクリート管（JSWAS K-12-2016）──────────────────────────────
   // 86章: 従来はヒューム管に係数を掛けた暫定値（mkR）だったが、実カタログと大きく
@@ -1680,7 +1693,7 @@ function segSpecFieldsHTML(kind, key, spec) {
           </div>
           <div class="two-col">
             <div class="field-row"><label>許容耐荷力Fa [kN]</label><input id="${prefix}_steelFa" class="mono" type="text" inputmode="decimal" value="${spec.steelFa ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"></div>
-            <div class="field-row"><label>外圧強さP_ext [kN/m²]</label><input id="${prefix}_steelPext" class="mono" type="text" inputmode="decimal" value="${spec.steelPext ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"></div>
+            <div class="field-row"><label>外圧強さP_ext [kN/m]</label><input id="${prefix}_steelPext" class="mono" type="text" inputmode="decimal" value="${spec.steelPext ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"></div>
           </div>
         </div>
         <div class="two-col">
@@ -4172,7 +4185,7 @@ function calcExtPressureCheck(D_in, t, W, P_ext, q_ext) {
   const M = 0.275 * q_ext * r * r;
   const Mr = 0.318 * P_ext * r + 0.239 * W * r;
   const ratio = Mr / M;
-  return { r, M, Mr, ratio, ok: ratio >= 1.2 };
+  return { r, M, Mr, ratio, P_ext, ok: ratio >= 1.2 };
 }
 
 // ══════════════════════════════════════
@@ -4508,6 +4521,7 @@ function renderResults(res) {
     ['Fo 先端抵抗力', Fo.toFixed(1), 'kN', '工法別計算'],
     ['fo 周面摩擦力（H最大）', fo.toFixed(3), 'kN/m', '設計値'],
     ['fo 周面摩擦力（H最小）', fo_min.toFixed(3), 'kN/m', '参考値'],
+    ['P_ext 外圧強さ（ひび割れ荷重）', extCheck.P_ext ? extCheck.P_ext.toFixed(1) : '—', 'kN/m', '規格表のひび割れ荷重'],
     ['r 管壁中心半径', extCheck.r.toFixed(3), 'm', '(Di/2)+t/2'],
     ['M 外圧曲げモーメント', extCheck.M.toFixed(3), 'kN·m/m', '0.275×q×r²'],
     ['Mr 抵抗モーメント', extCheck.Mr.toFixed(3), 'kN·m/m', '0.318×Pext×r+0.239×W×r'],
