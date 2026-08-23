@@ -100,7 +100,7 @@
 
 <div class="wrap">
   <h1>軸力検証ソフト <span class="pill">HTML版 β</span></h1>
-  <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・曲口量の検証。
+  <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
   <div class="toolbar topbar">
@@ -167,7 +167,7 @@
         <div class="lyrrow" id="pulcrushrow">
           <div class="tag" style="padding-left:20px">つぶれ代(mm)</div>
           <input type="number" id="pulCrush" step="0.1" value="8">
-          <div class="muted" style="grid-column:3/6;font-size:11px">パルリングはつぶれ計算をしないので手入力（MYcurve と同じ）。<br>応力計算からは外し、この値を曲口量に加算します。</div>
+          <div class="muted" style="grid-column:3/6;font-size:11px">パルリングはつぶれ計算をしないので手入力（MYcurve と同じ）。<br>応力計算からは外し、この値を開口長に加算します。</div>
         </div>
         <div id="layers"></div>
         <div class="zonecalc" id="zonecalc"></div>
@@ -219,7 +219,7 @@
   </div>
 
   <div class="toolbar" style="margin-top:10px">
-    <span class="muted">判定基準：最大応力度 ≤ 25 N/mm² ／ 内側曲口 ≥ 5mm ／ 外側曲口 ≤ 70mm(JC)・50mm(JB)</span>
+    <span class="muted">判定基準：最大応力度 ≤ 25 N/mm² ／ 内側の開口長 ≥ 5mm ／ 外側の開口長 ≤ 70mm(JC)・50mm(JB)</span>
   </div>
 
   <div class="panel propose">
@@ -228,7 +228,7 @@
       材種（発泡倍率）×厚み（層数）を総当たりで計算し、成立する構成を一覧します。</div>
     <div class="ctrls">
       <label>最大層数<input type="number" id="maxLayers" value="5" min="1" max="10" step="1"></label>
-      <label>継手タイプ<select id="jointType"><option value="70">JC（外側≤70mm）</option><option value="50">JB（外側≤50mm）</option></select></label>
+      <label>継手タイプ<select id="jointType"><option value="70">JC（外側の開口長≤70mm）</option><option value="50">JB（外側の開口長≤50mm）</option></select></label>
       <label>表示<select id="showTier"><option value="ok">推奨・要検討のみ</option><option value="all">不成立も含め全件</option></select></label>
       <button class="propbtn" id="propbtn">構成を提案</button>
     </div>
@@ -239,8 +239,8 @@
 
   <div class="toolbar" style="margin-top:10px">
     <span class="muted">区分：<span class="tier t-rec">推奨</span> 応力≤25 ／
-      <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・曲口OK（現場判断で採用可）／
-      <span class="tier t-ng">不成立</span> 破壊 or 内側&lt;5 or 外側超過</span>
+      <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
+      <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過</span>
   </div>
 </div>
 
@@ -440,7 +440,7 @@ const $=id=>document.getElementById(id);
      上下面(90°)ゾーン＝鉛直±45° → angle*count >= 180 で被覆
      側方面ゾーン                → angle*count >= 360（全面）で被覆
    パルリングは全周固定・つぶれ計算をしないので、応力計算からは外し、
-   残り厚み（厚み−つぶれ代）を曲口量に一律加算する。 */
+   残り厚み（厚み−つぶれ代）を開口長に一律加算する。 */
 const CU_THICK=[5,8,10], CU_ANGLE=[30,45,60,90,180];
 const CU_MAT=[{v:10,label:'PB標準品'},{v:11,label:'FJ 1.7倍'},{v:12,label:'FJ 2.0倍W'},
               {v:13,label:'FJ 2.5倍G'},{v:14,label:'FJ 3.0倍Y'},{v:15,label:'発泡PS3.5倍'}];
@@ -451,7 +451,7 @@ let layerState=[
   {on:false,mat:12, thick:10, angle:90, count:4},
   {on:false,mat:12, thick:10, angle:90, count:4},
 ];
-let PUL={on:true, thick:10, crush:8, residual:2};   // residual = 曲口に加算する残り厚み
+let PUL={on:true, thick:10, crush:8, residual:2};   // residual = 開口長に加算する残り厚み
 
 const fullCount=a=>Math.round(360/a);
 function countOptions(angle){
@@ -518,12 +518,12 @@ function recalcZones(){
   const warn=[];
   if(z.top.mixed||z.side.mixed) warn.push('層で材種が混在しています。軸力検証は1ゾーン1材種のみのため、各ゾーンで最も厚い材種を代表にしています（応力は保守側に出ます）');
   if(z.top.thick===0) warn.push('<span class="v-bad">上下面(90°)を覆う層がありません</span>（角度×枚数が180°以上の層が必要）');
-  if(PUL.on && PUL.crush>PUL.thick) warn.push('<span class="v-bad">つぶれ代がパルリング厚みを超えています</span>（曲口への加算は0として扱います）');
+  if(PUL.on && PUL.crush>PUL.thick) warn.push('<span class="v-bad">つぶれ代がパルリング厚みを超えています</span>（開口長への加算は0として扱います）');
   $('zonecalc').innerHTML =
     `→ 計算に使う値： <b>上下面(90°)</b> ${MN[z.top.mat]||'—'} <b>${z.top.thick}mm</b>`+
     `　／　<b>側方面</b> ${z.side.thick?(MN[z.side.mat]||'—'):'無し'} <b>${z.side.thick}mm</b>`+
     (PUL.on?`<br>パルリング PB ${PUL.thick}mm（つぶれ代 ${PUL.crush}mm）は応力計算から除外し、`+
-            `残り <b>${fmt(PUL.residual,1)}mm</b> を曲口量に加算します。`:'<br>パルリング なし。')+
+            `残り <b>${fmt(PUL.residual,1)}mm</b> を開口長に加算します。`:'<br>パルリング なし。')+
     (warn.length?'<br>'+warn.map(w=>'※ '+w).join('<br>'):'');
   drawLayout();
 }
@@ -697,7 +697,7 @@ function sigCell(sigma,verdict){
   const tag=v?`&lt;${v}&gt; `:""; return `<span class="${cls}">${tag}${fmt(sigma,2)}</span>`;
 }
 function render(res, mx){
-  // パルリングは応力計算から外しているので、その残り厚み（厚み−つぶれ代）を曲口量に一律加算する
+  // パルリングは応力計算から外しているので、その残り厚み（厚み−つぶれ代）を開口長に一律加算する
   const pr = PUL.residual || 0;
   // 判定サマリ
   let allMaxSig=0, minInner=Infinity, maxOuter=0;
@@ -707,11 +707,11 @@ function render(res, mx){
   const mk=(label,ok,val)=>`<div class="item">${label}：<span class="${ok?'v-ok':'v-bad'}">${val}</span> ${ok?'✓':'✕'}</div>`;
   crit.innerHTML =
     mk('最大応力度 ≤ 25', allMaxSig<=25, fmt(allMaxSig,2)+' N/mm²') +
-    mk('内側曲口 ≥ 5mm', minInner>=5, fmt(minInner,2)+' mm') +
-    mk('外側曲口 ≤ 70mm(JC)', maxOuter<=70, fmt(maxOuter,2)+' mm');
+    mk('内側の開口長 ≥ 5mm', minInner>=5, fmt(minInner,2)+' mm') +
+    mk('外側の開口長 ≤ 70mm(JC)', maxOuter<=70, fmt(maxOuter,2)+' mm');
 
   // 結果表
-  let h='<table><thead><tr><th>区間</th><th>推進力(kN)</th><th>最大応力度(N/mm²)</th><th>曲口量(mm)</th><th>外側曲口(mm)</th><th>内側曲口(mm)</th></tr></thead><tbody>';
+  let h='<table><thead><tr><th>区間</th><th>推進力(kN)</th><th>最大応力度(N/mm²)</th><th>開口長(直線)<br>開口差(曲線)(mm)</th><th>外側の開口長(mm)</th><th>内側の開口長(mm)</th></tr></thead><tbody>';
   res.curves.forEach(c=>{
     h+=`<tr><td class="lab">第${c.k}直線</td><td>${fmt(c.straight.pp)}</td><td>${sigCell(c.straight.sigma,c.straight.verdict)}</td><td>${fmt(c.straight.gap+pr,2)}</td><td>—</td><td>—</td></tr>`;
     const inner=c.curve.inner_gap+pr, outer=c.curve.outer_gap+pr;
@@ -722,8 +722,9 @@ function render(res, mx){
   h+='</tbody></table>';
   $('reswrap').innerHTML=h;
   $('footnote').innerHTML = (res.exit?`※ 第${res.exit}曲線で計算終了（曲線なし、または材料が最大圧縮に到達）。`:'')+
-    ' 曲口量欄は曲線部の設計曲口(sd0)。〈範囲外〉〈破壊〉は材料の適応限界超過を示す。'+
-    (pr?`<br>※ 曲口量・外側/内側曲口には、パルリングの残り厚み ${fmt(pr,1)}mm（厚み${fmt(PUL.thick,1)}−つぶれ代${fmt(PUL.crush,1)}）を加算している。`:'');
+    ' 第3列は、直線部が<b>開口長</b>、曲線部が<b>開口差</b>（＝外側の開口長−内側の開口長。'+
+    'エンジン内部の sd0）。〈範囲外〉〈破壊〉は材料の適応限界超過を示す。'+
+    (pr?`<br>※ 開口長・開口差・外側/内側の開口長には、パルリングの残り厚み ${fmt(pr,1)}mm（厚み${fmt(PUL.thick,1)}−つぶれ代${fmt(PUL.crush,1)}）を加算している。`:'');
 
   // チャート
   const ca=$('chartarea'); ca.innerHTML='';
@@ -778,7 +779,7 @@ Engine.prototype._solveFast=function(s,target){
 };
 function evalConfig(base,varc,thic,vars,thisv){
   const eng=new Engine(); eng.setup(Object.assign({},base,{varc:varc,thic:thic,vars:vars,this:thisv}));
-  const pr=PUL.residual||0;   // パルリングの残り厚み（曲口へ加算）
+  const pr=PUL.residual||0;   // パルリングの残り厚み（開口長へ加算）
   let sig=0,inn=Infinity,out=0,broken=false,bott=false;
   for(let k=1;k<=5;k++){
     if(k>=2 && eng.Cv[k].drc===0) break;
@@ -824,11 +825,11 @@ async function propose(){
 }
 function renderProposal(show,all,p,outlim){
   const rec=all.filter(r=>r.t==="推奨").length, warn=all.filter(r=>r.t==="要検討").length, ng=all.length-rec-warn;
-  $('propinfo').innerHTML=`探索 ${all.length} 通り（ピッチ ${p}mm・外側基準 ${outlim}mm）： `+
+  $('propinfo').innerHTML=`探索 ${all.length} 通り（ピッチ ${p}mm・外側の開口長の基準 ${outlim}mm）： `+
     `<span class="v-ok">推奨 ${rec}</span> ／ <span class="v-warn">要検討 ${warn}</span> ／ 不成立 ${ng}`;
   const SN={10:"パル",11:"PS1.7",12:"PS2.0",13:"PS2.5",14:"PS3.0",15:"PS3.5"};
   const cls={"推奨":"t-rec","要検討":"t-warn","不成立":"t-ng"};
-  let h='<table class="ptable"><thead><tr><th>区分</th><th>上下面(90°)材種</th><th>厚み(層)</th><th>側方面材種</th><th>厚み(層)</th><th>合計厚</th><th>最大応力</th><th>最小内側</th><th>最大外側</th></tr></thead><tbody>';
+  let h='<table class="ptable"><thead><tr><th>区分</th><th>上下面(90°)材種</th><th>厚み(層)</th><th>側方面材種</th><th>厚み(層)</th><th>合計厚</th><th>最大応力</th><th>内側の開口長<br>（最小）</th><th>外側の開口長<br>（最大）</th></tr></thead><tbody>';
   show.slice(0,PROPOSE_LIMIT).forEach(r=>{
     h+=`<tr><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
        `<td class="z">${SN[r.mc]}</td><td>${r.lc*p}mm (${r.lc}層)</td>`+
@@ -1082,12 +1083,12 @@ function importMyCurve(d){
       'MYcurveの推進力タブに表示される値を入れてください');
   }
 
-  // 継手種別 → 提案（逆算）で使う外側曲口の基準（vr006）
+  // 継手種別 → 提案（逆算）で使う外側の開口長の基準（vr006）
   const jt = MY_JOINT[Math.round(pipe.jointType)];
   if(jt){
     $('jointType').value = jt;
     if(Math.round(pipe.jointType)===30) notes.push(
-      'MYcurveの継手種別が <b>JA型</b> ですが、軸力検証の外側曲口基準は JC(70mm)／JB(50mm) しか'+
+      'MYcurveの継手種別が <b>JA型</b> ですが、軸力検証の外側の開口長の基準は JC(70mm)／JB(50mm) しか'+
       '持っていないため、厳しい側の <b>JB(50mm)</b> で読み込みました。提案（逆算）の判定に使う値なので、'+
       '必要なら「継手タイプ」を確認してください');
   }
@@ -1113,7 +1114,7 @@ const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
 const MY_SOURCE = '軸力検証ソフト HTML版 vr006';
 // MYcurveの継手種別は「許容目地開き」60=JC / 40=JB / 30=JA。
-// 軸力検証の継手タイプは「外側曲口の基準」70=JC / 50=JB。同じJC/JBでも数値の意味が違う。
+// 軸力検証の継手タイプは「外側の開口長の基準」70=JC / 50=JB。同じJC/JBでも数値の意味が違う。
 const MY_JOINT = {60:70, 40:50, 30:50};
 
 let fromMyCurve = false;
@@ -1339,8 +1340,8 @@ function loadExample(){
   // 帳票の値を併記して、計算結果と見比べられるようにする
   let note = `<span class="v-ok">実例を読み込みました：${e.t}</span>　<span class="muted">出典 ${e.f}</span>`;
   if(e.ex){
-    note += `<br><span class="muted">帳票の値：直線 ${e.ex.sp}kN / ${e.ex.ss} / 曲口${e.ex.sg}mm　`
-          + `曲線 ${e.ex.cp}kN / ${e.ex.cs} / 外側${e.ex.co}mm / 内側${e.ex.ci}mm</span>`;
+    note += `<br><span class="muted">帳票の値：直線 ${e.ex.sp}kN / ${e.ex.ss} / 開口長${e.ex.sg}mm　`
+          + `曲線 ${e.ex.cp}kN / ${e.ex.cs} / 外側の開口長${e.ex.co}mm / 内側の開口長${e.ex.ci}mm</span>`;
   }
   $('impinfo').innerHTML = note;
   updateDrcNote(); compute(); saveLastInput();

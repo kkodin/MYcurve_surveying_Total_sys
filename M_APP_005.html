@@ -813,7 +813,7 @@ tr.row-selected{background:#eff6ff}
   <div class="card accordion" id="jikuryokuCard">
     <div class="card-title" onclick="toggleAccordion(this)">🔩 軸力検証（FJリング照査）</div>
     <div class="note-box" style="font-size:11px">
-      推進力伝達材（FJリング）の圧縮応力度・曲口量を、軸力検証ソフトで照査します。
+      推進力伝達材（FJリング）の圧縮応力度・開口長を、軸力検証ソフトで照査します。
       ボタンを押すと別ウィンドウが開き、この現場の入力（呼び径・管長・曲線・伝達材の層構成・推進力）が自動で渡されます。
       向こうで「📤 MYcurveへ結果を返す」を押すと結果がここへ戻り、
       現場JSON（<code>MYcurve_現場名_スパン名_日付.json</code>）に一緒に保存されます。<br>
@@ -8030,7 +8030,7 @@ function calcBacklock() {
 // ══════════════════════════════════════
 //  軸力検証ソフト連携（90章）
 // ══════════════════════════════════════
-// 軸力検証ソフト（FJリングの圧縮応力・曲口量の照査）を別ウィンドウで開き、
+// 軸力検証ソフト（FJリングの圧縮応力・開口長の照査）を別ウィンドウで開き、
 // この現場の入力を渡して、向こうの計算結果をこちらへ戻す。
 //
 // 【なぜ別ウィンドウか】
@@ -8124,13 +8124,13 @@ function renderJikuryoku() {
 
   const d = jikuryokuData, i = d.input || {}, res = d.result;
   const MAT = {0:'無し', 10:'パル', 11:'PS1.7', 12:'PS2.0', 13:'PS2.5', 14:'PS3.0', 15:'PS3.5'};
-  const outLim = (d.propose && d.propose.jointType) || 70;   // 外側曲口の基準 70(JC)/50(JB)
+  const outLim = (d.propose && d.propose.jointType) || 70;   // 外側の開口長の基準 70(JC)/50(JB)
 
   const at = d.savedAt ? new Date(d.savedAt).toLocaleString('ja-JP') : '—';
   let head = `<b>照査日時:</b> ${at}<br>` +
     `<b>呼び径:</b> φ${i.dia ?? '—'} / <b>管長:</b> ${i.leng ?? '—'}m<br>` +
     `<b>伝達材:</b> 上下面(90°) ${MAT[i.varc] || i.varc || '—'} ${i.thic ?? 0}mm ／ 側方面 ${MAT[i.vars] || i.vars || '—'} ${i.this ?? 0}mm`;
-  if (i.pulResidual) head += `<br><b>パルリング残り厚み:</b> ${jkFmt(i.pulResidual, 1)}mm（曲口量に加算済み）`;
+  if (i.pulResidual) head += `<br><b>パルリング残り厚み:</b> ${jkFmt(i.pulResidual, 1)}mm（開口長に加算済み）`;
 
   if (!res || !res.length) {
     info.innerHTML = `<div class="note-box" style="font-size:11px">${head}<br>` +
@@ -8157,8 +8157,8 @@ function renderJikuryoku() {
     `<div class="note-box" style="font-size:11px">${head}</div>` +
     `<div class="${allOk ? 'ok-box' : 'ng-box'}" style="font-size:12px;margin-top:6px">` +
       mk('最大応力度 ≤ 25 N/mm²', okSig, jkFmt(maxSig) + ' N/mm²') +
-      mk('内側曲口 ≥ 5 mm', okIn, jkFmt(minInner) + ' mm') +
-      mk(`外側曲口 ≤ ${outLim} mm`, okOut, jkFmt(maxOuter) + ' mm') +
+      mk('内側の開口長 ≥ 5 mm', okIn, jkFmt(minInner) + ' mm') +
+      mk(`外側の開口長 ≤ ${outLim} mm`, okOut, jkFmt(maxOuter) + ' mm') +
       `<div style="margin-top:4px">${allOk ? '3基準すべて満足しています。' : '基準を満たさない項目があります。伝達材の構成を見直してください。'}</div>` +
     `</div>`;
 
@@ -8168,7 +8168,7 @@ function renderJikuryoku() {
     return `<span style="color:var(--${bad ? 'ng' : warn ? 'warn' : 'ok'})">${tag}${jkFmt(sigma)}</span>`;
   };
   let h = '<table><thead><tr><th>区間</th><th>推進力<br>(kN)</th><th>最大応力度<br>(N/mm²)</th>' +
-          '<th>曲口量<br>(mm)</th><th>外側曲口<br>(mm)</th><th>内側曲口<br>(mm)</th></tr></thead><tbody>';
+          '<th>開口長(直線)<br>開口差(曲線)<br>(mm)</th><th>外側の<br>開口長(mm)</th><th>内側の<br>開口長(mm)</th></tr></thead><tbody>';
   res.forEach(c => {
     if (c.straight) {
       h += `<tr><td>第${c.k}直線</td><td class="mono">${jkFmt(c.straight.pp, 1)}</td>` +
@@ -8185,7 +8185,8 @@ function renderJikuryoku() {
     }
   });
   h += '</tbody></table>';
-  h += '<p class="report-note" style="margin:6px 2px 0">曲口量欄は曲線部の設計曲口(sd0)。' +
+  h += '<p class="report-note" style="margin:6px 2px 0">第3列は、直線部が<b>開口長</b>、' +
+       '曲線部が<b>開口差</b>（＝外側の開口長−内側の開口長）。用語は軸力検証ソフト（Excel vol_1.9）の出力欄に合わせている。' +
        '〈範囲外〉〈破壊〉は伝達材の材料が適応限界を超えたことを示す。' +
        'この表は軸力検証ソフトが計算した結果をそのまま転記したもので、MYcurve 側では再計算していない。</p>';
   wrap.innerHTML = h;
