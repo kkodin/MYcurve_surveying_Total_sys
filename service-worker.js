@@ -1,11 +1,12 @@
-const CACHE_NAME = "m-app-005-v93";
+const CACHE_NAME = "m-app-005-v94";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.json",
   "./icon.svg",
   "./README.txt",
-  "./M_APP_005.html"
+  "./M_APP_005.html",
+  "./軸力検証ソフト_HTML版.html"
 ];
 
 self.addEventListener("install", (event) => {
