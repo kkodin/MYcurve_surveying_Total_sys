@@ -506,58 +506,6 @@ tr.row-selected{background:#eff6ff}
     </div>
   </div>
 
-  <div class="card accordion" id="alignmentVisualCard">
-    <div class="card-title" onclick="toggleAccordion(this)">📈 線形ビジュアル表示</div>
-    <div class="ok-box" style="font-size:11px;margin-bottom:8px">
-      BP→EPの平面形状を模式的に表示します（直線=緑、曲線=青）。縦軸=X（上+）、横軸=Y（右+）。実際の方位とは対応しません。ピンチ／ホイールで拡大縮小、ドラッグで移動できます。
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:4px">
-      <div style="display:flex;flex-wrap:wrap;gap:10px">
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-          <input type="checkbox" id="alignVisRO" onchange="toggleAlignmentLabelVis('ro', this.checked)"> RO表示
-        </label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-          <input type="checkbox" id="alignVisSeg" onchange="toggleAlignmentLabelVis('segLabel', this.checked)"> 区間名ラベル表示
-        </label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
-          <input type="checkbox" id="alignVisAnn" onchange="toggleAlignmentLabelVis('annotation', this.checked)"> 曲線注記（R・IA・CL・SL・TL）表示
-        </label>
-      </div>
-      <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView()">表示リセット</button>
-    </div>
-    <p class="report-note" style="margin:0 0 6px">既定では点（BP・BC・IP・SP・EC・EP）のみ表示し、重なりやすいRO・区間名・曲線注記は非表示にしています。87章以降、この設定と拡大・移動は<b>この図だけ</b>に効きます（計算書「3.施工条件」の図は別に操作できます）。</p>
-    <canvas id="alignmentVisual" style="width:100%;height:320px;margin-top:0;border-radius:8px;display:block;border:1px solid var(--line);background:#fff;touch-action:none"></canvas>
-  </div>
-
-  <div class="card accordion" id="pipeLenOptCard">
-    <div class="card-title" onclick="toggleAccordion(this)">📏 管長さ最適化アドバイス</div>
-    <div class="note-box" style="font-size:11px;margin-bottom:6px">
-      S₁ = D×l′/(R−D/2) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
-    </div>
-    <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
-  </div>
-
-  <div class="card accordion" id="seismicJointCard">
-    <div class="card-title" onclick="toggleAccordion(this)">🌏 地震時継手抜出照査（レベル1・レベル2地震動）</div>
-    <div class="note-box" style="font-size:11px;margin-bottom:6px">
-      地震時必要抜出量＝管長×設計地盤ひずみ（標準値：レベル1=0.23%／レベル2=1.5%）。抜出し余裕＝継手の抜出し長−据付時残留開口S₁−地震時必要抜出量（≥0でOK）。<br>
-      出典: 下水道協会「下水道施設耐震計算例－管路施設編－2001年版」（下水道施設耐震対策指針と解説・標準土質モデル タイプⅡ準拠）。
-    </div>
-    <div id="seismicJointResult"><div class="note-box">計算を実行すると表示されます。</div></div>
-  </div>
-
-  <div class="card accordion" id="pipeScheduleCard">
-    <div class="card-title" onclick="toggleAccordion(this)">🔧 管本数・目地仕様 集計</div>
-    <div class="note-box" style="font-size:11px;margin-bottom:6px">
-      管長・路線長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。
-    </div>
-    <div id="pipeScheduleResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
-  </div>
-
-</section>
-
-<!-- ═══ TAB 2: 立坑 ═══ -->
-<section class="page" id="p1">
 
   <div class="card accordion">
     <div class="card-title" onclick="toggleAccordion(this)">🚀 発進立坑</div>
@@ -710,6 +658,79 @@ tr.row-selected{background:#eff6ff}
       <div class="metric-card"><div class="metric-label" style="color:var(--blue2)">推進距離</div><div class="metric-value ok" id="rs_ground">—</div><div class="metric-sub">m ← 計算使用</div></div>
     </div>
     <canvas id="distDiagram" style="width:100%;height:90px;margin-top:8px;border-radius:8px;display:block;border:1px solid var(--line)"></canvas>
+  </div>
+
+  <!-- 92章: ここまでが推力計算に必要な入力。以降は入力から導かれる確認用カード。 -->
+  <div style="border-top:2px dashed var(--line);margin:14px 2px 10px;padding-top:8px;color:var(--sub);font-size:11.5px">
+    ▼ ここから下は、上の入力から自動で導かれる確認用の表示です（入力欄はありません）
+  </div>
+
+  <div class="card accordion" id="alignmentVisualCard">
+    <div class="card-title" onclick="toggleAccordion(this)">📈 線形ビジュアル表示</div>
+    <div class="ok-box" style="font-size:11px;margin-bottom:8px">
+      BP→EPの平面形状を模式的に表示します（直線=緑、曲線=青）。縦軸=X（上+）、横軸=Y（右+）。実際の方位とは対応しません。ピンチ／ホイールで拡大縮小、ドラッグで移動できます。
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisRO" onchange="toggleAlignmentLabelVis('ro', this.checked)"> RO表示
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisSeg" onchange="toggleAlignmentLabelVis('segLabel', this.checked)"> 区間名ラベル表示
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisAnn" onchange="toggleAlignmentLabelVis('annotation', this.checked)"> 曲線注記（R・IA・CL・SL・TL）表示
+        </label>
+      </div>
+      <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView()">表示リセット</button>
+    </div>
+    <p class="report-note" style="margin:0 0 6px">既定では点（BP・BC・IP・SP・EC・EP）のみ表示し、重なりやすいRO・区間名・曲線注記は非表示にしています。87章以降、この設定と拡大・移動は<b>この図だけ</b>に効きます（計算書「3.施工条件」の図は別に操作できます）。</p>
+    <canvas id="alignmentVisual" style="width:100%;height:320px;margin-top:0;border-radius:8px;display:block;border:1px solid var(--line);background:#fff;touch-action:none"></canvas>
+  </div>
+
+  <div class="card accordion" id="pipeLenOptCard">
+    <div class="card-title" onclick="toggleAccordion(this)">📏 管長さ最適化アドバイス</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      S₁ = D×l′/(R−D/2) + S₄ ≤ 許容値 から逆算した最大管長を曲線ごとに表示します。
+    </div>
+    <div id="pipeLenOptResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
+  </div>
+
+  <div class="card accordion" id="seismicJointCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🌏 地震時継手抜出照査（レベル1・レベル2地震動）</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      地震時必要抜出量＝管長×設計地盤ひずみ（標準値：レベル1=0.23%／レベル2=1.5%）。抜出し余裕＝継手の抜出し長−据付時残留開口S₁−地震時必要抜出量（≥0でOK）。<br>
+      出典: 下水道協会「下水道施設耐震計算例－管路施設編－2001年版」（下水道施設耐震対策指針と解説・標準土質モデル タイプⅡ準拠）。
+    </div>
+    <div id="seismicJointResult"><div class="note-box">計算を実行すると表示されます。</div></div>
+  </div>
+
+  <div class="card accordion" id="pipeScheduleCard">
+    <div class="card-title" onclick="toggleAccordion(this)">🔧 管本数・目地仕様 集計</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:6px">
+      管長・路線長から本数を割り出し、各管が通過する区間（直線／曲線）ごとに必要な継手・クッション仕様を判定します。複数の曲線にまたがる管は、最も目地が広く開く曲線の仕様に合わせます。<br>
+      本数は「管長 ＋ 目地開口長」を1本分のピッチとして数えます（曲線は内側の弧長基準）。開口長は軸力検証ソフトの照査結果があればその値を、無ければ S₄−つぶれ代の見積り値を使います。
+    </div>
+    <div style="margin-bottom:6px">
+      <button class="big-btn ok" style="width:100%" onclick="openJikuryokuFromAlignment()"><span style="font-size:20px">🔩</span>軸力検証を開いて伝達材を選定する</button>
+      <div style="color:var(--sub);font-size:11px;margin-top:3px">線形（IP間距離・曲線諸元）を入れ終えたら、軸力検証ソフトで曲線ごとの推進力伝達材を選定し、算出された目地開口長をここへ戻せます。先に「⚡ 推進力計算を実行」を済ませてください。</div>
+    </div>
+    <div id="pipeScheduleResult"><div class="note-box">曲線区間を追加すると表示されます。</div></div>
+  </div>
+
+  <!-- 92章: 入力が揃ったかを確認して、推進力計算→軸力検証へ進むための「次へ」カード -->
+  <div class="card accordion open" id="readinessCard">
+    <div class="card-title accent" onclick="toggleAccordion(this)">✅ 入力チェック → 推進力計算へ</div>
+    <div class="note-box" style="font-size:11px;margin-bottom:8px">
+      推進力計算に必要な入力が揃っているかを確認します。揃っていれば下のボタンで計算を実行し、推進力タブへ移動します。
+    </div>
+    <div id="readinessList"></div>
+    <button class="big-btn ok" style="width:100%;margin-top:8px" id="readinessGoBtn" onclick="runCalcAndGoForce()">
+      <span style="font-size:20px">⚡</span>推進力を計算して次へ進む
+    </button>
+    <div style="color:var(--sub);font-size:11px;margin-top:4px">
+      計算後は「🔩 軸力検証（FJリング照査）」で曲線ごとの推進力伝達材を選定し、算出された目地開口長をここへ戻せます（91章）。
+    </div>
   </div>
 
 </section>
@@ -1093,10 +1114,9 @@ tr.row-selected{background:#eff6ff}
 <nav id="tabBar">
   <button class="tab-item active" onclick="showPage(0)"><span class="tab-icon">💾</span><span class="tab-label">入出力</span></button>
   <button class="tab-item" onclick="showPage(1)"><span class="tab-icon">📋</span><span class="tab-label">基本情報</span></button>
-  <button class="tab-item" onclick="showPage(2)"><span class="tab-icon">🏗️</span><span class="tab-label">立坑</span></button>
-  <button class="tab-item" onclick="showPage(3)"><span class="tab-icon">⚡</span><span class="tab-label">推進力</span></button>
-  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">🧱</span><span class="tab-label">支圧壁</span></button>
-  <button class="tab-item" onclick="showPage(5)"><span class="tab-icon">📐</span><span class="tab-label">測量</span></button>
+  <button class="tab-item" onclick="showPage(2)"><span class="tab-icon">⚡</span><span class="tab-label">推進力</span></button>
+  <button class="tab-item" onclick="showPage(3)"><span class="tab-icon">🧱</span><span class="tab-label">支圧壁</span></button>
+  <button class="tab-item" onclick="showPage(4)"><span class="tab-icon">📐</span><span class="tab-label">測量</span></button>
 </nav>
 
 <div id="toast"></div>
@@ -1211,8 +1231,10 @@ function showPage(idx) {
     if (i === idx) t.scrollIntoView({behavior:'auto', inline:'center', block:'nearest'});
   });
   if (idx === 0) updateProjectSummary();
-  if (idx === 2) updateGroundLen();
-  if (idx === 5) { calcSurveyBaseAz(); calcSurvey(); }
+  // 92章: 立坑タブを基本情報タブへ統合したので、推進距離の再計算は基本情報(1)で行う。
+  // タブ番号は .page の DOM 順なので、推進力=2 / 支圧壁=3 / 測量=4 に繰り上がっている。
+  if (idx === 1) { updateGroundLen(); updateInputReadiness(); }
+  if (idx === 4) { calcSurveyBaseAz(); calcSurvey(); }
 }
 
 // タブバー：マウス操作での横スクロール対応（スマホのスワイプに相当）
@@ -3477,15 +3499,21 @@ function buildPipeSchedule(segments) {
   // 区間（直線・曲線）ごとに、その区間の管長l′で管を生成（BP側から順に）。
   // 端数を最後の1本に寄せず区間内で均等割りする（区間境界の直前だけ極端に短い管ができるのを防ぐ）。
   const pipes = [];
+  let numNoOpen = 0;   // 比較用: 目地開口長を無視した（＝従来の 区間長÷管長 の）本数
   (segments || []).forEach(seg => {
     if (!(seg.L > 0) || !seg.spec) return;
     const lp = seg.spec.lp || 2.43;
-    const num = Math.max(1, Math.round(seg.L / lp));
+    // 91章: 管1本が占めるのは「管長＋目地開口長」。曲線は内側弧長を基準に数える。
+    const open = seg.isCurve ? curveJointOpenMm(seg.curveNo - 1) : straightJointOpenMm(seg.key);
+    const num = seg.isCurve ? curvePipeCount(seg.CL, seg.R, seg.spec, open.mm)
+                            : straightPipeCount(seg.L, seg.spec, open.mm);
+    numNoOpen += Math.max(1, Math.round(seg.L / lp));
     const pipeLen = seg.L / num;
     for (let j = 0; j < num; j++) {
       const start = seg.startDist + j * pipeLen;
       const end = seg.startDist + (j + 1) * pipeLen;
-      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen, ownS4: seg.spec.S4, ownCrush: seg.spec.crush, ownJointAllowMm: seg.spec.jointAllowMm });
+      pipes.push({ start, end, D: seg.spec.D, lp: pipeLen, ownS4: seg.spec.S4, ownCrush: seg.spec.crush,
+                   ownJointAllowMm: seg.spec.jointAllowMm, openMm: open.mm, openSrc: open.src, ownLp: lp });
     }
   });
   const N = pipes.length;
@@ -3494,21 +3522,30 @@ function buildPipeSchedule(segments) {
     // 完成形でBPから見て曲線より奥（到達側）にある管は、施工中に必ずその曲線を通過してくる。
     // そのためBP側から見てこの管の位置(end)より手前にある曲線は、直接またがっていなくても対象に含める。
     // またがる曲線・通過してきた曲線のうち最も目地が広く開く曲線の継手仕様に準ずる（例外ルール）
-    let bestCurveS1 = 0, bestSeg = null, inCurve = false;
+    let bestCurveS1 = 0, bestSeg = null, inCurve = false, passedK = 0, insideSeg = null;
     curveSegs.forEach(seg => {
       const overlap = Math.min(pipe.end, seg.endDist) - Math.max(pipe.start, seg.startDist);
-      if (overlap > 1e-9) inCurve = true;
+      if (overlap > 1e-9) { inCurve = true; insideSeg = seg; }
       if (seg.startDist < pipe.end) {
-        const S1 = calcS1(pipe.D, pipe.lp, seg.R, seg.spec.S4);
+        passedK = Math.max(passedK, seg.curveNo);
+        // 開口は管の実長（区間内で均等割りした値ではなく規格の管長）で決まる
+        const S1 = calcS1(pipe.D, pipe.ownLp || pipe.lp, seg.R, seg.spec.S4);
         if (S1 > bestCurveS1) { bestCurveS1 = S1; bestSeg = seg; }
       }
     });
+    // 91章: 軸力検証の結果があれば、通過してきた全曲線のうち最も外側が開く値（gov）に置き換える。
+    // 幾何式 calcS1 は「クッションが全く潰れない」前提なので、実際の圧縮を解いた軸力検証の方が実態に近い。
+    if (passedK > 0 && jkMatchesAlignment()) {
+      const sec = jkSection(passedK);
+      if (sec && sec.gov && Number.isFinite(sec.gov.outer)) { bestCurveS1 = sec.gov.outer; bestSeg = bestSeg || curveSegs.find(s => s.curveNo === passedK) || null; }
+    }
     // 目地開口S1は「推進完了後、その管が最終的に静止した状態」の値を表示する。
     // ・曲線内に留まる管はそのまま曲がった状態で完成するため、曲線通過時の幾何学的開口がそのまま残留値になる。
     // ・それ以外（直線区間で静止する管。曲線を通過済みかどうかを問わない）は、
     //   クッション材厚S4からつぶれ代を差し引いた残り（その管自身の区間仕様）が残留開口になる
     //   （70章で一旦廃止したが、74章でユーザー指示によりスパン毎の指定として復活）。
-    const S1 = inCurve ? bestCurveS1 : Math.max(0, pipe.ownS4 - (pipe.ownCrush || 0));
+    const S1 = inCurve ? bestCurveS1
+             : (Number.isFinite(pipe.openMm) ? pipe.openMm : Math.max(0, pipe.ownS4 - (pipe.ownCrush || 0)));
     // 必要継手は2つの条件を両方満たす、最も安いものを選ぶ：
     // ・推進完了後の残留開口S1が抜出し長(pulloutOpen)以内（完成後ずっと保持される条件）
     // ・曲線通過時（一度でも経験する最大値=bestCurveS1。曲線を通過しない管は0）の開口が
@@ -3520,23 +3557,35 @@ function buildPipeSchedule(segments) {
     // クッション表示は「その管が実際に属する区間（直線／曲線）自身の仕様」を使う。
     // bestSegは目地開口計算に使った曲線（最も厳しい値を要求する曲線）であり、
     // 直線区間の個別クッション仕様とは別物のため混同しない。
-    return { no: N - i, curveNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1, spec: recommendedSpec, actualSpec, cushion: pipe.ownS4 };
+    // 91章: 「今どこに居るか（insideNo / passedK）」と「どの曲線が目地開口を支配するか（govNo）」は
+    // 別物なので分けて持つ。R150の曲線に居ても、手前のR100を通ってきていればR100が支配する。
+    return { no: N - i, insideNo: insideSeg ? insideSeg.curveNo : null, passedK,
+             govNo: bestSeg ? bestSeg.curveNo : null, inCurve, S1,
+             spec: recommendedSpec, actualSpec, cushion: pipe.ownS4 };
   });
   rows.reverse(); // 1本目(到達側)から順に並べる
   // 連続する同一判定（曲線番号＋現在地が曲線内か通過済みか＋継手）をまとめて範囲表示
   const groups = [];
   rows.forEach(r => {
-    const key = (r.curveNo || 'straight') + '|' + (r.inCurve ? 'in' : 'through') + '|' + (r.spec ? r.spec.key : 'NG')
+    const key = (r.insideNo || 'straight') + '|' + r.passedK + '|' + (r.govNo || '-') + '|' + (r.inCurve ? 'in' : 'through')
+      + '|' + (r.spec ? r.spec.key : 'NG')
       + '|' + (r.actualSpec ? r.actualSpec.key : 'NG') + '|' + r.cushion + '|' + r.S1.toFixed(3);
     const last = groups[groups.length - 1];
     if (last && last.key === key) { last.to = r.no; last.maxS1 = Math.max(last.maxS1, r.S1); }
-    else groups.push({ key, from: r.no, to: r.no, curveNo: r.curveNo, inCurve: r.inCurve, spec: r.spec, actualSpec: r.actualSpec, maxS1: r.S1, cushion: r.cushion });
+    else groups.push({ key, from: r.no, to: r.no, insideNo: r.insideNo, passedK: r.passedK, govNo: r.govNo,
+                      inCurve: r.inCurve, spec: r.spec, actualSpec: r.actualSpec, maxS1: r.S1, cushion: r.cushion });
   });
   let html = '<table style="width:100%;border-collapse:collapse;font-size:12px">'
     + '<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">本数</th><th>区間</th><th>目地開口S₁</th><th>推奨継手</th><th>クッション</th></tr>';
   groups.forEach(g => {
     const rangeLabel = g.from === g.to ? `${g.from}本目` : `${g.from}〜${g.to}本目`;
-    const segLabel = g.curveNo ? (g.inCurve ? `第${g.curveNo}曲線` : `直線(第${g.curveNo}曲線通過済)`) : '直線';
+    let segLabel;
+    if (g.inCurve)        segLabel = `第${g.insideNo}曲線`;
+    else if (g.passedK)   segLabel = `直線(第${g.passedK}曲線まで通過済)`;
+    else                  segLabel = '直線';
+    // 目地開口を決めているのが「今居る曲線」と違うときは、支配している曲線を併記する
+    if (g.govNo && g.inCurve && g.govNo !== g.insideNo) segLabel += `<br><span style="color:var(--sub);font-size:10.5px">第${g.govNo}曲線が支配</span>`;
+    else if (g.govNo && !g.inCurve && g.govNo !== g.passedK) segLabel += `<br><span style="color:var(--sub);font-size:10.5px">第${g.govNo}曲線が支配</span>`;
     // 「実際に選択されている継手（その区間仕様）」と「必要十分な最安の継手（推奨）」を併記する。
     // 例: 標準仕様がJC型で、この区間はJA型で足りるなら「JC型（JA型を推奨）」。
     //     実際の選択が必要水準に届いていなければ赤字で警告する。
@@ -3561,8 +3610,53 @@ function buildPipeSchedule(segments) {
       + `<td style="text-align:center" class="mono">${g.cushion != null ? g.cushion + 'mm' : '—'}</td></tr>`;
   });
   html += '</table>';
+  // ── 91章: 目地開口長を推進延長に反映した結果を、反映しない場合と並べて示す ──
+  const sumOpenM = pipes.reduce((s, p) => s + (p.openMm || 0), 0) / 1000;
+  const usedJk   = pipes.some(p => p.openSrc === 'jk');
+  const diff     = numNoOpen - N;
   html += `<div class="note-box" style="margin-top:6px">合計本数: <b>${N}</b>本（区間ごとの管長を使用、路線長${totalLen.toFixed(2)}m）</div>`;
+  html += `<table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px">`
+    + `<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">数え方</th><th>管本数</th><th>管そのものの長さ<br>(本数×管長)</th><th>目地開口の合計<br>(＝管列が伸びる分)</th></tr>`
+    + `<tr><td style="padding:4px;border-bottom:1px solid var(--line)">目地開口長を考慮（採用値）</td>`
+    + `<td style="text-align:center" class="mono"><b>${N}</b> 本</td>`
+    + `<td style="text-align:center" class="mono">${(totalLen - sumOpenM).toFixed(2)} m</td>`
+    + `<td style="text-align:center" class="mono">${(sumOpenM * 1000).toFixed(0)} mm</td></tr>`
+    + `<tr><td style="padding:4px;border-bottom:1px solid var(--line)">目地開口長を無視（路線長÷管長）</td>`
+    + `<td style="text-align:center" class="mono">${numNoOpen} 本</td>`
+    + `<td style="text-align:center" class="mono">${totalLen.toFixed(2)} m</td>`
+    + `<td style="text-align:center" class="mono">0 mm</td></tr>`
+    + `</table>`;
+  html += `<p class="report-note" style="margin:6px 2px 0">`
+    + `管1本が路線上で占めるのは「管長 ＋ その位置での目地開口長」。`
+    + `直線ではパルリングのつぶれ残り、曲線では<b>内側の開口長</b>が効き、`
+    + `曲線の本数は中心線ではなく<b>内側の弧長（半径 R−D/2）</b>で数える。`
+    + `そのぶん必要本数は <b>${diff >= 0 ? diff : 0}本</b> 少なくなる`
+    + `（開口の合計 ${(sumOpenM * 1000).toFixed(0)}mm ＝ 管列が伸びる長さ）。`
+    + (usedJk ? `開口長は<b>軸力検証ソフトの照査結果</b>を使用。`
+              : `開口長は<b>クッション材厚 S₄ − つぶれ代</b>による見積り値。`
+                + `「🔩 軸力検証（FJリング照査）」を実行すると、実際の圧縮を解いた開口長に置き換わる。`)
+    + `</p>`;
+
+  // ── 継手種別が途中で変わる場合は接続用の特殊管が要る ──
+  const jointBoundaries = [];
+  for (let i = 1; i < groups.length; i++) {
+    const a = groups[i - 1], b = groups[i];
+    const ka = a.actualSpec ? a.actualSpec.key : (a.spec ? a.spec.key : null);
+    const kb = b.actualSpec ? b.actualSpec.key : (b.spec ? b.spec.key : null);
+    const ra = a.spec ? a.spec.key : null, rb = b.spec ? b.spec.key : null;
+    if (ra && rb && ra !== rb) jointBoundaries.push({ from: a.to, to: b.from, a: ra, b: rb, ka, kb });
+  }
+  if (jointBoundaries.length) {
+    html += `<div class="note-box" style="margin-top:6px;font-size:12px"><b>継手種別が途中で変わります（接続用特殊管が必要）</b><br>`
+      + jointBoundaries.map(x =>
+          `${x.from}本目（推奨${x.a}型）と ${x.to}本目（推奨${x.b}型）の境目 — `
+          + `前方挿し口 ${x.b}型・後方カラー ${x.a}型 のような接続用特殊管を1本用意する`).join('<br>')
+      + `<br><span style="color:var(--sub)">1スパン内で目地性能を変えると経済的になる一方、種別が切り替わる位置に特殊管が要ります。`
+      + `全区間を最も厳しい種別で統一すれば特殊管は不要です。</span></div>`;
+  }
   resultEl.innerHTML = html;
+  // 線形が変わると「軸力検証の結果を使えるか」も変わるので、あちらのカードの表示も更新しておく
+  if (typeof renderJikuryoku === 'function') renderJikuryoku();
 }
 
 // ══════════════════════════════════════
@@ -3664,6 +3758,76 @@ function updateGroundLen() {
   document.getElementById('rs_arrival').textContent = arrivalDist.toFixed(2);
   document.getElementById('rs_ground').textContent = ground.toFixed(2);
   drawDistDiagram(total, launchDist, arrivalDist, ground);
+}
+
+// ══════════════════════════════════════
+//  入力チェック → 推進力計算へ（92章）
+//  ──────────────────────────────────────
+//  基本情報タブを上から埋めていけば推力計算まで辿り着ける、という流れにするための最後の関門。
+//  「必須」は calculate() が実際に弾く条件と揃えてある（ここでOKなのに向こうで赤字、を防ぐ）。
+//  「確認」は計算自体は通るが値が意味を持たなくなるもの（土質が全部0、立坑未入力など）。
+// ══════════════════════════════════════
+function inputReadinessItems() {
+  const stdSpec = resolveSpec(null);
+  const total = n('totalLength') || 0;
+  const launchDist = calcShaftDist('launch');
+  const arrivalDist = calcShaftDist('arrival');
+  const ground = total - launchDist - arrivalDist;
+  const Hmin = n('soilHmin') || 0, Hmax = n('soilHmax') || 0;
+  const req = [], warn = [];
+
+  req.push({ ok: !!stdSpec.D, label: '推進管仕様', detail: stdSpec.D ? `外径 D = ${stdSpec.D.toFixed(3)} m` : '呼び径を選んで外径 D を確定してください' });
+  req.push({ ok: !!stdSpec.lp, label: '有効長 l′', detail: stdSpec.lp ? `l′ = ${stdSpec.lp} m` : '管長（有効長）を入力してください' });
+  req.push({ ok: Hmax > 0, label: '土被り H最大', detail: Hmax > 0 ? `H最大 = ${Hmax} m` : '「🌱 土質条件」カードの H最大 を入力してください' });
+  // H最大が未入力のときは上の行で既に✕なので、大小関係の行は二重に赤くしない
+  if (Hmax > 0) req.push({ ok: !(Hmin > Hmax), label: '土被りの大小', detail: (Hmin > Hmax) ? `H最小(${Hmin}) > H最大(${Hmax}) になっています` : `H最小 = ${Hmin} m ≤ H最大` });
+  req.push({ ok: total > 0, label: '路線長', detail: total > 0 ? `${total.toFixed(2)} m（線形から自動計算）` : 'BP〜IP1間距離・曲線諸元・最終直線を入力してください' });
+  req.push({ ok: ground > 0, label: '推進距離', detail: ground > 0 ? `${ground.toFixed(2)} m（路線長 − 立坑の除外距離）` : '立坑の除外距離が路線長以上です。立坑の寸法を確認してください' });
+
+  warn.push({ ok: launchDist > 0, label: '発進立坑', detail: launchDist > 0 ? `除外距離 ${launchDist.toFixed(2)} m` : '未入力（除外距離0で計算します）' });
+  warn.push({ ok: arrivalDist > 0, label: '到達立坑', detail: arrivalDist > 0 ? `除外距離 ${arrivalDist.toFixed(2)} m` : '未入力（除外距離0で計算します）' });
+  warn.push({ ok: n('soilGamma') > 0, label: '土の単位体積重量 γ', detail: n('soilGamma') > 0 ? `${n('soilGamma')} kN/m³` : '未入力だと土圧が0になります' });
+  warn.push({ ok: v('soilPhi') !== '', label: '内部摩擦角 φ', detail: v('soilPhi') !== '' ? `${n('soilPhi')}°` : '未入力です（0°として扱われます）' });
+  warn.push({ ok: !!v('siteName'), label: '現場名', detail: v('siteName') || '未入力（保存ファイル名・計算書の表題に使います）' });
+
+  return { req, warn, allOk: req.every(r => r.ok) };
+}
+
+function updateInputReadiness() {
+  const el = document.getElementById('readinessList');
+  if (!el) return;
+  const { req, warn, allOk } = inputReadinessItems();
+  const row = (r) => `<div style="display:flex;gap:6px;align-items:baseline;padding:2px 0;font-size:12px">`
+    + `<span style="color:var(--${r.ok ? 'ok' : 'ng'});flex-shrink:0">${r.ok ? '✓' : '✕'}</span>`
+    + `<b style="flex-shrink:0">${r.label}</b>`
+    + `<span style="color:var(--sub)">${r.detail}</span></div>`;
+  el.innerHTML =
+    `<div class="${allOk ? 'ok-box' : 'ng-box'}" style="font-size:12px">`
+    + `<div style="font-weight:bold;margin-bottom:4px">必須${allOk ? '（すべて揃っています）' : `（${req.filter(r => !r.ok).length}件 未入力）`}</div>`
+    + req.map(row).join('') + `</div>`
+    + `<div class="note-box" style="font-size:12px;margin-top:6px">`
+    + `<div style="font-weight:bold;margin-bottom:4px">確認（無くても計算は通りますが、値が意味を持たなくなります）</div>`
+    + warn.map(row).join('') + `</div>`;
+  const btn = document.getElementById('readinessGoBtn');
+  if (btn) {
+    btn.disabled = !allOk;
+    btn.style.opacity = allOk ? 1 : 0.5;
+    btn.style.cursor = allOk ? 'pointer' : 'not-allowed';
+  }
+}
+
+// 計算して推進力タブへ移動する。calculate() が赤字で止まったときはこのタブに留まる。
+function runCalcAndGoForce() {
+  updateInputReadiness();
+  if (!inputReadinessItems().allOk) { showToast('必須入力が揃っていません'); return; }
+  calculate();
+  const err = document.getElementById('calcError');
+  if (err && err.style.display !== 'none') {
+    showToast('推進力計算でエラーになりました。入力を確認してください');
+    return;
+  }
+  showPage(2);                       // 92章: 立坑タブ統合でタブ番号が繰り上がり、推進力=2
+  window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 function drawDistDiagram(total, launch, arrival, ground) {
@@ -4060,6 +4224,62 @@ function resolveStraightCushionCrush(straightIdx) {
   if (straightIdx <= 0) return pulRingUse ? (n('pipeCrush') || 0) : 0;
   return computeCurveCushionCrush(straightIdx - 1);
 }
+
+// ══════════════════════════════════════
+//  目地開口長 → 管本数・推進延長（91章）
+//  ──────────────────────────────────────
+//  管1本が路線上で占める長さは「管長 l′」ではなく「l′ ＋ その位置での目地開口長」。
+//   ・直線区間 … パルリングがつぶれた残り分だけ目地が開く（例: 厚10mm・つぶれ代2mm → 8mm）
+//   ・曲線区間 … 内側は詰まり外側が開く。管が並ぶピッチを決めるのは詰まる側なので
+//                「内側の開口長」を使う。基準になる長さも中心線ではなく内側の弧長
+//                （半径 R−D/2）で、内側弧長 ＝ CL×(1 − D/2R)。
+//                  本数 n ＝ (R−D/2)・IA ／ (l′ ＋ 内側の開口長)
+//                中心線基準で書いても n ＝ CL ／ (l′ ＋ 内側 ＋ 開口差/2) となり同じ値になる
+//                （開口差 sd0 ＝ D・l′/(R−D/2)）。
+//  開口長は軸力検証ソフトの照査結果（jikuryokuData）があればそれを使い、無ければ
+//  従来どおり S4−つぶれ代 で見積もる。どちらを使ったかは src で区別して画面に出す。
+// ══════════════════════════════════════
+function jkSection(k) {
+  const r = jikuryokuData && jikuryokuData.result;
+  if (!Array.isArray(r)) return null;
+  return r.find(x => x && x.k === k) || null;
+}
+// 軸力検証を回したときの線形と、今の線形が一致しているか（曲線本数と半径で判定）
+function jkMatchesAlignment() {
+  const inp = jikuryokuData && jikuryokuData.input;
+  if (!inp || !Array.isArray(inp.curves)) return false;
+  const now = getCurves();
+  const jkC = inp.curves.filter(c => (c.rad || 0) > 0);
+  if (!now.length || jkC.length < Math.min(now.length, 5)) return false;
+  return now.slice(0, 5).every((c, i) => jkC[i] && Math.abs((jkC[i].rad || 0) - c.R) < 1e-6);
+}
+function curveJointOpenMm(curveIdx) {
+  const s = jkSection(curveIdx + 1);
+  if (s && s.curve && Number.isFinite(s.curve.inner) && jkMatchesAlignment())
+    return { mm: s.curve.inner, src: 'jk' };
+  return { mm: Math.max(0, computeCurveCushionS4(curveIdx) - computeCurveCushionCrush(curveIdx)), src: 'est' };
+}
+function straightJointOpenMm(straightIdx) {
+  // 第1直線＝どの曲線も通過しない管。追加層は無くパルリングだけなので、その残り厚みがそのまま開口長
+  if (straightIdx <= 0)
+    return { mm: Math.max(0, resolveStraightCushionS4(0) - resolveStraightCushionCrush(0)), src: 'est' };
+  // それ以外は「直前（発進立坑側）の曲線を通り終えて静止した状態」＝軸力検証の straightAfter
+  const s = jkSection(straightIdx);
+  if (s && s.straightAfter && Number.isFinite(s.straightAfter.gap) && jkMatchesAlignment())
+    return { mm: s.straightAfter.gap, src: 'jk' };
+  return { mm: Math.max(0, resolveStraightCushionS4(straightIdx) - resolveStraightCushionCrush(straightIdx)), src: 'est' };
+}
+// 区間の「管1本が占める長さ」[m]（曲線は内側基準、直線はそのまま）
+function segPitchM(spec, openMm) { return (spec.lp || 2.43) + (openMm || 0) / 1000; }
+// 曲線の内側弧長[m]（＝(R−D/2)・IA）。中心線弧長 CL から D/2R 分だけ短くなる
+function curveInnerArcM(CL, R, D) { return (R > 0) ? CL * (1 - (D || 0) / (2 * R)) : CL; }
+function curvePipeCount(CL, R, spec, openMm) {
+  const pitch = segPitchM(spec, openMm);
+  return Math.max(1, Math.round(curveInnerArcM(CL, R, spec.D) / pitch));
+}
+function straightPipeCount(L, spec, openMm) {
+  return Math.max(1, Math.round(L / segPitchM(spec, openMm)));
+}
 function setCurvePulRingUse(curveId, use) {
   const c = getCurveById(curveId); if (!c) return;
   ensureCurveCushionFields(c);
@@ -4353,7 +4573,8 @@ function calculate() {
     const { fo: segFo, q_total: segQ } = foForSpec(segSpec, H, bpCursor - epStraight/2);
     const dF = segFo * epStraight;
     F_cum += dF;
-    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec, qTotal: segQ });
+    const lastOpen = straightJointOpenMm(N_curves);
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec, qTotal: segQ, straightIdx: N_curves, openMm: lastOpen.mm, openSrc: lastOpen.src });
     bpCursor -= epStraight;
   }
   // 先端抵抗（先端一箇所の値。標準仕様のD・Wを使用）
@@ -4372,14 +4593,18 @@ function calculate() {
     const curveZone = resolveSoilAt(bpCursor - c.CL/2);
     const { fo: curveFo } = foForSpec(cSpec, H, bpCursor - c.CL/2);
     const { alpha, K, k: kConst } = calcCurveK(c.R, cSpec.D, cSpec.lp, curveZone.phi);
-    const n_pipes = Math.max(1, Math.round(c.CL / cSpec.lp));
+    // 91章: 本数は中心線長÷管長ではなく、内側弧長÷(管長＋内側の開口長)。
+    // 曲線では管が扇状に開くので、中心線で数えると本数を数え過ぎる（＝Kのn乗を過大評価する）。
+    const curveOpen = curveJointOpenMm(curveNo - 1);
+    const n_pipes = curvePipeCount(c.CL, c.R, cSpec, curveOpen.mm);
     const lambda = n_pipes > 1 ? (Math.pow(K, n_pipes+1) - K) / (n_pipes * (K - 1)) : K;
     const F_before = F_cum;
     F_cum = F_cum * Math.pow(K, n_pipes) + curveFo * c.CL * lambda;
     FBC_arr.push({ idx: curList.length - 1 - i, F: F_before, FBC: F_cum, spec: cSpec, R: c.R, alpha });
     segments.push({
       label: `第${curveNo}曲線`, type:'curve', curveNo,
-      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, kConst, n: n_pipes, lambda, fo:curveFo, dF: F_cum - F_before, F_cum, ord: 2*curveNo, spec: cSpec
+      L: c.CL, R: c.R, alpha_deg: alpha * 180/Math.PI, K, kConst, n: n_pipes, lambda, fo:curveFo, dF: F_cum - F_before, F_cum, ord: 2*curveNo, spec: cSpec,
+      openMm: curveOpen.mm, openSrc: curveOpen.src
     });
     bpCursor -= c.CL;
     // 曲線通過後、次（BP側）の曲線に至るまでの直線（＝第curveNo直線）
@@ -4390,7 +4615,8 @@ function calculate() {
         const { fo: midFo, q_total: midQ } = foForSpec(midSpec, H, bpCursor - midLen/2);
         const dF = midFo * midLen;
         F_cum += dF;
-        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec, qTotal: midQ });
+        const midOpen = straightJointOpenMm(curveNo - 1);
+        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec, qTotal: midQ, straightIdx: curveNo - 1, openMm: midOpen.mm, openSrc: midOpen.src });
         bpCursor -= midLen;
       }
     }
@@ -4405,7 +4631,8 @@ function calculate() {
     const { fo: firstFo, q_total: firstQ } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
     const dF = firstFo * spRemain;
     F_cum += dF;
-    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec, qTotal: firstQ });
+    const firstOpen = straightJointOpenMm(0);
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec, qTotal: firstQ, straightIdx: 0, openMm: firstOpen.mm, openSrc: firstOpen.src });
     bpCursor -= spRemain;
   }
 
@@ -5029,29 +5256,32 @@ function computeProgressiveTrace(segments, Fo) {
   ordered.forEach(seg => {
     if (!(seg.L > 0) || !seg.spec) return;
     const lp = seg.spec.lp || 2.43;
-    // クッション材厚からつぶれ代を差し引いた残り分を、管1本ごとの距離に加える（74章でつぶれ代を復活）
-    const netCushionM = Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0)) / 1000;
+    // 91章: 管1本が占めるピッチ ＝ 管長 ＋ 目地開口長。開口長は軸力検証の結果があればその値、
+    // 無ければ従来どおり S4−つぶれ代。区間長 L はこのピッチで割り切って本数を出すので、
+    // グラフの距離は路線長ちょうどで終わる（vr006までは開口長のぶんだけ路線長を超えていた）。
+    const openMm = Number.isFinite(seg.openMm) ? seg.openMm
+                 : Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0));
     if (seg.type === 'curve') markers.push({ label:`BC${seg.curveNo}`, x });
     if (seg.type === 'straight') {
       // 端数を最後の1本に寄せず、区間内で均等割りする（曲線側と同じ考え方）。
       // そうしないと区間境界(BC等)の直前だけ極端に短い管ができ、グラフ上のピッチが乱れる。
-      const numPipes = Math.max(1, Math.round(seg.L / lp));
+      const numPipes = straightPipeCount(seg.L, seg.spec, openMm);
       const pipeLen = seg.L / numPipes;
       for (let j = 1; j <= numPipes; j++) {
         S += CumK * seg.fo * pipeLen;
-        x += pipeLen + netCushionM;
+        x += pipeLen;
         const F = S + Fo * CumK;
         points.push({ x, F, type:'straight', label: seg.label });
         pipeRows.push({ seg: seg.label, type:'straight', x, F,
           formula: `F=F前+fo×l（${seg.fo.toFixed(2)}×${pipeLen.toFixed(2)}）` });
       }
     } else if (seg.type === 'curve') {
-      const numPipes = seg.n;
+      const numPipes = seg.n;   // 曲線の本数は calculate() で内側弧長÷ピッチから求めた値を使う
       const pipeLen = seg.L / numPipes;
       for (let j = 1; j <= numPipes; j++) {
         CumK *= seg.K;
         S += CumK * seg.fo * pipeLen;
-        x += pipeLen + netCushionM;
+        x += pipeLen;
         const F = S + Fo * CumK;
         points.push({ x, F, type:'curve', label: seg.label });
         pipeRows.push({ seg: seg.label, type:'curve', x, F,
@@ -8058,6 +8288,16 @@ function jkFmt(x, d = 2) {
   return (x == null || isNaN(x)) ? '—' : Number(x).toFixed(d);
 }
 
+// 91章: 線形カードから呼ぶ入口。推進力が未計算だと向こうでBC点の推進力が手入力になるので先に確認する。
+function openJikuryokuFromAlignment() {
+  if (!lastCalcResult) {
+    if (!confirm('推進力がまだ計算されていません。\nこのまま開くと、軸力検証側で各BC点の推進力を手入力することになります。\n\n先に「⚡ 推進力計算を実行」することをおすすめします。このまま開きますか？')) return;
+  } else if (calcInputsDirty) {
+    if (!confirm('推進力を計算したあとに入力が変更されています。\n古い推進力のまま照査することになりますが、このまま開きますか？')) return;
+  }
+  openJikuryoku();
+}
+
 function openJikuryoku() {
   const payload = {
     format: 'MYCURVE_HANDOFF_v1',
@@ -8093,12 +8333,57 @@ function receiveJikuryoku(rec, quiet) {
     result: rec.result || null
   };
   renderJikuryoku();
+  // 91章: 開口長は管本数・推進延長に効くので、受け取ったら線形・集計を計算し直す
+  if (typeof calcAlignment === 'function') calcAlignment();
   autoSave();
   if (!quiet) {
     showToast('軸力検証の結果を取り込みました');
     document.getElementById('jikuryokuCard').classList.add('open');
   }
   return true;
+}
+
+// 軸力検証の材種コード → MYcurveのクッション材質キー（15=発泡PS3.5倍はMYcurveに対応が無い）
+const JK_MAT_TO_MYCURVE = { 10:'PB', 11:'fj17', 12:'fj20', 13:'fj25', 14:'fj30' };
+
+// 91章: 軸力検証で選定（提案＝逆算）した層構成を、MYcurve側の各曲線へ取り込む。
+// 区間k（＝第k曲線とその先の直線に静止する管の構成）を curves[k-1] に対応させる。
+function applyJikuryokuLayers() {
+  const res = jikuryokuData && jikuryokuData.result;
+  if (!Array.isArray(res) || !res.length) { showToast('取り込める層構成がありません'); return; }
+  // getCurves() は複製を返すので、書き込みは実体の curves[] に対して行うこと
+  const curList = curves;
+  if (!curList.length) { showToast('先に線形（曲線）を入力してください'); return; }
+  const target = res.filter(s => s.k >= 1 && s.k <= curList.length && Array.isArray(s.layers));
+  if (!target.length) { showToast('層構成が入っていません（直接指定モードで照査された可能性があります）'); return; }
+  if (!confirm(`軸力検証で選定した層構成を、第1〜第${target.length}曲線のクッション層に上書きします。\nよろしいですか？（現在の層構成は失われます）`)) return;
+
+  let unmapped = 0;
+  target.forEach(sec => {
+    const c = curList[sec.k - 1];
+    if (!c) return;
+    ensureCurveCushionFields(c);
+    if (sec.pulRing) {
+      c.pulRingUse = sec.pulRing.on !== false;
+      if (Number.isFinite(sec.pulRing.thick)) c.pulRingThickness = sec.pulRing.thick;
+    }
+    const prev = c.cushionLayers || [];
+    c.cushionLayers = sec.layers.filter(l => l.on && l.thick > 0).slice(0, 4).map((l, i) => {
+      const mat = JK_MAT_TO_MYCURVE[l.mat];
+      if (!mat) unmapped++;
+      return normalizeCushionLayer({
+        material: mat || '', thickness: l.thick, angle: l.angle, count: l.count,
+        // つぶれ代は軸力検証側が層ごとには持たないので、既にあった手入力値を引き継ぐ（81章）
+        crush: (prev[i] && prev[i].crush) || 0
+      });
+    });
+  });
+  renderCurves();
+  calcAlignment();
+  autoSave();
+  renderJikuryoku();
+  showToast(`第1〜第${target.length}曲線のクッション層を取り込みました`
+    + (unmapped ? `（MYcurveに無い材種が${unmapped}層あり、材質は未選択にしました）` : ''));
 }
 
 function clearJikuryoku() {
@@ -8142,11 +8427,14 @@ function renderJikuryoku() {
   // 検証3基準（軸力検証ソフト側と同じ判定）
   let maxSig = 0, minInner = Infinity, maxOuter = 0;
   res.forEach(c => {
-    maxSig = Math.max(maxSig, c.straight?.sigma || 0, c.curve?.sigma || 0);
-    if (c.curve) {
-      minInner = Math.min(minInner, c.curve.inner);
-      maxOuter = Math.max(maxOuter, c.curve.outer);
-    }
+    maxSig = Math.max(maxSig, c.straight?.sigma || 0, c.curve?.sigma || 0, c.straightAfter?.sigma || 0);
+    // 91章: passes＝その区間の管が通過してくる全曲線。最悪値はそこまで見る（vr006は自分の曲線だけだった）
+    const list = Array.isArray(c.passes) && c.passes.length ? c.passes : (c.curve ? [c.curve] : []);
+    list.forEach(p => {
+      maxSig = Math.max(maxSig, p.sigma || 0);
+      minInner = Math.min(minInner, p.inner);
+      maxOuter = Math.max(maxOuter, p.outer);
+    });
   });
   const okSig = maxSig <= 25, okIn = minInner >= 5, okOut = maxOuter <= outLim;
   const allOk = okSig && okIn && okOut;
@@ -8161,6 +8449,23 @@ function renderJikuryoku() {
       mk(`外側の開口長 ≤ ${outLim} mm`, okOut, jkFmt(maxOuter) + ' mm') +
       `<div style="margin-top:4px">${allOk ? '3基準すべて満足しています。' : '基準を満たさない項目があります。伝達材の構成を見直してください。'}</div>` +
     `</div>`;
+
+  // ── 91章: この結果を推進延長（管本数）へ反映しているかどうかを明示する ──
+  const matched = jkMatchesAlignment();
+  const hasLayers = res.some(c => Array.isArray(c.layers) && c.layers.some(l => l.on && l.thick > 0));
+  info.innerHTML +=
+    `<div class="${matched ? 'ok-box' : 'ng-box'}" style="font-size:12px;margin-top:6px">`
+    + (matched
+        ? '照査時の曲線半径が現在の線形と一致しています。<b>ここで出た開口長を管本数・推進延長に使用中</b>です'
+          + '（直線＝通過後の直線の開口長、曲線＝内側の開口長）。'
+        : '<b>照査時の曲線と現在の線形が一致しません</b>（曲線を足した・半径を変えた等）。'
+          + '安全のため管本数には使わず、S₄−つぶれ代による見積り値で計算しています。'
+          + '線形を確定してから軸力検証をやり直してください。')
+    + (hasLayers
+        ? `<div style="margin-top:6px"><button class="big-btn ok" style="width:100%" onclick="applyJikuryokuLayers()"><span style="font-size:18px">📥</span>選定した層構成をMYcurveの曲線に取り込む</button>`
+          + `<div style="color:var(--sub);font-size:11px;margin-top:3px">区間kの構成を第k曲線のクッション層に上書きします（現在の層構成は失われます）。</div></div>`
+        : '')
+    + `</div>`;
 
   const sigCell = (sigma, verdict) => {
     const bad = verdict === '破壊', warn = verdict === '範囲外' || sigma > 25;
@@ -8182,6 +8487,12 @@ function renderJikuryoku() {
            `<td class="mono">${jkFmt(c.curve.sd0)}</td>` +
            `<td class="mono" style="color:var(--${outOK ? 'ok' : 'ng'})">${jkFmt(c.curve.outer)}</td>` +
            `<td class="mono" style="color:var(--${inOK ? 'ok' : 'ng'})">${jkFmt(c.curve.inner)}</td></tr>`;
+    }
+    // 91章: 曲線を通り終えて先の直線で静止した状態。MYcurveはこの値を直線区間の目地開口長に使う
+    if (c.straightAfter) {
+      h += `<tr style="opacity:.85"><td>　└ 第${c.k}曲線通過後の直線</td><td class="mono">${jkFmt(c.straightAfter.pp, 1)}</td>` +
+           `<td class="mono">${sigCell(c.straightAfter.sigma, c.straightAfter.verdict)}</td>` +
+           `<td class="mono">${jkFmt(c.straightAfter.gap)}</td><td>—</td><td>—</td></tr>`;
     }
   });
   h += '</tbody></table>';
@@ -8226,6 +8537,7 @@ function autoSave() {
   try { localStorage.setItem('curvedJackingProjectDraft', JSON.stringify(getProjectData())); } catch(e){}
   updateGroundLen();
   updatePipeLenOpt();
+  if (typeof updateInputReadiness === 'function') updateInputReadiness();   // 92章
   curves.forEach(c => updateCurveJoint(c.id));
 }
 
@@ -8719,6 +9031,7 @@ function updateProjectSummary() {
   updateProjectSummary();
   renderJikuryoku();      // 90章: 保存済みの軸力検証結果があれば開いた時点で見えるようにする
   pickupJikuryokuReturn(); // 90章: 軸力検証から結果が返っているのに未取込なら、ここで拾う
+  updateInputReadiness(); // 92章: 入力チェックカードを初期表示する
   setupAlignmentVisualInteraction();
 })();
 </script>

@@ -156,6 +156,11 @@
 
       <!-- ① 層構成で指定 -->
       <div id="layerUI">
+        <div id="cuScope" style="margin:2px 0 8px">
+          <label style="font-size:12px;cursor:pointer"><input type="checkbox" id="cuPerCurve"> 曲線ごとに構成を変える（区間別に貼り分ける）</label>
+          <div id="cuCurveTabs" style="display:none;margin-top:6px;gap:4px;flex-wrap:wrap"></div>
+          <div class="muted" id="cuScopeNote" style="font-size:11px;margin-top:4px"></div>
+        </div>
         <div class="lyrhead"><div></div><div>材種</div><div>厚み(mm)</div><div>角度(°)</div><div>割付(枚数)</div></div>
         <div class="lyrrow" id="pulrow">
           <div class="tag"><input type="checkbox" id="pulUse" checked>パルリング</div>
@@ -305,8 +310,10 @@ Engine.prototype.setup = function(inp){
   const n=Cu.nsep;
   this.SA=Array.from({length:n+2},()=>new Array(16).fill(0));
   this.CU=Array.from({length:n+2},()=>new Array(10).fill(0));
-  this.CD=Array.from({length:n+2},()=>Array.from({length:12},()=>new Array(11).fill(0)));
-  this.Inpt=new Array(11).fill(0);
+  // スロットは 1..10（第k直線=2k-1／第k曲線=2k）に加え、vr007 で「曲線通過後の直線」
+  // として 2k+1 まで使うので 12 まで確保する
+  this.CD=Array.from({length:n+2},()=>Array.from({length:12},()=>new Array(13).fill(0)));
+  this.Inpt=new Array(13).fill(0);
   this._calSA(); this._calCU();
 };
 Engine.prototype._calSA=function(){
@@ -406,9 +413,13 @@ Engine.prototype._verdict=function(sig,ms){
   const lim=(ms===1)?this.sig_c:this.sig_s, ro=lim[0], br=lim[1];
   if(br&&sig>=br) return "破壊"; if(ro&&sig>=ro) return "範囲外"; return "";
 };
-Engine.prototype.run=function(){
+/* スロット s は s-1 の結果（col4＝それまでの残留つぶれ）を引き継ぐので、
+   1,2,3,… の順に解かないと値が合わない。途中の曲線だけを単独で解くことはできない。
+   そのため「第k曲線まで」を通しで解く runUpTo(k) を用意し、run() はその全曲線版とする。 */
+Engine.prototype.run=function(){ return this.runUpTo(5); };
+Engine.prototype.runUpTo=function(kmax){
   const Cv=this.Cv,St=this.St,mx=this.mx, out={curves:[],exit:null};
-  for(let k=1;k<=5;k++){
+  for(let k=1;k<=kmax;k++){
     if(k>=2 && Cv[k].drc===0){ out.exit=k; break; }
     const rs=this._solve(2*k-1,Cv[k].pbc);
     St[k].max_pl=rs.pl;St[k].pp=rs.pp;St[k].max_sigma=rs.sig;St[k].ms_p=rs.ms;
@@ -421,9 +432,10 @@ Engine.prototype.run=function(){
     const n=this.Cu.nsep, prof=[];
     for(let i=1;i<=n;i++) prof.push({x:this.CU[i][9], comp:this.CD[i][3][2*k], sig:this.CD[i][11][2*k]});
     out.curves.push({k,
-      straight:{pp:St[k].pp,sigma:St[k].max_sigma,verdict:this._verdict(St[k].max_sigma,St[k].ms_p),gap:mx-St[k].max_pl},
+      straight:{pp:St[k].pp,sigma:St[k].max_sigma,verdict:this._verdict(St[k].max_sigma,St[k].ms_p),gap:mx-St[k].max_pl,max_pl:St[k].max_pl,bottomed:St[k].max_pl>=mx},
       curve:{pp:Cv[k].pp,sigma:Cv[k].max_sigma,verdict:this._verdict(Cv[k].max_sigma,Cv[k].ms_p),
-             sd0:Cv[k].sd0,outer_gap:outer,inner_gap:inner,max_pl:Cv[k].max_pl,sd:Cv[k].sd},
+             sd0:Cv[k].sd0,outer_gap:outer,inner_gap:inner,max_pl:Cv[k].max_pl,sd:Cv[k].sd,
+             rad:Cv[k].rad,bottomed:Cv[k].max_pl>=mx},
       prof});
     if(over1||rc.pl>=mx){ out.exit=k; break; }
   }
@@ -445,13 +457,45 @@ const CU_THICK=[5,8,10], CU_ANGLE=[30,45,60,90,180];
 const CU_MAT=[{v:10,label:'PB標準品'},{v:11,label:'FJ 1.7倍'},{v:12,label:'FJ 2.0倍W'},
               {v:13,label:'FJ 2.5倍G'},{v:14,label:'FJ 3.0倍Y'},{v:15,label:'発泡PS3.5倍'}];
 const LAYER_N=4;
-let layerState=[
+const CURVE_N=5;
+function defaultLayers(){ return [
   {on:true, mat:12, thick:10, angle:90, count:4},
   {on:true, mat:12, thick:10, angle:90, count:2},
   {on:false,mat:12, thick:10, angle:90, count:4},
   {on:false,mat:12, thick:10, angle:90, count:4},
-];
-let PUL={on:true, thick:10, crush:8, residual:2};   // residual = 開口長に加算する残り厚み
+]; }
+function defaultPul(){ return {on:true, thick:10, crush:8, residual:2}; }  // residual = 開口長に加算する残り厚み
+
+/* 曲線ごとの伝達材構成（vr007）
+   ── なぜ曲線ごとに要るのか ────────────────────────────────
+   推進管は発進立坑で継ぎ足されて押し込まれるので、ある管は自分の最終位置より
+   発進立坑側にある曲線を「全部」通過してくる。だから区間kに静止する管に貼る
+   伝達材は、第一〜第k曲線の全部を通れるものでなければならない。
+   例）第一100R・第二150R なら、第二曲線にいる管も第一曲線を通ってきているので
+       150R用ではなく100R用が要る。逆に曲線半径が緩い先の区間まで一律に
+       いちばん厳しい構成を貼るのは不経済。
+   そこで「区間k＝第k曲線とその先の直線に静止する管」ごとに構成を持たせ、
+   照査は第一〜第k曲線の全部に対して行う（governing＝いちばん厳しい曲線で判定）。 */
+let curveCu = Array.from({length:CURVE_N}, ()=>({pul:defaultPul(), layers:defaultLayers()}));
+let cuPerCurve = false;   // false=全曲線共通（第一曲線の構成を全区間に使う＝vr006までの動作）
+let cuEditK = 1;          // 層構成UIで今どの区間を編集しているか（1..5）
+// 既存コードがそのまま使えるよう、編集中の区間の構成への参照を従来名で保持する
+let layerState = curveCu[0].layers;
+let PUL        = curveCu[0].pul;
+
+function cuIndexFor(k){ return cuPerCurve ? Math.min(Math.max(k,1),CURVE_N)-1 : 0; }
+function cuSpecFor(k){ return curveCu[cuIndexFor(k)]; }
+function pulResidualOf(p){ return p.on ? Math.max(0, (p.thick||0)-(p.crush||0)) : 0; }
+// 直接指定モードではパルリングの加算を行わない（vr006からの決まり）
+function pulResidualFor(k){ return $('cuMode').value==='layer' ? pulResidualOf(cuSpecFor(k).pul) : 0; }
+// 区間kの構成 → エンジンに渡すゾーン値（上下面(90°)／側方面）
+function zonesFor(k){
+  if($('cuMode').value!=='layer'){
+    return {varc:+$('varc').value, thic:+$('thic').value, vars:+$('vars').value, this:+$('this').value};
+  }
+  const z=zonesFromLayers(cuSpecFor(k).layers);
+  return {varc:z.top.mat||10, thic:z.top.thick, vars:z.side.mat||10, this:z.side.thick};
+}
 
 const fullCount=a=>Math.round(360/a);
 function countOptions(angle){
@@ -483,6 +527,56 @@ function renderLayers(){
     $('ly'+i+'angle').onchange=e=>{ l.angle=+e.target.value; l.count=fullCount(l.angle); renderLayers(); recalcZones(); compute(); };
     $('ly'+i+'count').onchange=e=>{ l.count=+e.target.value; recalcZones(); compute(); };
   });
+}
+
+/* ===== 区間（曲線）ごとの構成を選ぶUI（vr007）===== */
+// 曲線が何本入力されているか（第一は常に有り。以降は「曲線なし」が出たらそこで打ち切り）
+function activeCurveCount(){
+  const dirs=readDirs(); let n=1;
+  for(let k=1;k<CURVE_N;k++){ if(dirs[k]) n=k+1; else break; }
+  return n;
+}
+function selectCuCurve(k){
+  cuEditK=Math.min(Math.max(k,1),CURVE_N);
+  const s=cuSpecFor(cuEditK);
+  layerState=s.layers; PUL=s.pul;
+  $('pulUse').checked=!!s.pul.on;
+  $('pulThick').value=s.pul.thick;
+  $('pulCrush').value=s.pul.crush;
+  renderCuScope(); renderLayers(); recalcZones(); compute();
+}
+function setCuPerCurve(on){
+  // ONにした瞬間は全区間を第一曲線の構成で揃えておく（そこから貼り分ける／提案で置き換える）
+  if(on && !cuPerCurve){
+    for(let i=1;i<CURVE_N;i++)
+      curveCu[i]={pul:{...curveCu[0].pul}, layers:curveCu[0].layers.map(l=>({...l}))};
+  }
+  cuPerCurve=on; cuEditK=1;
+  selectCuCurve(1);
+}
+function renderCuScope(){
+  const tabs=$('cuCurveTabs'), scope=$('cuScope');
+  if(!tabs||!scope) return;
+  const layerMode=$('cuMode').value==='layer';
+  scope.style.display = layerMode?'':'none';
+  $('cuPerCurve').checked=cuPerCurve;
+  tabs.style.display = cuPerCurve?'flex':'none';
+  const names=['第一','第二','第三','第四','第五'], n=activeCurveCount();
+  if(cuPerCurve){
+    if(cuEditK>n) cuEditK=n;
+    tabs.innerHTML=Array.from({length:n},(_,i)=>{
+      const k=i+1, on=k===cuEditK;
+      return `<button type="button" data-k="${k}" style="padding:3px 9px;border-radius:6px;`+
+        `border:1px solid ${on?'var(--accent)':'var(--line)'};cursor:pointer;font-size:12px;`+
+        `background:${on?'var(--accent)':'transparent'};color:${on?'#fff':'inherit'}">区間${k}（${names[i]}曲線〜）</button>`;
+    }).join('');
+    tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>selectCuCurve(+b.dataset.k));
+  } else tabs.innerHTML='';
+  $('cuScopeNote').innerHTML = cuPerCurve
+    ? `<b>区間${cuEditK}</b> ＝ ${names[cuEditK-1]}曲線と、その先（到達側）の直線に静止する管に貼る構成です。`
+      + (cuEditK>1 ? `この管は第一〜${names[cuEditK-1]}曲線を<b>すべて通過してくる</b>ので、照査もその全曲線に対して行います。`
+                   : `この管が通過する曲線は第一曲線だけです。`)
+    : '全区間に同じ構成を貼る前提で照査します（vr006までと同じ）。曲線半径ごとに厚さを変えるならチェックしてください。';
 }
 
 // 層構成 → 上下面(90°)／側方面 の厚み・材種を求め、隠しの varc/thic/vars/this に反映する
@@ -636,7 +730,7 @@ function setCuMode(){
   $('layerUI').style.display=layer?'':'none';
   $('zoneUI').style.display=layer?'none':'';
   if(!layer) PUL.residual=0;      // 直接指定モードではパルリング加算を行わない
-  recalcZones(); compute();
+  recalcZones(); renderCuScope(); compute();
 }
 function fillSelects(){
   const dia=$('dia');
@@ -663,7 +757,7 @@ function fillSelects(){
       <input type="number" id="pbc${k}" step="1" value="${defs[k][2]}">`;
     cd.appendChild(row);
     $('dir'+k).value = k===0 ? (defs[k][1]||'L') : defs[k][1];
-    $('dir'+k).onchange = updateDrcNote;
+    $('dir'+k).onchange = ()=>{ updateDrcNote(); renderCuScope(); };
   }
 }
 // L/R（絶対的な曲がる向き）→ drc（第一曲線を基準にした相対表現）
@@ -691,47 +785,129 @@ function readInput(){
   return {dia:$('dia').value,leng:$('leng').value,sc:$('sc').value,
     varc:$('varc').value,thic:$('thic').value,vars:$('vars').value,this:$('this').value,curves};
 }
+/* ===== 区間ごとの照査（vr007）=====
+   区間k＝第k曲線と、その先（到達側）の直線に静止する管。この管は第一〜第k曲線を
+   通過してくるので、区間kの構成のまま第一〜第k曲線を通しで解き（runUpTo(k)）、
+   その全曲線の結果を持ち帰る。判定は「通過する全曲線のうちいちばん厳しいもの」。 */
+function runPerCurve(){
+  const base=readInput(), nAct=activeCurveCount(), out=[];
+  for(let k=1;k<=nAct;k++){
+    const z=zonesFor(k), pr=pulResidualFor(k);
+    const eng=new Engine(); eng.setup(Object.assign({},base,z));
+    const res=eng.runUpTo(k);
+    const got=res.curves.find(c=>c.k===k) || null;
+    /* 「第k曲線を通り終えて、その先の直線に静止した」状態（vr007）。
+       エンジンのスロットは前段の残留つぶれを引き継ぐので、曲線kのスロット(2k)の次に
+       直線スロット(2k+1)を解けば、曲線でつぶれた後の直線での開口長が出る。
+       MYcurve が「BC_k〜次の曲線までの直線に静止する管」の目地開口長として使うのはこの値。
+       （区間kの straight＝第k直線 は、曲線kに入る手前を通過中の状態で、静止位置ではない） */
+    let straightAfter=null;
+    if(got){
+      const ra=eng._solve(2*k+1, eng.Cv[k].pbc);
+      straightAfter={pp:ra.pp, sigma:ra.sig, verdict:eng._verdict(ra.sig,ra.ms),
+                     gap:eng.mx-ra.pl+pr, bottomed:ra.pl>=eng.mx};
+    }
+    // 通過する曲線ごとの値（パルリング残り厚みを開口長に加算した後の値で持つ）
+    const passes=res.curves.map(c=>({
+      j:c.k, rad:c.curve.rad, pp:c.curve.pp, sigma:c.curve.sigma, verdict:c.curve.verdict,
+      sd0:c.curve.sd0, outer:c.curve.outer_gap+pr, inner:c.curve.inner_gap+pr,
+      bottomed:c.curve.bottomed
+    }));
+    // いちばん厳しい曲線＝外側がいちばん開く（＝内側がいちばん詰まる）曲線
+    let gov=null; passes.forEach(p=>{ if(!gov || p.outer>gov.outer) gov=p; });
+    out.push({
+      k, zone:z, pr, mx:eng.mx, exit:res.exit,
+      layers:cuSpecFor(k).layers.map(l=>({...l})), pul:{...cuSpecFor(k).pul},
+      straight: got ? {pp:got.straight.pp, sigma:got.straight.sigma,
+                       verdict:got.straight.verdict, gap:got.straight.gap+pr,
+                       bottomed:got.straight.bottomed} : null,
+      straightAfter,
+      curve: got ? {pp:got.curve.pp, sigma:got.curve.sigma, verdict:got.curve.verdict,
+                    sd0:got.curve.sd0, outer:got.curve.outer_gap+pr,
+                    inner:got.curve.inner_gap+pr, rad:got.curve.rad,
+                    bottomed:got.curve.bottomed} : null,
+      gov, passes, prof: got ? got.prof : []
+    });
+  }
+  return out;
+}
 function fmt(x,d=1){return (Math.round(x*10**d)/10**d).toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function sigCell(sigma,verdict){
   const v=verdict; const cls=v==="破壊"?"v-bad":v==="範囲外"?"v-warn":( sigma<=25?"v-ok":"v-warn");
   const tag=v?`&lt;${v}&gt; `:""; return `<span class="${cls}">${tag}${fmt(sigma,2)}</span>`;
 }
-function render(res, mx){
-  // パルリングは応力計算から外しているので、その残り厚み（厚み−つぶれ代）を開口長に一律加算する
-  const pr = PUL.residual || 0;
-  // 判定サマリ
+function render(secs){
+  const outLim=+$('jointType').value||70;
+  const MN=Object.fromEntries(CU_MAT.map(m=>[m.v,m.label]));
+  // 判定サマリ ── 全区間・全通過曲線を通した最悪値で見る
   let allMaxSig=0, minInner=Infinity, maxOuter=0;
-  res.curves.forEach(c=>{ allMaxSig=Math.max(allMaxSig,c.straight.sigma,c.curve.sigma);
-    minInner=Math.min(minInner,c.curve.inner_gap+pr); maxOuter=Math.max(maxOuter,c.curve.outer_gap+pr); });
-  const crit=$('crit'); crit.innerHTML='';
+  secs.forEach(s=>{
+    if(s.straight) allMaxSig=Math.max(allMaxSig, s.straight.sigma);
+    s.passes.forEach(p=>{ allMaxSig=Math.max(allMaxSig,p.sigma);
+      minInner=Math.min(minInner,p.inner); maxOuter=Math.max(maxOuter,p.outer); });
+  });
+  if(minInner===Infinity) minInner=0;
   const mk=(label,ok,val)=>`<div class="item">${label}：<span class="${ok?'v-ok':'v-bad'}">${val}</span> ${ok?'✓':'✕'}</div>`;
-  crit.innerHTML =
+  $('crit').innerHTML =
     mk('最大応力度 ≤ 25', allMaxSig<=25, fmt(allMaxSig,2)+' N/mm²') +
     mk('内側の開口長 ≥ 5mm', minInner>=5, fmt(minInner,2)+' mm') +
-    mk('外側の開口長 ≤ 70mm(JC)', maxOuter<=70, fmt(maxOuter,2)+' mm');
+    mk(`外側の開口長 ≤ ${outLim}mm`, maxOuter<=outLim, fmt(maxOuter,2)+' mm');
 
   // 結果表
-  let h='<table><thead><tr><th>区間</th><th>推進力(kN)</th><th>最大応力度(N/mm²)</th><th>開口長(直線)<br>開口差(曲線)(mm)</th><th>外側の開口長(mm)</th><th>内側の開口長(mm)</th></tr></thead><tbody>';
-  res.curves.forEach(c=>{
-    h+=`<tr><td class="lab">第${c.k}直線</td><td>${fmt(c.straight.pp)}</td><td>${sigCell(c.straight.sigma,c.straight.verdict)}</td><td>${fmt(c.straight.gap+pr,2)}</td><td>—</td><td>—</td></tr>`;
-    const inner=c.curve.inner_gap+pr, outer=c.curve.outer_gap+pr;
-    const inOK=inner>=5, outOK=outer<=70;
-    h+=`<tr><td class="lab">第${c.k}曲線</td><td>${fmt(c.curve.pp)}</td><td>${sigCell(c.curve.sigma,c.curve.verdict)}</td><td>${fmt(c.curve.sd0,2)}</td>`+
-       `<td class="${outOK?'v-ok':'v-bad'}">${fmt(outer,2)}</td><td class="${inOK?'v-ok':'v-bad'}">${fmt(inner,2)}</td></tr>`;
+  let h='<table><thead><tr><th>区間</th><th>推進力(kN)</th><th>最大応力度(N/mm²)</th>'+
+        '<th>開口長(直線)<br>開口差(曲線)(mm)</th><th>外側の開口長(mm)</th><th>内側の開口長(mm)</th></tr></thead><tbody>';
+  secs.forEach(s=>{
+    if(cuPerCurve){
+      const zt=`上下面 ${MN[s.zone.varc]||'—'} ${s.zone.thic}mm ／ 側方面 ${s.zone.this?(MN[s.zone.vars]||'—'):'無し'} ${s.zone.this}mm`
+        + (s.pr?`　＋パルリング残り ${fmt(s.pr,1)}mm`:'');
+      h+=`<tr><td class="lab" colspan="6" style="background:var(--chip);font-size:11.5px">`+
+         `<b>区間${s.k}</b>（第${'一二三四五'[s.k-1]}曲線〜。ここに静止する管の構成）： ${zt}</td></tr>`;
+    }
+    if(s.straight){
+      h+=`<tr><td class="lab">第${s.k}直線</td><td>${fmt(s.straight.pp)}</td>`+
+         `<td>${sigCell(s.straight.sigma,s.straight.verdict)}</td>`+
+         `<td>${fmt(s.straight.gap,2)}</td><td>—</td><td>—</td></tr>`;
+    }
+    s.passes.forEach(p=>{
+      const inOK=p.inner>=5, outOK=p.outer<=outLim, own=(p.j===s.k);
+      const lab = own ? `第${p.j}曲線` : `　└ 通過：第${p.j}曲線`;
+      h+=`<tr${own?'':' style="opacity:.85"'}><td class="lab">${lab}<span class="muted" style="font-size:10.5px"> R=${p.rad}m</span></td>`+
+         `<td>${fmt(p.pp)}</td><td>${sigCell(p.sigma,p.verdict)}</td><td>${fmt(p.sd0,2)}</td>`+
+         `<td class="${outOK?'v-ok':'v-bad'}">${fmt(p.outer,2)}</td>`+
+         `<td class="${inOK?'v-ok':'v-bad'}">${fmt(p.inner,2)}</td></tr>`;
+    });
+    if(s.straightAfter){
+      h+=`<tr style="opacity:.85"><td class="lab">　└ 通過後の直線（静止位置）</td><td>${fmt(s.straightAfter.pp)}</td>`+
+         `<td>${sigCell(s.straightAfter.sigma,s.straightAfter.verdict)}</td>`+
+         `<td>${fmt(s.straightAfter.gap,2)}</td><td>—</td><td>—</td></tr>`;
+    }
+    if(!s.straight && !s.passes.length)
+      h+=`<tr><td class="lab">区間${s.k}</td><td colspan="5" class="v-bad">材料が最大圧縮に到達し、この区間は解けませんでした（構成を厚くしてください）。</td></tr>`;
   });
   h+='</tbody></table>';
   $('reswrap').innerHTML=h;
-  $('footnote').innerHTML = (res.exit?`※ 第${res.exit}曲線で計算終了（曲線なし、または材料が最大圧縮に到達）。`:'')+
+
+  const exited=secs.filter(s=>s.exit).map(s=>s.k);
+  $('footnote').innerHTML =
+    (exited.length?`※ 区間 ${exited.join('・')} は途中で計算終了（曲線なし、または材料が最大圧縮に到達）。`:'')+
     ' 第3列は、直線部が<b>開口長</b>、曲線部が<b>開口差</b>（＝外側の開口長−内側の開口長。'+
     'エンジン内部の sd0）。〈範囲外〉〈破壊〉は材料の適応限界超過を示す。'+
-    (pr?`<br>※ 開口長・開口差・外側/内側の開口長には、パルリングの残り厚み ${fmt(pr,1)}mm（厚み${fmt(PUL.thick,1)}−つぶれ代${fmt(PUL.crush,1)}）を加算している。`:'');
+    (cuPerCurve
+      ? '<br>※ 「└ 通過：第j曲線」は、その区間に静止する管が<b>そこへ至るまでに通ってくる</b>曲線での値。'+
+        '推進管は発進立坑側の曲線を必ず全部通過するので、区間の構成はこれら全部を満たす必要がある。'+
+        '<br>※ 「└ 通過後の直線（静止位置）」は、その曲線を通り終えて先の直線で止まった管の開口長。'+
+        '曲線でつぶれた分を引き継いだ状態なので、上の「第k直線」（曲線に入る手前を通過中）とは別の値。'
+      : '<br>※ 全区間に同じ構成を貼る前提の照査。曲線ごとに貼り分けるなら「曲線ごとに構成を変える」をON。')+
+    (secs.some(s=>s.pr)?`<br>※ 開口長・外側/内側の開口長には、各区間のパルリング残り厚み（厚み−つぶれ代）を加算している。`:'');
 
-  // チャート
+  // チャート（各区間の自分の曲線での分布）
   const ca=$('chartarea'); ca.innerHTML='';
-  res.curves.forEach(c=>{
+  secs.forEach(s=>{
+    if(!s.prof || !s.prof.length) return;
     const box=document.createElement('div'); box.className='charts';
-    box.innerHTML=`<div class="chartbox"><div class="ct">第${c.k}曲線 圧縮量分布 (mm)</div>${lineSVG(c.prof,'comp','#1f6feb')}</div>`+
-                  `<div class="chartbox"><div class="ct">第${c.k}曲線 圧縮応力度分布 (N/mm²)</div>${lineSVG(c.prof,'sig','#c0392b',25)}</div>`;
+    const t=cuPerCurve?`区間${s.k}／第${s.k}曲線`:`第${s.k}曲線`;
+    box.innerHTML=`<div class="chartbox"><div class="ct">${t} 圧縮量分布 (mm)</div>${lineSVG(s.prof,'comp','#1f6feb')}</div>`+
+                  `<div class="chartbox"><div class="ct">${t} 圧縮応力度分布 (N/mm²)</div>${lineSVG(s.prof,'sig','#c0392b',25)}</div>`;
     ca.appendChild(box);
   });
 }
@@ -750,12 +926,13 @@ function lineSVG(prof,key,color,refLine){
     <text x="4" y="14" font-size="9" fill="var(--sub)">${fmt(ymax,1)}</text>
     ${ref}<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
 }
+let lastSections=null;   // 直近の照査結果（区間ごと）。履歴保存・MYcurveへの返却で使う
 function compute(){
   drawLayout();
   try{
-    const eng=new Engine(); eng.setup(readInput());
-    const res=eng.run(); render(res,eng.mx);
-  }catch(e){ $('reswrap').innerHTML='<div class="v-bad">計算エラー：'+e.message+'</div>'; console.error(e); }
+    lastSections=runPerCurve();
+    render(lastSections);
+  }catch(e){ lastSections=null; $('reswrap').innerHTML='<div class="v-bad">計算エラー：'+e.message+'</div>'; console.error(e); }
 }
 /* ===== 提案（逆算）===== */
 const PROPOSE_LIMIT = 10;   // 提案の表示件数（合計厚みの小さい順）
@@ -777,21 +954,34 @@ Engine.prototype._solveFast=function(s,target){
   for(let j=0;j<=n+1;j++){ if(CD[j][8][s]>maxsig){maxsig=CD[j][8][s];ms=2;} if(CD[j][9][s]>maxsig){maxsig=CD[j][9][s];ms=1;} }
   return {pl:this.Inpt[s], sig:maxsig, ms:ms, bottomed:bottomed};
 };
+/* 1つの構成を、曲線1..5まで通しで速解きして曲線ごとの生値を返す（パルリング残り厚みは足さない）。
+   スロットが前段の残留つぶれを引き継ぐ都合上、途中の曲線だけを単独では解けないので通しで解く。 */
 function evalConfig(base,varc,thic,vars,thisv){
   const eng=new Engine(); eng.setup(Object.assign({},base,{varc:varc,thic:thic,vars:vars,this:thisv}));
-  const pr=PUL.residual||0;   // パルリングの残り厚み（開口長へ加算）
-  let sig=0,inn=Infinity,out=0,broken=false,bott=false;
+  const per=[];
   for(let k=1;k<=5;k++){
     if(k>=2 && eng.Cv[k].drc===0) break;
     const r1=eng._solveFast(2*k-1,eng.Cv[k].pbc), v1=eng._verdict(r1.sig,r1.ms);
     const r2=eng._solveFast(2*k,eng.Cv[k].pbc),   v2=eng._verdict(r2.sig,r2.ms);
     const mx=eng.mx;
-    const outer=(mx-r2.pl+eng.Cv[k].sd)+(eng.Cv[k].sd0-eng.Cv[k].sd)/2+pr;
-    const inner=(mx-r2.pl)-(eng.Cv[k].sd0-eng.Cv[k].sd)/2+pr;
-    sig=Math.max(sig,r1.sig,r2.sig); inn=Math.min(inn,inner); out=Math.max(out,outer);
-    if(v1==="破壊"||v2==="破壊") broken=true;
-    if(r1.bottomed||r2.bottomed) bott=true;
+    per.push({k:k,
+      sig:Math.max(r1.sig,r2.sig),
+      outer:(mx-r2.pl+eng.Cv[k].sd)+(eng.Cv[k].sd0-eng.Cv[k].sd)/2,
+      inner:(mx-r2.pl)-(eng.Cv[k].sd0-eng.Cv[k].sd)/2,
+      broken:(v1==="破壊"||v2==="破壊"), bott:(r1.bottomed||r2.bottomed)});
     if(r1.pl>=mx||r2.pl>=mx) break;
+  }
+  return per;
+}
+/* 区間k＝第一〜第k曲線を通ってくる管。その全曲線での最悪値にまとめる。
+   パルリングの残り厚みはその区間のものを使うので、ここで足す。 */
+function aggregateThrough(per,k,pr){
+  if(per.length<k) return {sig:0,inn:0,out:9e9,broken:true,bott:true};   // 第k曲線まで到達できない
+  let sig=0,inn=Infinity,out=0,broken=false,bott=false;
+  for(let i=0;i<k;i++){
+    const r=per[i];
+    sig=Math.max(sig,r.sig); inn=Math.min(inn,r.inner+pr); out=Math.max(out,r.outer+pr);
+    if(r.broken) broken=true; if(r.bott) bott=true;
   }
   return {sig:sig,inn:inn===Infinity?0:inn,out:out,broken:broken,bott:bott};
 }
@@ -800,6 +990,12 @@ function tierOf(r,outlim){
   if(r.sig<=25) return "推奨";
   return "要検討";
 }
+/* 層（同心のリング）で作れる組合せか。
+   全周360°の層は側方面も上下面も覆い、180°の層は上下面だけを覆う。だから層で組む限り
+   「上下面の厚み ≥ 側方面の厚み」で、両ゾーンが同じ材種の重なりになる組合せしか作れない。
+   （上下面／側方面を直接指定するモードでは、この制約は無い） */
+function canBeLayers(r){ return r.mc===r.ms && r.lc>=r.ls && r.lc<=LAYER_N; }
+let lastProposal=null;   // 区間ごとの提案（採用ボタンで使う）
 async function propose(){
   const base=readInput(), dia=parseInt(base.dia);
   const p = dia<=500?5 : (dia<=700?8:10);
@@ -807,39 +1003,92 @@ async function propose(){
   const outlim=parseInt($('jointType').value), showAll=$('showTier').value==='all';
   const MATS=[10,11,12,13,14,15], combos=[];
   for(const mc of MATS) for(let lc=1;lc<=maxL;lc++) for(const ms of MATS) for(let ls=1;ls<=maxL;ls++) combos.push([mc,lc,ms,ls]);
-  const total=combos.length, results=[];
+  const total=combos.length, raw=[];
   const prog=$('prog'), bar=prog.firstElementChild; prog.style.display='block'; bar.style.width='0';
   $('propbtn').disabled=true; $('propwrap').innerHTML=''; $('propinfo').textContent='計算中… 0 / '+total;
-  const ord={"推奨":0,"要検討":1,"不成立":2};
   for(let i=0;i<total;i++){
     const c=combos[i];
-    let r; try{ r=evalConfig(base,c[0],c[1]*p,c[2],c[3]*p); }catch(e){ r={sig:0,inn:0,out:9e9,broken:true,bott:true}; }
-    results.push({t:tierOf(r,outlim),mc:c[0],lc:c[1],ms:c[2],ls:c[3],thick:(c[1]+c[3])*p,sig:r.sig,inn:r.inn,out:r.out});
+    let per; try{ per=evalConfig(base,c[0],c[1]*p,c[2],c[3]*p); }catch(e){ per=[]; }
+    raw.push({mc:c[0],lc:c[1],ms:c[2],ls:c[3],thick:(c[1]+c[3])*p,per:per});
     if(i%50===0){ bar.style.width=(i/total*100).toFixed(0)+'%'; $('propinfo').textContent='計算中… '+i+' / '+total; await new Promise(rs=>setTimeout(rs)); }
   }
   bar.style.width='100%';
-  let show=results.filter(r=> showAll || r.t!=="不成立");
-  show.sort((a,b)=> ord[a.t]-ord[b.t] || a.thick-b.thick || a.sig-b.sig);
-  renderProposal(show,results,p,outlim);
+  const ord={"推奨":0,"要検討":1,"不成立":2};
+  const layerMode=$('cuMode').value==='layer';
+  const nAct=activeCurveCount(), sections=[];
+  for(let k=1;k<=nAct;k++){
+    const pr=pulResidualFor(k);
+    const list=raw.map(r=>{
+      const a=aggregateThrough(r.per,k,pr);
+      return {t:tierOf(a,outlim),mc:r.mc,lc:r.lc,ms:r.ms,ls:r.ls,thick:r.thick,
+              sig:a.sig,inn:a.inn,out:a.out};
+    });
+    let show=list.filter(r=> showAll || r.t!=="不成立");
+    if(layerMode) show=show.filter(canBeLayers);
+    show.sort((a,b)=> ord[a.t]-ord[b.t] || a.thick-b.thick || a.sig-b.sig);
+    sections.push({k:k, pitch:p, list:list, show:show});
+  }
+  lastProposal={pitch:p, outlim:outlim, sections:sections, layerMode:layerMode};
+  renderProposal(lastProposal);
   prog.style.display='none'; $('propbtn').disabled=false;
 }
-function renderProposal(show,all,p,outlim){
-  const rec=all.filter(r=>r.t==="推奨").length, warn=all.filter(r=>r.t==="要検討").length, ng=all.length-rec-warn;
-  $('propinfo').innerHTML=`探索 ${all.length} 通り（ピッチ ${p}mm・外側の開口長の基準 ${outlim}mm）： `+
-    `<span class="v-ok">推奨 ${rec}</span> ／ <span class="v-warn">要検討 ${warn}</span> ／ 不成立 ${ng}`;
-  const SN={10:"パル",11:"PS1.7",12:"PS2.0",13:"PS2.5",14:"PS3.0",15:"PS3.5"};
+const PROP_SN={10:"パル",11:"PS1.7",12:"PS2.0",13:"PS2.5",14:"PS3.0",15:"PS3.5"};
+function renderProposal(prop){
+  const {pitch:p, outlim, sections}=prop;
   const cls={"推奨":"t-rec","要検討":"t-warn","不成立":"t-ng"};
-  let h='<table class="ptable"><thead><tr><th>区分</th><th>上下面(90°)材種</th><th>厚み(層)</th><th>側方面材種</th><th>厚み(層)</th><th>合計厚</th><th>最大応力</th><th>内側の開口長<br>（最小）</th><th>外側の開口長<br>（最大）</th></tr></thead><tbody>';
-  show.slice(0,PROPOSE_LIMIT).forEach(r=>{
-    h+=`<tr><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
-       `<td class="z">${SN[r.mc]}</td><td>${r.lc*p}mm (${r.lc}層)</td>`+
-       `<td class="z">${SN[r.ms]}</td><td>${r.ls*p}mm (${r.ls}層)</td>`+
-       `<td>${r.thick}mm</td><td>${fmt(r.sig,1)}</td><td>${fmt(r.inn,1)}</td><td>${fmt(r.out,1)}</td></tr>`;
+  const first=sections[0];
+  const rec=first.list.filter(r=>r.t==="推奨").length, warn=first.list.filter(r=>r.t==="要検討").length;
+  $('propinfo').innerHTML=`探索 ${first.list.length} 通り（ピッチ ${p}mm・外側の開口長の基準 ${outlim}mm）を、`+
+    `区間ごとに「そこへ至るまでに通過する全曲線」で判定しました。`+
+    (prop.layerMode?'　<span class="muted">※層構成で実際に作れる組合せ（上下面≧側方面・同材種・4層以内）だけを表示。</span>':'')+
+    (sections.length>1?'':` <span class="v-ok">推奨 ${rec}</span> ／ <span class="v-warn">要検討 ${warn}</span>`);
+  let h='';
+  sections.forEach(sec=>{
+    const names='一二三四五';
+    h+=`<div style="margin-top:10px"><b>区間${sec.k}</b>`+
+       `<span class="muted" style="font-size:11.5px">（第${names[sec.k-1]}曲線とその先の直線に静止する管`+
+       (sec.k>1?`。第一〜第${names[sec.k-1]}曲線を通過`:'')+`）</span></div>`;
+    h+='<table class="ptable"><thead><tr><th>区分</th><th>上下面(90°)材種</th><th>厚み(層)</th><th>側方面材種</th><th>厚み(層)</th>'+
+       '<th>合計厚</th><th>最大応力</th><th>内側の開口長<br>（最小）</th><th>外側の開口長<br>（最大）</th><th></th></tr></thead><tbody>';
+    sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
+      h+=`<tr><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
+         `<td class="z">${PROP_SN[r.mc]}</td><td>${r.lc*p}mm (${r.lc}層)</td>`+
+         `<td class="z">${PROP_SN[r.ms]}</td><td>${r.ls*p}mm (${r.ls}層)</td>`+
+         `<td>${r.thick}mm</td><td>${fmt(r.sig,1)}</td><td>${fmt(r.inn,1)}</td><td>${fmt(r.out,1)}</td>`+
+         `<td><button type="button" class="adoptbtn" data-k="${sec.k}" data-i="${i}" `+
+         `style="padding:2px 7px;font-size:11px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button></td></tr>`;
+    });
+    h+='</tbody></table>';
+    if(sec.show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:4px">合計厚みの小さい順に上位${PROPOSE_LIMIT}件を表示（該当 ${sec.show.length} 件）。</div>`;
+    if(sec.show.length===0) h+='<div class="v-warn" style="margin-top:4px">条件を満たす構成が見つかりませんでした。最大層数を増やす／曲線・推進力を見直す／継手タイプをご確認ください。</div>';
   });
-  h+='</tbody></table>';
-  if(show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:6px">合計厚みの小さい順に上位${PROPOSE_LIMIT}件を表示（該当 ${show.length} 件）。</div>`;
-  if(show.length===0) h+='<div class="v-warn" style="margin-top:6px">条件を満たす構成が見つかりませんでした。最大層数を増やす／曲線・推進力を見直す／継手タイプをご確認ください。</div>';
+  if(sections.length>1) h+='<div class="muted" style="margin-top:8px">'+
+    '※ 発進立坑側の曲線ほど多くの管が通過するので、到達側の区間ほど条件は厳しくなります（合計厚は単調に増えるのが普通）。'+
+    '「採用」を押すとその区間の層構成に反映します（曲線ごとに構成を変える＝ONになります）。</div>';
   $('propwrap').innerHTML=h;
+  $('propwrap').querySelectorAll('.adoptbtn').forEach(b=>b.onclick=()=>adoptProposal(+b.dataset.k,+b.dataset.i));
+}
+// 提案の1件を、その区間の層構成に流し込む。
+// 側方面を覆う全周(360°)の層を ls 枚、その上に上下面だけ(180°)の層を lc-ls 枚重ねると、
+// 導出ゾーンがちょうど 上下面=lc*p / 側方面=ls*p になる（canBeLayers を満たす組合せのみ）。
+function adoptProposal(k,i){
+  const sec=lastProposal && lastProposal.sections.find(s=>s.k===k);
+  if(!sec) return;
+  const r=sec.show[i]; if(!r) return;
+  const p=sec.pitch;
+  if(!canBeLayers(r)){
+    $('propinfo').innerHTML='<span class="v-warn">この組合せは層構成では作れません（上下面＜側方面、材種違い、または層数超過）。'+
+      '「上下面／側方面を直接指定」モードで使ってください。</span>';
+    return;
+  }
+  if(!cuPerCurve && lastProposal.sections.length>1) setCuPerCurve(true);
+  const idx=cuIndexFor(k), out=[];
+  for(let n=0;n<r.ls;n++)       out.push({on:true, mat:r.ms, thick:p, angle:90, count:4}); // 全周
+  for(let n=0;n<r.lc-r.ls;n++)  out.push({on:true, mat:r.mc, thick:p, angle:90, count:2}); // 上下面のみ
+  while(out.length<LAYER_N) out.push({on:false, mat:12, thick:10, angle:90, count:4});
+  curveCu[idx].layers=out.slice(0,LAYER_N);
+  selectCuCurve(cuPerCurve?k:1);
+  $('propinfo').innerHTML = `<span class="v-ok">区間${k}に「上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm ／ 側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm」を採用しました。</span>`;
 }
 
 /* ===== 入力履歴（保存・呼び出し）===== */
@@ -853,6 +1102,7 @@ function collectRecord(){
   for(let k=0;k<5;k++){
     curves.push({rad:+$('rad'+k).value||0, dir:dirs[k]||'', drc:drc[k], pbc:+$('pbc'+k).value||0});
   }
+  const c0=curveCu[0];
   const rec = {
     format: HIST_FORMAT,
     savedAt: new Date().toISOString(),
@@ -860,24 +1110,32 @@ function collectRecord(){
     input: {
       dia:+$('dia').value, leng:+$('leng').value, sc:+$('sc').value,
       cuMode:$('cuMode').value,
-      pulRing:{on:PUL.on, thick:PUL.thick, crush:PUL.crush},
-      layers: layerState.map(l=>({...l})),
+      // 互換のため第一区間の構成を従来のキーでも残す（vr006以前の読み手が壊れないように）
+      pulRing:{on:c0.pul.on, thick:c0.pul.thick, crush:c0.pul.crush},
+      layers: c0.layers.map(l=>({...l})),
       varc:+$('varc').value, thic:+$('thic').value, vars:+$('vars').value, this:+$('this').value,
+      // vr007: 区間（曲線）ごとの構成
+      perCurve: cuPerCurve,
+      curveCu: curveCu.map(c=>({pul:{...c.pul}, layers:c.layers.map(l=>({...l}))})),
       curves
     },
     propose: {maxLayers:+$('maxLayers').value, jointType:+$('jointType').value},
     result: null
   };
   try{
-    const eng=new Engine(); eng.setup(readInput());
-    const res=eng.run();
-    const pr=PUL.residual||0;
-    rec.input.pulResidual=pr;
-    rec.result = res.curves.map(c=>({
-      k:c.k,
-      straight:{pp:c.straight.pp, sigma:c.straight.sigma, gap:c.straight.gap+pr, verdict:c.straight.verdict},
-      curve:{pp:c.curve.pp, sigma:c.curve.sigma, sd0:c.curve.sd0,
-             outer:c.curve.outer_gap+pr, inner:c.curve.inner_gap+pr, verdict:c.curve.verdict}
+    const secs = lastSections || runPerCurve();
+    rec.input.pulResidual = pulResidualOf(c0.pul);
+    rec.result = secs.map(sc=>({
+      k: sc.k,
+      // その区間に据え付ける構成（MYcurve側の曲線へ書き戻すのに使う）
+      zone: {...sc.zone}, pulResidual: sc.pr,
+      layers: sc.layers.map(l=>({...l})), pulRing: {...sc.pul},
+      straight:      sc.straight      ? {...sc.straight}      : null,
+      straightAfter: sc.straightAfter ? {...sc.straightAfter} : null,
+      curve:    sc.curve    ? {...sc.curve}    : null,
+      // 区間kの管が通過してくる曲線すべての照査値（いちばん厳しいものが gov）
+      passes: sc.passes.map(x=>({...x})),
+      gov: sc.gov ? {...sc.gov} : null
     }));
   }catch(e){ /* 入力が不完全なら結果なしで保存する */ }
   return rec;
@@ -891,11 +1149,23 @@ function applyRecord(rec){
   $('dia').value=i.dia; $('leng').value=i.leng; $('sc').value=i.sc;
   // 層構成（無い旧形式の履歴は「直接指定」モードで開く）
   if(i.layers){
-    layerState = i.layers.map(l=>({...l}));
-    while(layerState.length<LAYER_N) layerState.push({on:false,mat:12,thick:10,angle:90,count:4});
-    const p=i.pulRing||{};
-    $('pulUse').checked = p.on!==false; $('pulThick').value = p.thick!=null?p.thick:10;
-    $('pulCrush').value = p.crush!=null?p.crush:0;
+    const norm = ls => { const a=(ls||[]).map(l=>({...l}));
+      while(a.length<LAYER_N) a.push({on:false,mat:12,thick:10,angle:90,count:4}); return a.slice(0,LAYER_N); };
+    const pulOf = p => ({on:(p&&p.on)!==false, thick:(p&&p.thick!=null)?p.thick:10,
+                         crush:(p&&p.crush!=null)?p.crush:0, residual:0});
+    if(i.curveCu && i.curveCu.length){          // vr007以降：区間ごとの構成
+      curveCu = Array.from({length:CURVE_N},(_,k)=>{
+        const c=i.curveCu[k] || i.curveCu[0];
+        return {pul:pulOf(c&&c.pul), layers:norm(c&&c.layers)};
+      });
+      cuPerCurve = !!i.perCurve;
+    }else{                                       // vr006以前：全区間で同じ構成
+      const base={pul:pulOf(i.pulRing), layers:norm(i.layers)};
+      curveCu = Array.from({length:CURVE_N},()=>({pul:{...base.pul}, layers:base.layers.map(l=>({...l}))}));
+      cuPerCurve = false;
+    }
+    cuEditK=1; layerState=curveCu[0].layers; PUL=curveCu[0].pul;
+    $('pulUse').checked = PUL.on; $('pulThick').value = PUL.thick; $('pulCrush').value = PUL.crush;
     $('cuMode').value = i.cuMode || 'layer';
   }else{
     $('cuMode').value = 'zone';
@@ -904,7 +1174,7 @@ function applyRecord(rec){
   $('layerUI').style.display=layerMode?'':'none';
   $('zoneUI').style.display=layerMode?'none':'';
   renderLayers();
-  if(layerMode){ recalcZones(); }
+  if(layerMode){ recalcZones(); renderCuScope(); }
   else{ PUL.residual=0; $('zonecalc').innerHTML='';
         $('varc').value=i.varc; $('thic').value=i.thic; $('vars').value=i.vars; $('this').value=i.this; }
   (i.curves||[]).forEach((c,k)=>{
@@ -1025,27 +1295,33 @@ function importMyCurve(d){
     else { $('rad'+k).value=0; $('dir'+k).value=(k===0?'L':''); }
   }
 
-  // 推進力伝達材：第一曲線の層構成をそのまま取り込む（曲線ごとに違う場合は注意書きを出す）
+  // 推進力伝達材：曲線ごとの層構成をそのまま取り込む（vr007。vr006までは第一曲線のみだった）
   $('cuMode').value='layer';
   $('layerUI').style.display=''; $('zoneUI').style.display='none';
   if(curvesIn.length){
-    const c0=curvesIn[0];
-    const pulOn=(c0.pulRingUse!=null?c0.pulRingUse:pipe.pulRingUse)!==false;
-    const pulT =c0.pulRingThickness!=null?c0.pulRingThickness:pipe.pulRingThickness;
-    $('pulUse').checked = pulOn;
-    $('pulThick').value = pulT || 10;
-    // つぶれ代は MYcurve の管仕様タブのグローバル値（pipe.crush）を使う
-    $('pulCrush').value = pipe.crush != null ? pipe.crush : 0;
+    const pad = a => { const b=a.map(l=>({...l}));
+      while(b.length<LAYER_N) b.push({on:false,mat:12,thick:10,angle:90,count:4}); return b.slice(0,LAYER_N); };
+    const cuOf = c => ({
+      pul:{ on:(c.pulRingUse!=null?c.pulRingUse:pipe.pulRingUse)!==false,
+            thick:(c.pulRingThickness!=null?c.pulRingThickness:pipe.pulRingThickness) || 10,
+            // つぶれ代は MYcurve の管仕様タブのグローバル値（pipe.crush）を使う
+            crush: pipe.crush != null ? pipe.crush : 0, residual:0 },
+      layers: pad(layersFromCurve(c)) });
+    const last = cuOf(curvesIn[Math.min(curvesIn.length,CURVE_N)-1]);
+    curveCu = Array.from({length:CURVE_N},(_,k)=> curvesIn[k] ? cuOf(curvesIn[k])
+                : {pul:{...last.pul}, layers:last.layers.map(l=>({...l}))});
 
-    layerState = layersFromCurve(c0);
-    while(layerState.length<LAYER_N) layerState.push({on:false,mat:12,thick:10,angle:90,count:4});
-
-    const k0=curveCushionKey(c0,pipe);
-    const others=curvesIn.slice(1,5).map((c,i)=>({i:i+2,same:curveCushionKey(c,pipe)===k0})).filter(o=>!o.same);
-    if(others.length) notes.push(`第${others.map(o=>'一二三四五'[o.i-1]).join('・')}曲線は第一曲線と伝達材の構成が異なります。軸力検証は全区間共通のため、第一曲線の構成を読み込みました`);
+    const k0=curveCushionKey(curvesIn[0],pipe);
+    const diff=curvesIn.slice(1,CURVE_N).map((c,i)=>({i:i+2,same:curveCushionKey(c,pipe)===k0})).filter(o=>!o.same);
+    cuPerCurve = diff.length>0;
+    cuEditK=1; layerState=curveCu[0].layers; PUL=curveCu[0].pul;
+    $('pulUse').checked=PUL.on; $('pulThick').value=PUL.thick; $('pulCrush').value=PUL.crush;
+    if(diff.length) notes.push(`第${diff.map(o=>'一二三四五'[o.i-1]).join('・')}曲線は第一曲線と伝達材の構成が異なるため、`+
+      `<b>「曲線ごとに構成を変える」をONにして区間ごとに読み込みました</b>。`+
+      `区間kの管は第一〜第k曲線を通過してくるので、照査もその全曲線に対して行います`);
     if(pipe.crush==null) notes.push('MYcurve側につぶれ代（管仕様タブ）の保存が無かったため 0mm で読み込みました。必要なら手入力してください');
   }
-  renderLayers(); recalcZones();
+  renderLayers(); recalcZones(); renderCuScope();
 
   // 推進力：前の入力が残るとMYcurveから来た値に見えてしまうので、取込時は必ず入れ替える。
   //  ① M_APP_033 以降は calcResult（推進力計算の結果）がJSONに入る → これを使う
@@ -1112,7 +1388,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const MY_SOURCE = '軸力検証ソフト HTML版 vr006';
+const MY_SOURCE = '軸力検証ソフト HTML版 vr007';
 // MYcurveの継手種別は「許容目地開き」60=JC / 40=JB / 30=JA。
 // 軸力検証の継手タイプは「外側の開口長の基準」70=JC / 50=JB。同じJC/JBでも数値の意味が違う。
 const MY_JOINT = {60:70, 40:50, 30:50};
@@ -1273,9 +1549,10 @@ function clearInput(){
   $('layerUI').style.display=''; $('zoneUI').style.display='none';
   // パルリング・層構成を初期状態へ
   $('pulUse').checked=false; $('pulThick').value=''; $('pulCrush').value='';
-  PUL.on=false; PUL.thick=0; PUL.crush=0; PUL.residual=0;
-  layerState.forEach(l=>{ l.on=false; l.thick=0; });
-  renderLayers();
+  curveCu = Array.from({length:CURVE_N},()=>({pul:{on:false,thick:0,crush:0,residual:0},
+    layers:defaultLayers().map(l=>({...l, on:false, thick:0}))}));
+  cuPerCurve=false; cuEditK=1; layerState=curveCu[0].layers; PUL=curveCu[0].pul;
+  renderLayers(); renderCuScope();
   $('thic').value=''; $('this').value='';
   for(let k=0;k<5;k++){ $('rad'+k).value=''; $('pbc'+k).value=''; $('dir'+k).value = k===0?'L':''; }
   $('zonecalc').innerHTML='';
@@ -1350,6 +1627,8 @@ function loadExample(){
 fillSelects();
 renderLayers();
 updateDrcNote();
+renderCuScope();
+$('cuPerCurve').onchange=e=>setCuPerCurve(e.target.checked);
 $('cuMode').onchange=setCuMode;
 $('pulUse').onchange=()=>{ recalcZones(); compute(); };
 $('pulThick').oninput=()=>{ recalcZones(); compute(); };
