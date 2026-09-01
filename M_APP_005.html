@@ -1356,8 +1356,18 @@ function onSoilTypeChange() {
 function onShinnukiToggle() {
   const use = document.getElementById('shinnukiUse').checked;
   const el = document.getElementById('soilNprime');
+  if (use) {
+    // 93章: ONにする直前の手入力値を控えておき、OFFに戻したとき復元できるようにする。
+    if (!el.readOnly) el.dataset.manualNprime = el.value;
+    setV('soilNprime', SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? n('soilN') ?? 15);
+  } else {
+    // 93章: 従来はOFFに戻してもN′が心抜きの標準値（例:砂質土2.5）のまま残り、先端抵抗
+    // F0=10×1.32π×Bs×N′ が変わらないため「行う／行わないを切り替えても推進力が変化しない」
+    // 状態になっていた。控えた手入力値（無ければ実測N値）へ戻す。
+    const back = el.dataset.manualNprime;
+    setV('soilNprime', (back !== undefined && back !== '') ? back : (n('soilN') || 15));
+  }
   el.readOnly = use;
-  if (use) setV('soilNprime', SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? n('soilN') ?? 15);
   autoSave();
   calcAlignment();
   refreshForceIfCalculated();
@@ -2013,8 +2023,14 @@ function onSoilZoneChange(id) {
 function onSoilZoneShinnukiToggle(id, checked) {
   const z = soilZones.find(x => x.id === id);
   if (!z) return;
+  // 93章: 共通の土質条件と同じく、OFFに戻したときN′が標準値のまま残らないようにする。
+  if (checked) {
+    if (!z.shinnukiUse) z.manualNprime = z.Nprime;
+    z.Nprime = SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? z.N ?? 15;
+  } else if (z.shinnukiUse) {
+    z.Nprime = (z.manualNprime != null && z.manualNprime !== '') ? z.manualNprime : (z.N ?? 15);
+  }
   z.shinnukiUse = checked;
-  if (checked) z.Nprime = SHINNUKI_NPRIME_BY_SOIL[v('soilType')] ?? z.N ?? 15;
   renderSoilZones();
   autoSave();
   refreshForceIfCalculated();
@@ -8659,7 +8675,11 @@ function getCalcResultForSave() {
 function setProjectData(d) {
   if (!d) return;
   if (d.site) { setV('siteName', d.site.name||''); setV('siteSpan', d.site.span||''); setV('siteDate', d.site.date||''); }
-  if (d.method) setMethod(d.method);
+  // 93章: method を持たないJSONを読み込むと setMethod() が呼ばれず、刃口推進が選択状態に
+  // 見えるのに #bladeRow（周面抵抗の算定式＝下水道協会式／佐藤・山本改定式の選択欄）が
+  // HTML初期の display:none のまま残り、選択欄が消えたように見えていた。
+  // 工法の指定が無くても現在の工法で必ず setMethod() を通し、工法専用欄の表示を同期する。
+  setMethod(d.method || currentMethod);
   if (d.pipe) {
     // 旧フォーマット(split-*)互換: size→dia, strength→grade, joint→jointType, length→len
     const dia = d.pipe.dia || d.pipe.size || 800;
@@ -9013,9 +9033,21 @@ function updateProjectSummary() {
   { const iEl = document.getElementById('pulRingIcon'); if (iEl) iEl.innerHTML = pulRingIconSVG(); } // 71章: パルリングのリングアイコン初期表示
   // localStorage から復元
   const saved = localStorage.getItem('curvedJackingProjectDraft') || localStorage.getItem('curvedJackingProject');
+  // 93章: 従来ここは catch(e){} で例外を握りつぶしていたため、復元が途中で失敗しても
+  // 画面はHTMLの初期状態（工法専用の入力欄が display:none）のまま無言で残り、
+  // 「入力欄が消えた」ようにしか見えなかった。失敗はコンソールへ出し、既定値で立て直す。
+  // 立て直しでは setMethod()→autoSave() が走って下書きが既定値で上書きされるため、
+  // 復元できなかった元データは別キーへ退避してから初期化する。
+  let restored = false;
   if (saved) {
-    try { setProjectData(JSON.parse(saved)); } catch(e) {}
-  } else {
+    try { setProjectData(JSON.parse(saved)); restored = true; }
+    catch (e) {
+      console.error('保存データの復元に失敗しました。既定値で初期化します。', e);
+      try { localStorage.setItem('curvedJackingProjectRescue', saved); } catch (e2) {}
+      showToast('保存データを読めませんでした。既定値で開きます（元データは退避済み）');
+    }
+  }
+  if (!restored) {
     // デフォルト値で初期化
     setMethod('blade');
     onSoilTypeChange();
