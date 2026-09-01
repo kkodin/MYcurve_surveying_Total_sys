@@ -681,11 +681,14 @@ tr.row-selected{background:#eff6ff}
         <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
           <input type="checkbox" id="alignVisAnn" onchange="toggleAlignmentLabelVis('annotation', this.checked)"> 曲線注記（R・IA・CL・SL・TL）表示
         </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="alignVisSurvey" checked onchange="toggleAlignmentLabelVis('survey', this.checked)"> 測量結果（実測KP・予測点）表示
+        </label>
       </div>
       <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView()">表示リセット</button>
     </div>
-    <p class="report-note" style="margin:0 0 6px">既定では点（BP・BC・IP・SP・EC・EP）のみ表示し、重なりやすいRO・区間名・曲線注記は非表示にしています。87章以降、この設定と拡大・移動は<b>この図だけ</b>に効きます（計算書「3.施工条件」の図は別に操作できます）。</p>
-    <canvas id="alignmentVisual" style="width:100%;height:320px;margin-top:0;border-radius:8px;display:block;border:1px solid var(--line);background:#fff;touch-action:none"></canvas>
+    <p class="report-note" style="margin:0 0 6px">既定では点（BP・BC・IP・SP・EC・EP）と測量結果のみ表示し、重なりやすいRO・区間名・曲線注記は非表示にしています。測量タブに測定結果があるときは、実測KP点（紫の実線）と予測点（点線）を重ねて表示します（94章。チェックを外すと計画線だけになります）。87章以降、この設定と拡大・移動は<b>この図だけ</b>に効きます（計算書「3.施工条件」の図は別に操作できます）。縦横は同縮尺（1:1）で、計算書「3.施工条件」の図と同じ正方形表示です（94章）。</p>
+    <canvas id="alignmentVisual" class="report-svg" style="width:100%;max-width:680px;aspect-ratio:1/1;height:auto;margin:0 auto;display:block;background:#fff;touch-action:none"></canvas>
   </div>
 
   <div class="card accordion" id="pipeLenOptCard">
@@ -2209,10 +2212,27 @@ function alignmentState(canvasId) {
   return alignmentStates[canvasId] || (alignmentStates[canvasId] = {
     view: { scale: 1, offsetX: 0, offsetY: 0 },
     viewBase: { scale: 1, offX: 0, offY: 0 },
-    // 計算書の図はR・IA・CL・SL・TLが要るので、そちらだけ注記を既定表示にする
-    labelVis: { ro: false, segLabel: false, annotation: canvasId === 'reportAlignmentVisual' },
+    // 計算書の図はR・IA・CL・SL・TLが要るので、そちらだけ注記を既定表示にする。
+    // 94章: survey（測量結果の重ね描き）は従来常時表示だったため既定 true。
+    labelVis: { ro: false, segLabel: false, annotation: canvasId === 'reportAlignmentVisual', survey: true },
     annotation: {},
     annScreens: []
+  });
+}
+// 94章: 計算書は innerHTML ごと作り直されるので、チェックボックスは毎回HTMLの既定値に
+// 戻ってしまう一方、表示状態は alignmentStates 側に canvasId 単位で残る。両者がずれると
+// 「チェックが入っているのに出ない」状態になるため、描画のたびに状態→チェックボックスへ反映する。
+const ALIGN_VIS_CHECKBOX_IDS = {
+  alignmentVisual:       { ro:'alignVisRO',  segLabel:'alignVisSeg',  annotation:'alignVisAnn',  survey:'alignVisSurvey'  },
+  reportAlignmentVisual: { ro:'reportVisRO', segLabel:'reportVisSeg', annotation:'reportVisAnn', survey:'reportVisSurvey' }
+};
+function syncAlignmentVisCheckboxes(canvasId) {
+  const ids = ALIGN_VIS_CHECKBOX_IDS[canvasId];
+  if (!ids) return;
+  const S = alignmentState(canvasId);
+  Object.keys(ids).forEach(k => {
+    const el = document.getElementById(ids[k]);
+    if (el) el.checked = !!S.labelVis[k];
   });
 }
 function toggleAlignmentLabelVis(key, checked, canvasId) {
@@ -2280,6 +2300,7 @@ function drawAlignmentVisual(targetId) {
   const S = alignmentState(canvasId);          // 87章: canvasごとの独立した表示状態
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
+  syncAlignmentVisCheckboxes(canvasId);        // 94章: 表示状態→チェックボックス
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.offsetWidth, h = canvas.offsetHeight;
   if (!w || !h) {
@@ -2443,7 +2464,7 @@ function drawAlignmentVisual(targetId) {
   // 以降2点ごとに1本ずつ遡る。60章の予測点ロジックと同じ「KP1=先頭管前面」の考え方）。
   // 測量タブは基準方位角(baseAz)分だけ回転した座標系のため、このビジュアル表示のスキーマ座標
   // （az=0起点）に合わせて逆回転してから重ねる。
-  if (surveyGeom && surveyResults && surveyResults.length) {
+  if (S.labelVis.survey && surveyGeom && surveyResults && surveyResults.length) {
     const baseAzRad = degToRad(n('surveyBaseAz') || 0);
     const cosA = Math.cos(-baseAzRad), sinA = Math.sin(-baseAzRad);
     const pipeCountBase = n('surveyPipeCount') || 0;
@@ -4964,6 +4985,9 @@ function renderReport(res) {
         </label>
         <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
           <input type="checkbox" id="reportVisAnn" checked onchange="toggleAlignmentLabelVis('annotation', this.checked, 'reportAlignmentVisual')"> 曲線注記（R・IA・CL・SL・TL）表示
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer">
+          <input type="checkbox" id="reportVisSurvey" checked onchange="toggleAlignmentLabelVis('survey', this.checked, 'reportAlignmentVisual')"> 測量結果（実測KP・予測点）表示
         </label>
       </div>
       <button type="button" class="big-btn secondary" style="min-height:32px;font-size:12px;padding:4px 12px;width:auto" onclick="resetAlignmentVisualView('reportAlignmentVisual')">表示リセット</button>
