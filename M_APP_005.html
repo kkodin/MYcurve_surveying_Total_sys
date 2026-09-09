@@ -811,6 +811,13 @@ tr.row-selected{background:#eff6ff}
 
     <div class="card accordion" id="bcCard" style="display:none">
       <div class="card-title accent" onclick="toggleAccordion(this)">⚠️ 詳細: BC点外圧管種検討表</div>
+      <div class="note-box" style="font-size:11px;margin-bottom:6px">
+        曲線部では管が継手部で折れた状態で進むため、推進力によって管が曲線の外側へ張り出そうとし、地山から側方反力を受けます。その反力に対する許容推進力 FaBC を、BC点の実際の軸力 FBC と比べます（一次資料『推進工法の設計』4.8.3、式4.33〜4.34）。<br>
+        <b>Ma</b>=0.318×P×r＋0.239×W×r（P＝外圧強さ、r＝管厚中心半径(D+Di)/4）　→　<b>qa</b>=Ma/(0.239×r²)（許容等分布側圧）<br>
+        <b>η</b>=−13.917Rt−0.579RL＋10.506Rt×RL＋2.033（Rt=管厚/<b>内径</b>、RL=管長/<b>内径</b>、下限1.0）　→　<b>La</b>=管長/η（仮想影響範囲長。載荷実験とFEM解析から求めた補正で、生の管長より短くなります）<br>
+        <b>FaBC</b>=√2×La×r×qa/(sinα×1.5)（α＝管1本あたりの折れ角、1.5は安全率）。ただし<b>上限は管耐荷力</b>（直線推進の許容耐荷力）とし、頭打ちになった行には「※管耐荷力」と表示します。<br>
+        鋼管は外圧強さの規格表の適用外のため対象外です（手入力のFaで別途照査してください）。<br>ηの回帰式は表1.4-16（呼び径800〜3000mm）の載荷実験・FEM解析から導かれたものなので、その外側の呼び径では外挿になります。該当する行はηに <b style="color:var(--accent)">*</b> が付きます（値はη↑＝La↓＝FaBC↓と安全側に振れます）。
+      </div>
       <div class="tbl-wrap"><table id="bcTable"></table></div>
     </div>
 
@@ -4068,17 +4075,46 @@ function calcCurveK(R, D, lp, phi_soil) {
 // ══════════════════════════════════════
 //  BC点許容推進力 FaBC
 // ══════════════════════════════════════
-const QA_TABLE = {
-  '1shu': {300:5420,350:4643,400:4063,450:3612,500:3249,600:2708,700:3282,800:5880,900:5226,1000:4693,1100:4268,1200:3911,1350:3476,1500:3128,1650:2843,1800:2604,2000:2344,2200:2131,2400:1953},
-  '2shu': {300:7585,350:6500,400:5688,450:5056,500:4549,600:3791,700:4594,800:8230,900:7317,1000:6570,1100:5975,1200:5475,1350:4866,1500:4379,1650:3980,1800:3646,2000:3281,2200:2983,2400:2735},
-  'RS':   {300:4607,350:3947,400:3454,450:3070,500:2762,600:2302,700:2790,800:4998,900:4442,1000:3989,1100:3628,1200:3324,1350:2955,1500:2659,1650:2416,1800:2213,2000:1992,2200:1811,2400:1660},
-  'RM':   {300:5962,350:5107,400:4469,450:3973,500:3574,600:2979,700:3610,800:6468,900:5749,1000:5162,1100:4695,1200:4302,1350:3824,1500:3441,1650:3127,1800:2864,2000:2578,2200:2344,2400:2148},
-  'RT':   {300:7206,350:6175,400:5404,450:4803,500:4322,600:3601,700:4364,800:7819,900:6951,1000:6242,1100:5676,1200:5201,1350:4623,1500:4160,1650:3781,1800:3464,2000:3117,2200:2834,2400:2598},
-};
-
-function calcFaBC(lp, r, qa, alpha) {
-  if (Math.abs(Math.sin(alpha)) < 1e-9) return Infinity;
-  return (lp * r * qa) / (2 * Math.sin(alpha));
+// 99章: BC点の許容推進力を一次資料『推進工法の設計』4.8.3（式4.33〜4.34、表1.4-16/17）の
+// 連鎖どおりに計算する。旧実装は `(lp・r・qa)/(2 sinα)` で qa を出所不明の静的表 QA_TABLE から
+// 引いており、水無第6φ1800の一次資料（Fa=11,092.90kN）に対し233,122kN＝約21倍を返していた
+// （98.5節で確定）。旧QA_TABLEは一次資料の表1.4-17とも表1.4-18とも一致しなかったため削除した。
+//
+//   Ma = 0.318・P・r + 0.239・W・r          式(4.15) 管の保証モーメント
+//   qa = Ma /(0.239・r²)                    許容等分布側圧（表1.4-17と一致）
+//   η  = −13.917Rt − 0.579RL + 10.506Rt・RL + 2.033   影響範囲係数（表1.4-16と一致、下限1.0）
+//        Rt = t/Di（管厚比）、RL = lp/Di（管長比）。**Diは推進管の内径**であって外径ではない。
+//   La = lp/η                                仮想影響範囲長
+//   Rg = √2・La・r・qa                        許容地盤反力 式(4.33)
+//   Fa = Rg /(sinα・1.5)                     許容推進力 式(4.34)。安全率1.5
+//   ただし Fa の最大値は管耐荷力（直線推進の許容耐荷力 Fa=1000σma・Ae、表1.4-11）とする。
+//
+// r は**管厚中心半径 (D+Di)/4**。旧実装は内径の半分 Di/2 を渡していた（φ1800で0.90 vs 0.98）。
+const FA_BC_SAFETY = 1.5;
+function calcEtaBC(t, Di, lp) {
+  if (!(Di > 0)) return null;
+  const Rt = t / Di, RL = lp / Di;
+  const eta = -13.917 * Rt - 0.579 * RL + 10.506 * Rt * RL + 2.033;
+  return Math.max(1.0, eta); // 一次資料に「(≧1.0)」の注記がある
+}
+// spec（resolveSpec()の戻り）と管1本あたりの折れ角αから、BC点の許容推進力と途中式を返す。
+// 判定に必要な値が欠けている場合は null を返す（呼び出し側で「—」表示）。
+function calcFaBC(spec, alpha) {
+  if (!spec || !(spec.Pext > 0) || !(spec.Di > 0) || !(spec.lp > 0)) return null;
+  const r = (spec.D + spec.Di) / 4;            // 管厚中心半径
+  const Ma = (0.318 * spec.Pext + 0.239 * spec.W) * r;
+  const qa = Ma / (0.239 * r * r);
+  const eta = calcEtaBC(spec.t, spec.Di, spec.lp);
+  if (eta == null) return null;
+  const La = spec.lp / eta;
+  const Rg = Math.SQRT2 * La * r * qa;
+  const sinA = Math.abs(Math.sin(alpha));
+  const raw = sinA < 1e-9 ? Infinity : Rg / (sinA * FA_BC_SAFETY);
+  const cap = spec.Fa > 0 ? spec.Fa : Infinity; // 管耐荷力で頭打ち
+  // ηの回帰式は表1.4-16（呼び径800〜3000mm）の載荷実験・FEM解析から導かれたもの。
+  // その外側（レジン管RS/RMの小口径など）は外挿になるので、値は出すが印を付けて知らせる。
+  const etaOutOfRange = !(spec.Di >= 0.80 && spec.Di <= 3.00);
+  return { Fa: Math.min(raw, cap), raw, cap, capped: raw > cap, r, Ma, qa, eta, La, Rg, etaOutOfRange };
 }
 
 // ══════════════════════════════════════
@@ -4783,13 +4819,11 @@ function calculate() {
   const catLabelMap = {hume:'ヒューム管', resin:'レジン管', steel:'鋼管'};
   const bcResults = FBC_arr.map(bc => {
     const spec = bc.spec;
-    let FaBC = null;
-    if (spec.category !== 'steel' && spec.grade) {
-      const qa = (QA_TABLE[spec.grade]||{})[dia] || 3000;
-      FaBC = calcFaBC(spec.lp, spec.Di/2, qa, bc.alpha);
-    }
+    // 99章: 鋼管は外圧強さPの規格表（JSWAS A-2系）の適用外なので従来どおり対象外。
+    const fa = (spec.category !== 'steel' && spec.grade) ? calcFaBC(spec, bc.alpha) : null;
+    const FaBC = fa ? fa.Fa : null;
     const gradeLabel = (CATEGORY_GRADES[spec.category]||[]).find(g=>g.value===spec.grade)?.label || '';
-    return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, ok: FaBC!=null ? bc.F <= FaBC : null };
+    return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, faDetail: fa, ok: FaBC!=null ? bc.F <= FaBC : null };
   });
 
   // クッション材（PB/FJ）選定: BC点ごとの軸力FBCを管の有効断面積で除した無潰れ想定の
@@ -4933,13 +4967,18 @@ function renderResults(res) {
     bcCard.style.display = '';
     const rows = bcResults.map(b => {
       const rowNG = b.ok === false;
+      const d = b.faDetail;
+      // 99章: η・qa・頭打ちの有無まで出す。数字の出どころを画面で追えるようにするため。
+      const mid = d
+        ? `<td class="mono">${d.eta.toFixed(3)}${d.etaOutOfRange?'<span style="color:var(--accent)" title="表1.4-16の呼び径800〜3000mmの外なので外挿値です">*</span>':''}</td><td class="mono">${d.La.toFixed(3)}</td><td class="mono">${d.qa.toFixed(1)}</td>`
+        : `<td colspan="3" style="color:var(--sub)">—</td>`;
       const faCell = b.FaBC == null
         ? `<td colspan="2" style="color:var(--sub)">—（鋼管は手入力Faで別途照査）</td>`
-        : `<td class="mono">${b.FaBC===Infinity?'∞':b.FaBC.toFixed(0)}</td><td><span class="pill ${b.ok?'ok':'ng'}">${b.ok?'OK':'NG'}</span></td>`;
-      return `<tr class="${rowNG?'row-ng':''}"><td>${b.name}</td><td>${b.pipeLabel}</td><td class="mono">${b.FBC.toFixed(0)}</td>${faCell}</tr>`;
+        : `<td class="mono">${b.FaBC===Infinity?'∞':b.FaBC.toFixed(0)}${d&&d.capped?'<span style="font-size:10px;color:var(--sub)"> ※管耐荷力</span>':''}</td><td><span class="pill ${b.ok?'ok':'ng'}">${b.ok?'OK':'NG'}</span></td>`;
+      return `<tr class="${rowNG?'row-ng':''}"><td>${b.name}</td><td>${b.pipeLabel}</td>${mid}<td class="mono">${b.FBC.toFixed(0)}</td>${faCell}</tr>`;
     }).join('');
     document.getElementById('bcTable').innerHTML =
-      `<thead><tr><th>BC点</th><th>使用管種</th><th>FBC(kN)</th><th>FaBC(kN)</th><th>判定</th></tr></thead><tbody>${rows}</tbody>`;
+      `<thead><tr><th>BC点</th><th>使用管種</th><th>η</th><th>La(m)</th><th>qa(kN/m²)</th><th>FBC(kN)</th><th>FaBC(kN)</th><th>判定</th></tr></thead><tbody>${rows}</tbody>`;
   } else {
     bcCard.style.display = 'none';
   }
