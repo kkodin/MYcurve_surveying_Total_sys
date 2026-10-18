@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><title>01 線形計算・座標一覧</title><style>
 :root{--blue:#0055a4;--bg:#f4f6f8;--line:#d8dee6;--text:#1f2937;--ok:#177245;--warn:#b45309;--ng:#b91c1c;}
 *{box-sizing:border-box} body{font-family:Meiryo,"Yu Gothic",sans-serif;margin:0;background:var(--bg);color:var(--text);font-size:14px} header{background:#003366;color:#fff;padding:12px 18px;font-weight:bold;display:flex;justify-content:space-between;align-items:center} main{max-width:1120px;margin:18px auto;padding:0 14px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 2px 8px rgba(0,0,0,.05)}h1{font-size:20px;margin:0}h2{font-size:17px;border-left:6px solid var(--blue);padding-left:10px;margin:4px 0 14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:12px 24px}.row{display:flex;align-items:center;gap:8px;margin:8px 0}.row label{min-width:180px;text-align:right;font-weight:bold;color:#374151}input,select,button,textarea{font-family:inherit;font-size:14px}input,select,textarea{border:1px solid #b8c0cc;border-radius:6px;padding:7px 9px;background:#fff}input.num{text-align:right;ime-mode:disabled;width:120px;font-family:Consolas,monospace}input:focus,select:focus,textarea:focus{outline:2px solid #93c5fd;border-color:#2563eb}button{border:0;border-radius:7px;padding:9px 14px;font-weight:bold;cursor:pointer;background:#2563eb;color:#fff}button.secondary{background:#64748b}button.ok{background:#17803d}button.warn{background:#d97706}button.danger{background:#b91c1c}.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.note{font-size:12px;color:#64748b;line-height:1.6}.pill{display:inline-block;border-radius:999px;padding:4px 9px;font-weight:bold}.pill.ok{background:#dcfce7;color:#166534}.pill.warn{background:#fef3c7;color:#92400e}.pill.ng{background:#fee2e2;color:#991b1b}table{border-collapse:collapse;width:100%;background:#fff;margin-top:10px}th,td{border:1px solid #cfd7e3;padding:7px;text-align:center}th{background:#334155;color:#fff}.mono{font-family:Consolas,monospace}.small{font-size:12px}.hide{display:none}.full{width:100%}@media(max-width:760px){.grid{grid-template-columns:1fr}.row{align-items:flex-start;flex-direction:column}.row label{text-align:left;min-width:0}}
-</style></head><body><header><h1>01 線形計算・座標一覧</h1><div class="toolbar"><input type="file" id="file" accept=".json" onchange="loadProjectFile(this,run)"><button onclick="run(getProject())">再計算</button><button class="ok" onclick="saveWithGeometry()">計算結果付きJSON保存</button></div><span style="font-size:11px;font-weight:normal;opacity:0.75;white-space:nowrap">M_APP_004</span></header><main><div class="card"><h2>読み込み情報</h2><div id="info" class="note"></div></div><div class="card"><h2>座標一覧</h2><div id="table"></div></div><div class="card"><h2>区間距離一覧（BP-BC-EC-EP）</h2><div id="sectionsTable"></div></div><div class="card"><h2>曲線要素（通し番号付き）</h2><div id="curvesTable"></div></div></main><script>
+</style></head><body><header><h1>01 線形計算・座標一覧</h1><div class="toolbar"><input type="file" id="file" accept=".json" onchange="loadProjectFile(this,run)"><button onclick="run(getProject())">再計算</button><button class="ok" onclick="saveWithGeometry()">計算結果付きJSON保存</button><button class="secondary" onclick="downloadCSV()">CSV出力</button></div><span style="font-size:11px;font-weight:normal;opacity:0.75;white-space:nowrap">M_APP_004</span></header><main><div class="card"><h2>読み込み情報</h2><div id="info" class="note"></div></div><div class="card"><h2>線形サマリー（IP間距離・曲線要素）</h2><div id="summaryTable"></div></div><div class="card"><h2>座標一覧① ─ 推進線形点（BP・BC・RO・EC・EP）</h2><div id="coordTable1"></div></div><div class="card"><h2>座標一覧② ─ IP点（BP・IP・EP）</h2><div id="coordTable2"></div></div><div class="card"><h2>区間距離一覧（BP-BC-EC-EP）</h2><div id="sectionsTable"></div></div><div class="card"><h2>曲線要素（通し番号付き）</h2><div id="curvesTable"></div></div></main><script>
 const PIPE_SIZES=[250,300,350,400,450,500,600,700,800,900,1000,1100,1200,1350,1500,1650,1800,2000,2200,2400,2600,2800,3000];
 const HUME_T={250:55,300:57,350:60,400:63,450:67,500:70,600:76,700:82,800:80,900:90,1000:100,1100:105,1200:115,1350:125,1500:140,1650:150,1800:160,2000:175,2200:190,2400:205,2600:220,2800:235,3000:250};
 function n(id,def=0){const el=document.getElementById(id); const v=el?parseFloat(String(el.value).replace(',','')):NaN; return Number.isFinite(v)?v:def;}
@@ -9,6 +9,7 @@ function v(id,def=''){const el=document.getElementById(id);return el?el.value:de
 function set(id,val){const el=document.getElementById(id); if(el) el.value=val}
 function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function dmsToDeg(d,m,s){return (+d||0)+(+m||0)/60+(+s||0)/3600}
+function degToDms(deg){const t=Math.round(Math.abs(deg)*3600);const d=Math.floor(t/3600);const m=Math.floor((t%3600)/60);const s=t%60;return `${d}°${String(m).padStart(2,'0')}′${String(s).padStart(2,'0')}″`}
 function pipeDefault(size,cat='ヒューム管'){
   const inner=size/1000; let t=(HUME_T[size]||125)/1000; let unitW=24.5;
   if(cat==='レジン管'){t=Math.max(0.02, inner*0.045); unitW=19.5}
@@ -39,9 +40,100 @@ function calcGeometry(p){
 function calcJoint(p,c){const L=p.pipe.length, D=p.pipe.inner, t=p.pipe.thickness, R=c.R, S4=p.pipe.cushion||0; const den=Math.max(0.0001,R-D/2); const S1=(L*D/den)*1000+S4; const S2=(L*Math.max(0,D-t)/den)*1000+S4; const S3=(L*t/den)*1000+S4; const simple=(D*2*Math.sin((L/R)/2))*1000+S4; return {S1,S2,S3,S4,simple,margin:(p.pipe.allowOpen||60)-S1,ok:S1<=(p.pipe.allowOpen||60)};}
 
 let project=null, geom=null;function run(p){project=p||getProject(); if(!project){alert('先に00基本情報HTMLで保存、またはJSONを読込してください');return} geom=calcGeometry(project); localStorage.setItem('curvedJackingGeometry',JSON.stringify(geom)); document.getElementById('info').innerHTML=`現場: <b>${project.site.name}</b> / スパン: <b>${project.site.span}</b> / 総推進長: <b>${fmt(geom.totalDistance,3)}m</b>`; render();}
-function render(){let h='<table><tr><th>点名</th><th>内容</th><th>X</th><th>Y</th></tr>'; geom.points.forEach(p=>h+=`<tr><td><b>${p.name}</b></td><td>${p.label}</td><td class="mono">${fmt(p.x,3)}</td><td class="mono">${fmt(p.y,3)}</td></tr>`); h+='</table>';document.getElementById('table').innerHTML=h;
- let s='<table><tr><th>No</th><th>区間種別</th><th>開始点</th><th>終了点</th><th>区間距離</th><th>累加距離 始</th><th>累加距離 終</th><th>備考</th></tr>'; (geom.sections||[]).forEach(x=>s+=`<tr><td>${x.no}</td><td>${x.type}</td><td><b>${x.from}</b></td><td><b>${x.to}</b></td><td class="mono">${fmt(x.length,3)} m</td><td class="mono">${fmt(x.accStart,3)} m</td><td class="mono">${fmt(x.accEnd,3)} m</td><td>${x.note||''}</td></tr>`); s+=`<tr><th colspan="4">線形上の総推進距離 BP→EP</th><th class="mono">${fmt(geom.totalDistance,3)} m</th><th colspan="2">BP-EP間の直線距離</th><th class="mono">${fmt(geom.bpEpDistance,3)} m</th></tr>`; s+='</table>'; document.getElementById('sectionsTable').innerHTML=s;
- let c='<table><tr><th>通し番号</th><th>方向</th><th>R</th><th>IA(10進)</th><th>TL</th><th>CL</th><th>SL</th><th>BC累加距離</th><th>EC累加距離</th></tr>'; geom.curves.forEach(x=>c+=`<tr><td><b>第${x.id}曲線</b></td><td>${x.dir==='L'?'左':'右'}</td><td>${fmt(x.R,3)}</td><td>${x.ia_deg.toFixed(7)}</td><td>${fmt(x.TL,3)}</td><td>${fmt(x.CL,3)}</td><td>${fmt(x.SL,3)}</td><td>${fmt(x.startDist,3)}</td><td>${fmt(x.endDist,3)}</td></tr>`); c+='</table>';document.getElementById('curvesTable').innerHTML=c;}
+function render(){
+  // 線形サマリー（IP間距離・曲線要素）
+  const cs=geom.curves;
+  let sm='<table><tr><th>区間</th><th>IP間距離 (m)</th><th>曲線半径 R (m)</th><th>方向</th><th>角度（度分秒）</th><th>TL (m)</th><th>CL (m)</th></tr>';
+  const bp=geom.points.find(p=>p.name==='BP');
+  sm+=`<tr><td><b>BP</b></td><td colspan="6" class="mono">X=${fmt(bp.x,3)}　Y=${fmt(bp.y,3)}</td></tr>`;
+  cs.forEach((c,i)=>{
+    const ipPt=geom.points.find(p=>p.name===`IP${c.id}`);
+    sm+=`<tr style="background:#f0f4ff"><td><b>${i===0?'BP':'IP'+cs[i-1].id}→IP${c.id} 直線</b></td><td class="mono">${fmt(c.L,3)}</td><td>─</td><td>─</td><td>─</td><td>─</td><td>─</td></tr>`;
+    sm+=`<tr><td><b>第${c.id}曲線</b></td><td>─</td><td class="mono">${fmt(c.R,3)}</td><td>${c.dir==='L'?'左（L）':'右（R）'}</td><td class="mono">${degToDms(c.ia_deg)}</td><td class="mono">${fmt(c.TL,3)}</td><td class="mono">${fmt(c.CL,3)}</td></tr>`;
+    if(ipPt) sm+=`<tr><td style="padding-left:20px;color:#555">IP${c.id} 座標</td><td colspan="6" class="mono">X=${fmt(ipPt.x,3)}　Y=${fmt(ipPt.y,3)}</td></tr>`;
+  });
+  const epPt=geom.points.find(p=>p.name==='EP');
+  const lastIp=cs.length?geom.points.find(p=>p.name===`IP${cs[cs.length-1].id}`):bp;
+  sm+=`<tr style="background:#f0f4ff"><td><b>${cs.length?'IP'+cs[cs.length-1].id:'BP'}→EP 最終直線</b></td><td class="mono">${fmt(Math.hypot(epPt.x-lastIp.x,epPt.y-lastIp.y),3)}</td><td>─</td><td>─</td><td>─</td><td>─</td><td>─</td></tr>`;
+  sm+=`<tr><td><b>EP</b></td><td colspan="6" class="mono">X=${fmt(epPt.x,3)}　Y=${fmt(epPt.y,3)}</td></tr>`;
+  sm+=`<tr><th colspan="2">線形総延長</th><td class="mono" colspan="2">${fmt(geom.totalDistance,3)} m</td><th>BP-EP直線距離</th><td class="mono" colspan="2">${fmt(geom.bpEpDistance,3)} m</td></tr>`;
+  sm+='</table>';
+  document.getElementById('summaryTable').innerHTML=sm;
+
+  // 座標①: BP, BC1, RO1, EC1, BC2, RO2, EC2, ..., EP
+  const order1=['BP'];
+  cs.forEach(c=>{order1.push(`BC${c.id}`,`RO${c.id}`,`EC${c.id}`)});
+  order1.push('EP');
+  let t1='<table><tr><th>点名</th><th>内容</th><th>X (m)</th><th>Y (m)</th></tr>';
+  order1.forEach(nm=>{const pt=geom.points.find(p=>p.name===nm);if(pt)t1+=`<tr><td><b>${pt.name}</b></td><td>${pt.label}</td><td class="mono">${fmt(pt.x,3)}</td><td class="mono">${fmt(pt.y,3)}</td></tr>`});
+  t1+='</table>';
+  document.getElementById('coordTable1').innerHTML=t1;
+
+  // 座標②: BP, IP1, IP2, ..., EP
+  const order2=['BP'];
+  cs.forEach(c=>order2.push(`IP${c.id}`));
+  order2.push('EP');
+  let t2='<table><tr><th>点名</th><th>内容</th><th>X (m)</th><th>Y (m)</th></tr>';
+  order2.forEach(nm=>{const pt=geom.points.find(p=>p.name===nm);if(pt)t2+=`<tr><td><b>${pt.name}</b></td><td>${pt.label}</td><td class="mono">${fmt(pt.x,3)}</td><td class="mono">${fmt(pt.y,3)}</td></tr>`});
+  t2+='</table>';
+  document.getElementById('coordTable2').innerHTML=t2;
+
+  // 区間距離一覧
+  let s='<table><tr><th>No</th><th>区間種別</th><th>開始点</th><th>終了点</th><th>区間距離</th><th>累加距離 始</th><th>累加距離 終</th><th>備考</th></tr>';
+  (geom.sections||[]).forEach(x=>s+=`<tr><td>${x.no}</td><td>${x.type}</td><td><b>${x.from}</b></td><td><b>${x.to}</b></td><td class="mono">${fmt(x.length,3)} m</td><td class="mono">${fmt(x.accStart,3)} m</td><td class="mono">${fmt(x.accEnd,3)} m</td><td>${x.note||''}</td></tr>`);
+  s+=`<tr><th colspan="4">線形上の総推進距離 BP→EP</th><th class="mono">${fmt(geom.totalDistance,3)} m</th><th colspan="2">BP-EP間の直線距離</th><th class="mono">${fmt(geom.bpEpDistance,3)} m</th></tr>`;
+  s+='</table>';
+  document.getElementById('sectionsTable').innerHTML=s;
+
+  // 曲線要素
+  let c='<table><tr><th>通し番号</th><th>方向</th><th>R</th><th>IA(10進)</th><th>角度（度分秒）</th><th>TL</th><th>CL</th><th>SL</th><th>BC累加距離</th><th>EC累加距離</th></tr>';
+  geom.curves.forEach(x=>c+=`<tr><td><b>第${x.id}曲線</b></td><td>${x.dir==='L'?'左':'右'}</td><td>${fmt(x.R,3)}</td><td>${x.ia_deg.toFixed(7)}</td><td>${degToDms(x.ia_deg)}</td><td>${fmt(x.TL,3)}</td><td>${fmt(x.CL,3)}</td><td>${fmt(x.SL,3)}</td><td>${fmt(x.startDist,3)}</td><td>${fmt(x.endDist,3)}</td></tr>`);
+  c+='</table>';
+  document.getElementById('curvesTable').innerHTML=c;
+}
+
+function downloadCSV(){
+  if(!project||!geom){alert('先にデータを読み込んでください');return}
+  const cs=geom.curves;
+  const rows=[];
+  const site=`${project.site?.name||''}　${project.site?.span||''}`;
+  rows.push(['線形計算結果CSV','現場:'+site,'出力日:'+today()]);
+  rows.push([]);
+  rows.push(['【線形サマリー（IP間距離・曲線要素）】']);
+  rows.push(['区間','IP間距離(m)','曲線半径R(m)','方向','角度(度分秒)','TL(m)','CL(m)']);
+  const bp=geom.points.find(p=>p.name==='BP');
+  rows.push([`BP X=${fmt(bp.x,3)} Y=${fmt(bp.y,3)}`,'','','','','','']);
+  cs.forEach((c,i)=>{
+    const ipPt=geom.points.find(p=>p.name===`IP${c.id}`);
+    rows.push([`${i===0?'BP':'IP'+cs[i-1].id}→IP${c.id} 直線`,fmt(c.L,3),'','','','','']);
+    rows.push([`第${c.id}曲線`,'',fmt(c.R,3),c.dir==='L'?'左':'右',degToDms(c.ia_deg),fmt(c.TL,3),fmt(c.CL,3)]);
+    if(ipPt) rows.push([`IP${c.id} X=${fmt(ipPt.x,3)} Y=${fmt(ipPt.y,3)}`,'','','','','','']);
+  });
+  const epPt=geom.points.find(p=>p.name==='EP');
+  const lastIp=cs.length?geom.points.find(p=>p.name===`IP${cs[cs.length-1].id}`):bp;
+  rows.push([`${cs.length?'IP'+cs[cs.length-1].id:'BP'}→EP 最終直線`,fmt(Math.hypot(epPt.x-lastIp.x,epPt.y-lastIp.y),3),'','','','','']);
+  rows.push([`EP X=${fmt(epPt.x,3)} Y=${fmt(epPt.y,3)}`,'','','','','','']);
+  rows.push(['線形総延長',fmt(geom.totalDistance,3)+'m','BP-EP直線距離',fmt(geom.bpEpDistance,3)+'m','','','']);
+  rows.push([]);
+  rows.push(['【座標一覧① BP・BC・RO・EC・EP】']);
+  rows.push(['点名','内容','X(m)','Y(m)']);
+  const order1=['BP']; cs.forEach(c=>{order1.push(`BC${c.id}`,`RO${c.id}`,`EC${c.id}`)}); order1.push('EP');
+  order1.forEach(nm=>{const pt=geom.points.find(p=>p.name===nm);if(pt)rows.push([pt.name,pt.label,fmt(pt.x,3),fmt(pt.y,3)])});
+  rows.push([]);
+  rows.push(['【座標一覧② BP・IP・EP】']);
+  rows.push(['点名','内容','X(m)','Y(m)']);
+  const order2=['BP']; cs.forEach(c=>order2.push(`IP${c.id}`)); order2.push('EP');
+  order2.forEach(nm=>{const pt=geom.points.find(p=>p.name===nm);if(pt)rows.push([pt.name,pt.label,fmt(pt.x,3),fmt(pt.y,3)])});
+  rows.push([]);
+  rows.push(['【曲線要素】']);
+  rows.push(['曲線No','方向','R(m)','IA(10進)','角度(度分秒)','TL(m)','CL(m)','SL(m)','BC累加(m)','EC累加(m)']);
+  geom.curves.forEach(x=>rows.push([`第${x.id}曲線`,x.dir==='L'?'左':'右',fmt(x.R,3),x.ia_deg.toFixed(7),degToDms(x.ia_deg),fmt(x.TL,3),fmt(x.CL,3),fmt(x.SL,3),fmt(x.startDist,3),fmt(x.endDist,3)]));
+  const csv='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`線形計算_${safeName(project.site?.name||'現場')}_${safeName(project.site?.span||'スパン')}.csv`;
+  a.click();URL.revokeObjectURL(a.href);
+}
 function saveWithGeometry(){if(!project||!geom)run(getProject()); const obj={...project,geometry:geom}; downloadJSON(obj,`${safeName(project.site.name)}_${safeName(project.site.span)}_geometry.json`)}
 run(getProject());</script>
 <script>

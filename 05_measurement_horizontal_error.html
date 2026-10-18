@@ -1442,9 +1442,21 @@ function renderSummary(){
   const box=document.getElementById('summaryCards');
   if(!results.length){box.innerHTML='<p class="note">KPがありません。</p>';return}
   const pj=window.latestPredictionJudge;
+
+  // 座標一覧表
+  let tbl='<div style="overflow-x:auto;margin-bottom:14px"><table style="display:table;width:100%;min-width:560px;font-size:13px">';
+  tbl+='<tr><th rowspan="2" style="min-width:60px">点名</th><th colspan="2" style="background:#334155">設計座標</th><th colspan="2" style="background:#1e3a5f">実測座標</th><th rowspan="2" style="min-width:80px">誤差</th><th rowspan="2">判定</th></tr>';
+  tbl+='<tr><th style="background:#475569">X (m)</th><th style="background:#475569">Y (m)</th><th style="background:#1e4d7a">X (m)</th><th style="background:#1e4d7a">Y (m)</th></tr>';
+  results.forEach(r=>{
+    const rk=rankClass(r.rank);
+    const errStr=r.short||(r.side||'')+(r.errorMm!=null?' '+fmt(r.errorMm,0)+' mm':'');
+    tbl+=`<tr class="${rk}"><td><b>${esc(r.name)}</b> <span style="font-size:11px;color:#64748b">${esc(r.role||'')}</span></td><td class="mono">${fmt(r.foot?.x,3)}</td><td class="mono">${fmt(r.foot?.y,3)}</td><td class="mono">${fmt(r.x,3)}</td><td class="mono">${fmt(r.y,3)}</td><td><b>${esc(errStr)}</b></td><td><span class="pill ${rk}">${r.rank}</span></td></tr>`;
+  });
+  tbl+='</table></div>';
+
   let cards=pj?`<div class="kpcard ${rankClass(pj.rank)}" style="border-width:2px"><div class="line"><div class="name">次回予測</div><div class="big">${esc(pj.short||((pj.side||'')+' '+fmt(pj.errorMm,0)))}</div></div><div class="line sub"><span>位置：${esc(pj.sectionName)}</span><span>判定：<span class="pill ${rankClass(pj.rank)}">${pj.rank}</span></span></div><div class="note coord-note"><div>予測 X=${fmt(pj.x,3)} / Y=${fmt(pj.y,3)}</div><div>計画 X=${fmt(pj.foot?.x,3)} / Y=${fmt(pj.foot?.y,3)}</div></div></div>`:'';
   cards+=results.map(r=>`<div class="kpcard ${rankClass(r.rank)}"><div class="line"><div class="name">${esc(r.name)} ${esc(r.role||'')}</div><div class="big">${esc(r.short||((r.side||'')+' '+fmt(r.errorMm,0)))}</div></div><div class="line sub"><span>位置：${esc(r.sectionName)}</span><span>判定：<span class="pill ${rankClass(r.rank)}">${r.rank}</span></span></div><div class="note coord-note"><div>測定 X=${fmt(r.x,3)} / Y=${fmt(r.y,3)}</div><div>計画 X=${fmt(r.foot?.x,3)} / Y=${fmt(r.foot?.y,3)}</div></div></div>`).join('');
-  box.innerHTML=cards;
+  box.innerHTML=tbl+cards;
 }
 function renderTable(){
   let h=`<p class="note mono">${esc(inputSnapshotText())}</p>`;
@@ -1674,6 +1686,7 @@ function drawMovableLabel(ctx,canvasId,key,text,x,y,W,H,color='#111827',anchor=n
   return {x:lx,y:ly,w:tw,h:th};
 }
 
+function setGraphFont(ctx,px,bold=false){ctx.font=`${bold?'bold ':''}${px}px Meiryo,"Yu Gothic",sans-serif`;return px}
 function drawPointNameLabels(ctx,toS,visibleOnly=true,W=99999,H=99999){
   if(!geom)return;
   const pts=[];
