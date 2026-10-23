@@ -9139,7 +9139,8 @@ function setProjectData(d) {
   }
   if (d.shaft) {
     const sh = d.shaft;
-    setV('launchDirect', sh.launchDirect||1.5);
+    // 101章: 除外距離0（立坑中心間で計算する）は正当な値。`||`だと0が既定値に化けるので、キーが無い時だけ既定値。
+    setV('launchDirect', sh.launchDirect ?? 1.5);
     setV('launchW', sh.launchW||3); setV('launchLdim', sh.launchL||4);
     setV('launchOffset', sh.launchOffset||0.3); setV('launchCircleD', sh.launchCircleD||3.5);
     setV('launchCircleOff', sh.launchCircleOff||0);
@@ -9156,7 +9157,7 @@ function setProjectData(d) {
       setV('launchCasingOD', sh.launchCasingOD != null ? sh.launchCasingOD : (legacyLaunchD + 2 * CASING_DEFAULT_THICKNESS_MM / 1000));
       setV('launchCasingThickness', sh.launchCasingThickness != null ? sh.launchCasingThickness : CASING_DEFAULT_THICKNESS_MM);
     }
-    setV('arrivalDirect', sh.arrivalDirect||0.8);
+    setV('arrivalDirect', sh.arrivalDirect ?? 0.8);
     setV('manholeSize', sh.manholeSize||1.2);
     setV('manholeGrade', sh.manholeGrade||'1');
     setV('arrivalW', sh.arrivalW||3); setV('arrivalLdim', sh.arrivalL||3);
