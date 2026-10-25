@@ -1,0 +1,294 @@
+{
+  "version": "M_APP_005",
+  "build": "M_APP_041",
+  "buildDate": "2026-10-22",
+  "savedAt": "2026-10-25T02:37:27.014Z",
+  "site": {
+    "name": "桜森一丁目 φ800 刃口推進（検討書改訂07 検証用）",
+    "span": "No.1〜No.2",
+    "date": "2026-10-22"
+  },
+  "method": "blade",
+  "pipe": {
+    "category": "hume",
+    "dia": "800",
+    "grade": "1shu",
+    "outer": 0.96,
+    "inner": 0.8,
+    "thick": 0.08,
+    "len": 1.2,
+    "weight": 5.31,
+    "allow": 2296,
+    "jointType": 30,
+    "crush": 8,
+    "cushionSigmaAllow": 13,
+    "cushionMaterial": "",
+    "pulRingUse": true,
+    "pulRingThickness": 10,
+    "Pext": 35.4,
+    "Bs": 0.98,
+    "seismicJointLevel": "L1"
+  },
+  "soil": {
+    "type": "clay",
+    "gamma": 12,
+    "phi": 10,
+    "phiPipe": 10,
+    "C": 80,
+    "N": 5,
+    "Nprime": 1,
+    "shinnukiUse": false,
+    "Hmin": 6.32,
+    "Hmax": 7.37,
+    "adh": 5,
+    "water": 10.6,
+    "gravel": 0,
+    "gravelM": 0,
+    "alpha": 0.6,
+    "beta": 1.5,
+    "foFormula": "kyokai",
+    "selfSupport": "",
+    "liveLoadH": "min",
+    "curveKMode": "input",
+    "curveK": 0.7,
+    "foCoef": {
+      "kyokai": {
+        "alpha": "0.6",
+        "beta": "1.5"
+      },
+      "satoyamamoto": null
+    },
+    "zones": []
+  },
+  "alignment": {
+    "totalLength": 127.9,
+    "curves": [
+      {
+        "R": 60,
+        "dir": "R",
+        "CL": 33.98097875991226,
+        "spec": null,
+        "deg": 32,
+        "min": 26,
+        "sec": 58,
+        "L": 33.345,
+        "pulRingUse": true,
+        "pulRingThickness": 10,
+        "cushionLayers": []
+      }
+    ],
+    "seg_L0": 33.345,
+    "finalL": 95.494,
+    "straightSpecs": [
+      {
+        "spec": null
+      },
+      {
+        "spec": null
+      }
+    ]
+  },
+  "jack": {
+    "capUnit": 1000,
+    "count": 4
+  },
+  "shaft": {
+    "launchMode": "direct",
+    "launchDirect": 0,
+    "launchType": "circle",
+    "launchW": 3,
+    "launchL": 4,
+    "launchOffset": 0,
+    "launchCircleD": 3.95,
+    "launchCircleOff": 0,
+    "launchCircleCasing": "liner",
+    "launchLinerNominalD": 4,
+    "launchLinerThickness": 2.7,
+    "launchCasingOD": 3.968,
+    "launchCasingThickness": 9,
+    "arrivalMode": "direct",
+    "arrivalDirect": 0,
+    "arrivalType": "circle",
+    "manholeSize": "1.2",
+    "manholeGrade": "1",
+    "arrivalW": 3,
+    "arrivalL": 3,
+    "arrivalCircleD": 1.95,
+    "arrivalCircleOff": 0,
+    "arrivalCircleCasing": "liner",
+    "arrivalLinerNominalD": 2,
+    "arrivalLinerThickness": 2.7,
+    "arrivalCasingOD": 1.968,
+    "arrivalCasingThickness": 9
+  },
+  "wall": {
+    "shaftType": "circle",
+    "pitW": 3,
+    "pitL": 4,
+    "circleD": 3.95,
+    "Bw": 2.765,
+    "Hw": 1.5,
+    "hc": 0.853,
+    "fa": 5.4,
+    "force": 1941,
+    "jackPlateW": 0.5,
+    "jackPlateH": 0.5,
+    "fc": 18,
+    "levelMode": "level",
+    "elBase": 55.781,
+    "elPipeInvert": 56.234,
+    "elWallTop": 57.281,
+    "elGround": 63.76,
+    "centerOffset": 0,
+    "thickness": 0.564,
+    "jackStageWidths": [
+      0.233,
+      0.41
+    ],
+    "jackStageHeights": [
+      0,
+      0.25
+    ],
+    "railDrop": 50,
+    "railSize": "250",
+    "backrockUse": true,
+    "backrockType": "taper",
+    "backrockModelOverride": "BR-SST",
+    "epAlpha": 2,
+    "steelT": 11,
+    "steelSa": 140,
+    "ringUse": false,
+    "ringH": 100,
+    "remainingStub": 300,
+    "pressRingLen": 300,
+    "strutUnitLen": 400,
+    "strutCount": 4
+  },
+  "survey": {
+    "baseAz": 0,
+    "internalPct": 80,
+    "instX": 0,
+    "instY": 0,
+    "bsX": 10,
+    "bsY": 0,
+    "pipeCount": "",
+    "measureDate": "2026-10-25",
+    "loadedIndex": -1,
+    "protected": false,
+    "tpRows": [
+      {
+        "dist": 0,
+        "deg": 0,
+        "min": 0,
+        "sec": 0,
+        "memo": ""
+      }
+    ],
+    "kpRows": [
+      {
+        "role": "",
+        "dist": 0,
+        "deg": 0,
+        "min": 0,
+        "sec": 0,
+        "memo": ""
+      },
+      {
+        "role": "",
+        "dist": 0,
+        "deg": 0,
+        "min": 0,
+        "sec": 0,
+        "memo": ""
+      },
+      {
+        "role": "",
+        "dist": 0,
+        "deg": 0,
+        "min": 0,
+        "sec": 0,
+        "memo": ""
+      },
+      {
+        "role": "",
+        "dist": 0,
+        "deg": 0,
+        "min": 0,
+        "sec": 0,
+        "memo": ""
+      }
+    ]
+  },
+  "measurements": [],
+  "calcResult": {
+    "calculatedAt": "2026-10-25T02:37:27.001Z",
+    "inputsChangedSince": false,
+    "method": "blade",
+    "F_total": 1940.116,
+    "Fo": 40.64,
+    "fo": 10.745,
+    "fo_min": 10.745,
+    "Fa": 2296,
+    "q_total": 5.189,
+    "Hmin": 6.32,
+    "Hmax": 7.37,
+    "extCheck": {
+      "M": 0.276,
+      "Mr": 5.512,
+      "ratio": 19.949,
+      "ok": true
+    },
+    "bc": [
+      {
+        "name": "BC.1",
+        "FBC": 879.096,
+        "pipeLabel": "ヒューム管 1種（50N）",
+        "FaBC": 2180.811,
+        "ok": true
+      }
+    ],
+    "segments": [
+      {
+        "label": "最終直線",
+        "type": "straight",
+        "curveNo": null,
+        "L": 78.034,
+        "R": null,
+        "fo": 10.745,
+        "dF": 838.456,
+        "F_cum": 838.456
+      },
+      {
+        "label": "Fo（先端）",
+        "type": "tip",
+        "curveNo": null,
+        "L": 0,
+        "R": null,
+        "fo": 0,
+        "dF": 40.64,
+        "F_cum": 879.096
+      },
+      {
+        "label": "第1曲線",
+        "type": "curve",
+        "curveNo": 1,
+        "L": 33.981,
+        "R": 60,
+        "fo": 10.745,
+        "dF": 890.337,
+        "F_cum": 1769.433
+      },
+      {
+        "label": "第1直線",
+        "type": "straight",
+        "curveNo": null,
+        "L": 15.885,
+        "R": null,
+        "fo": 10.745,
+        "dF": 170.683,
+        "F_cum": 1940.116
+      }
+    ]
+  },
+  "jikuryoku": null
+}
