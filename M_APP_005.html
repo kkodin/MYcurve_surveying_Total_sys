@@ -915,6 +915,7 @@ input.req:placeholder-shown{border-color:var(--ng);background:#fff5f5}
       <div class="shaft-chip" data-val="casing" onclick="setWallShaft('casing',this)"><div style="font-size:18px">🔩</div><b>鋼製ケーシング</b></div>
       <div class="shaft-chip" data-val="open" onclick="setWallShaft('open',this)"><div style="font-size:18px">🌿</div><b>オープンカット</b></div>
       <div class="shaft-chip" data-val="oval" onclick="setWallShaft('oval',this)"><div style="font-size:18px">🥚</div><b>小判型立坑</b></div>
+      <div class="shaft-chip" data-val="measured" onclick="setWallShaft('measured',this)"><div style="font-size:18px">📏</div><b>実測形状（真円でない立坑）</b></div>
     </div>
     <div id="wallTypeNote" class="note-box" style="margin-top:8px"></div>
     <div id="wallRectInputs" style="margin-top:8px">
@@ -922,6 +923,15 @@ input.req:placeholder-shown{border-color:var(--ng);background:#fff5f5}
         <div class="field-row"><label>立坑内法幅 B [m]</label><input id="wallPitW" class="mono" type="number" step="0.1" value="3.0" oninput="calcBacklock()"><span class="unit">m</span></div>
         <div class="field-row"><label>立坑内法長 L [m]</label><input id="wallPitL" class="mono" type="number" step="0.1" value="4.0" oninput="calcBacklock()"><span class="unit">m</span></div>
       </div>
+    </div>
+    <!-- 104章: 真円でない立坑。推進中心線から左右の壁までの距離を、後壁からの奥行きごとに実測して入れる -->
+    <div id="wallMeasuredInputs" style="display:none;margin-top:8px">
+      <div class="field-row"><label>推進中心線上の内法長 L（後壁〜反対側の壁）[m] <span class="req-mark">必須</span></label><input id="wallMeasuredL" class="mono req" type="number" step="0.01" value="" placeholder="必須" oninput="calcBacklock();autoSave()"><span class="unit">m</span></div>
+      <div id="wallMeasuredTable"></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button type="button" class="big-btn secondary" style="min-height:34px;font-size:12px" onclick="addMeasuredRow()">＋ 測点を追加</button>
+      </div>
+      <p class="report-note hint" data-title="実測形状の入れ方">支圧壁は推進方向に直角に据えるので、立坑の中心ではなく<b>推進中心線</b>を基準に測ります。<br>奥行き d＝推進中心線が後壁（支圧壁側の壁）に当たる点から、推進方向へ測った距離。<br>左・右＝その奥行きで、推進中心線から左右の壁（据付で当たる面：補強材があればその内面）までの直角距離。<br>d=0（後壁）から支圧壁の前面より奥まで、形が変わる所を細かめに入れてください（間は直線で補間、最後の測点より奥は最後の値）。<br>バックロックは後面（幅W2）の角と側面が壁に当たるところまで押し込んだ位置に据え、前面での左右の壁間＝有効幅、後壁〜前面＝中央の厚さ、壁と前面とバックロックで囲まれた部分＝間詰めとして求めます。現場打ちは入力した中央の厚さの位置を前面とします。</p>
     </div>
     <div id="wallCircleInputs" style="display:none;margin-top:8px">
       <div class="field-row"><label>立坑内径 φ [m]（自動）</label><input id="wallCircleD" class="mono" type="number" step="0.1" value="3.5" readonly><span class="unit">m</span></div>
@@ -6968,7 +6978,95 @@ function setBackrockType(type) {
 }
 function effectiveBackrockType() {
   if (backrockType !== 'auto') return backrockType;
-  return (wallShaftType === 'circle' || wallShaftType === 'casing') ? 'taper' : 'square';
+  return (wallShaftType === 'circle' || wallShaftType === 'casing' || wallShaftType === 'measured') ? 'taper' : 'square';
+}
+
+// ══════════════════════════════════════
+//  104章: 実測形状の立坑（真円でない立坑・芯ずれ）
+//  座標：推進中心線を軸に、d＝後壁（推進中心線が支圧壁側の壁に当たる点）から推進方向への奥行き、
+//  左右＝推進中心線から壁までの直角距離。支圧壁は推進方向に直角に据える（絶対条件）ので、
+//  立坑の中心ではなく推進中心線を基準にする。
+// ══════════════════════════════════════
+let wallMeasuredRows = []; // [{d, left, right}]
+function renderMeasuredTable() {
+  const el = document.getElementById('wallMeasuredTable');
+  if (!el) return;
+  if (!wallMeasuredRows.length) wallMeasuredRows = [{ d: 0, left: '', right: '' }];
+  const rows = wallMeasuredRows.map((r, i) => `<tr>
+    <td class="mono">${i + 1}</td>
+    <td><input class="mono" type="number" step="0.01" min="0" value="${r.d}" style="width:80px" oninput="wallMeasuredRows[${i}].d=this.value;calcBacklock();autoSave()"></td>
+    <td><input class="mono" type="number" step="0.01" min="0" value="${r.left}" style="width:80px" oninput="wallMeasuredRows[${i}].left=this.value;calcBacklock();autoSave()"></td>
+    <td><input class="mono" type="number" step="0.01" min="0" value="${r.right}" style="width:80px" oninput="wallMeasuredRows[${i}].right=this.value;calcBacklock();autoSave()"></td>
+    <td><button type="button" class="mode-btn" style="padding:2px 8px" onclick="removeMeasuredRow(${i})">削除</button></td>
+  </tr>`).join('');
+  el.innerHTML = `<div class="tbl-wrap"><table class="report-table">
+    <thead><tr><th>測点</th><th>奥行き d [m]<br>（後壁から）</th><th>左の壁まで [m]</th><th>右の壁まで [m]</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>`;
+}
+function addMeasuredRow() {
+  const last = wallMeasuredRows[wallMeasuredRows.length - 1];
+  const dNext = last && last.d !== '' ? (+(parseFloat(last.d) + 0.25).toFixed(3)) : 0;
+  wallMeasuredRows.push({ d: dNext, left: last ? last.left : '', right: last ? last.right : '' });
+  renderMeasuredTable(); calcBacklock(); autoSave();
+}
+function removeMeasuredRow(i) {
+  wallMeasuredRows.splice(i, 1);
+  renderMeasuredTable(); calcBacklock(); autoSave();
+}
+// 入力が揃った測点を奥行き順に並べる。2点未満なら null。
+function measuredProfile() {
+  const pts = wallMeasuredRows
+    .map(r => ({ d: parseFloat(r.d), l: parseFloat(r.left), r: parseFloat(r.right) }))
+    .filter(p => isFinite(p.d) && isFinite(p.l) && isFinite(p.r) && p.d >= 0 && p.l >= 0 && p.r >= 0)
+    .sort((a, b) => a.d - b.d);
+  return pts.length >= 2 ? pts : null;
+}
+// 奥行き d での推進中心線から左右の壁までの距離（直線補間、最後の測点より奥は最後の値、
+// 最初の測点より手前＝後壁より奥は 0＝壁の中）。
+function measuredHalfAt(pts, d) {
+  if (d < pts[0].d - 1e-9) return { l: 0, r: 0 };
+  for (let i = 1; i < pts.length; i++) {
+    if (d <= pts[i].d) {
+      const a = pts[i - 1], b = pts[i], t = b.d > a.d ? (d - a.d) / (b.d - a.d) : 1;
+      return { l: a.l + (b.l - a.l) * t, r: a.r + (b.r - a.r) * t };
+    }
+  }
+  const z = pts[pts.length - 1];
+  return { l: z.l, r: z.r };
+}
+// 壁と前面（奥行き dF）で囲まれた断面積 ∫0^dF (左＋右) dd（台形則、測点で区切る）
+function measuredAreaTo(pts, dF) {
+  const ds = [0, ...pts.map(p => p.d).filter(d => d > 0 && d < dF), dF];
+  let A = 0;
+  for (let i = 1; i < ds.length; i++) {
+    const a = measuredHalfAt(pts, ds[i - 1]), b = measuredHalfAt(pts, ds[i]);
+    A += ((a.l + a.r) + (b.l + b.r)) / 2 * (ds[i] - ds[i - 1]);
+  }
+  return A;
+}
+// バックロックの据付位置：後面を奥行き s に置いたとき、ブロックの各断面（後面から x）の半幅が
+// 左右どちらの壁にも収まる最小の s。ブロックは推進中心線に対して左右対称。
+function measuredPlacement(pts, model) {
+  const isSq = model.W1 == null;
+  const W2 = isSq ? model.W : model.W2, W1 = isSq ? model.W : model.W1, T = model.T;
+  const lip = isSq ? 0 : BACKROCK_TAPER_LIP_H;
+  const halfAt = x => (x >= T - lip) ? W1 / 2 : W2 / 2 + (W1 - W2) / 2 * (x / (T - lip));
+  const dMax = pts[pts.length - 1].d + 5;
+  const fits = sd => {
+    for (let k = 0; k <= 50; k++) {
+      const x = T * k / 50, w = measuredHalfAt(pts, sd + x);
+      if (Math.min(w.l, w.r) < halfAt(x) - 1e-9) return false;
+    }
+    return true;
+  };
+  // 粗く（1cm）探してから、直前の1cmを1mmで詰める
+  for (let sd = 0; sd <= dMax; sd += 0.01) {
+    if (!fits(sd)) continue;
+    let best = sd;
+    for (let f = Math.max(0, sd - 0.01); f <= sd; f += 0.001) if (fits(f)) { best = f; break; }
+    return { ok: true, s: best, dF: best + T };
+  }
+  return { ok: false, s: 0, dF: T };
 }
 
 let backrockModelOverride = ''; // ''=自動選定、それ以外は型番名（例:'BR-SST'）を手動指定
@@ -7123,6 +7221,7 @@ function applyBackrockSelection() {
     // Bw/厚さのDOM反映後にcomputeWallBeff()を呼び直し、角当たり位置から求めた正しいsagitta等を得る
     html += renderBackrockGapConcrete(model, computeWallBeff());
   }
+  if (wallShaftType === 'measured') html += renderMeasuredGapConcrete(model, computeWallBeff());
 
   el.innerHTML = html;
   return model;
@@ -7143,6 +7242,30 @@ function applyBackrockSelection() {
 //   A2 = (W1+W2)/2×(T-lip) + lip×W1　… バックロック台形ブロックの断面積（T=カタログの厚さ、lip=底部の鋼材リップ高さ）
 //   A  = A1 − A2　… 間詰めコンクリート断面積
 //   V  = A × H　… 間詰めコンクリート体積（Hは実際に積み上げた高さ）
+// 104章: 実測形状の間詰めコンクリート量。壁と前面で囲まれた断面積（台形則）からブロックの断面積を引く。
+function renderMeasuredGapConcrete(model, info) {
+  const ms = info && info.measured;
+  if (!ms) return '<p class="report-note" style="color:var(--sub)">実測形状の測点を入力すると、間詰めコンクリート量を計算します。</p>';
+  if (!info.placementOk) return '';
+  const isSq = model.W1 == null;
+  const lip = isSq ? 0 : BACKROCK_TAPER_LIP_H;
+  const A1 = measuredAreaTo(ms.pts, ms.dF);
+  const A2 = isSq ? model.W * model.T : (model.W1 + model.W2) / 2 * (model.T - lip) + lip * model.W1;
+  const A = A1 - A2;
+  const Hw = n('wallHw') || 0;
+  const pieces = Math.max(1, Math.ceil(Hw / model.H));
+  const actualH = pieces * model.H;
+  return `<div class="calc-steps" style="margin-top:6px">
+    ${stepRow('据付位置（後壁〜ブロック後面）', '後面の角・側面が実測の壁に当たる位置', `${ms.s.toFixed(3)} m`)}
+    ${stepRow('後壁〜前面（中央の厚さ）', `${ms.s.toFixed(3)}＋${model.T}`, `${ms.dF.toFixed(3)} m`)}
+    ${stepRow('前面での壁間（有効幅）', `左${ms.left.toFixed(3)}＋右${ms.right.toFixed(3)}`, `${info.Beff.toFixed(3)} m`)}
+    ${stepRow('壁と前面で囲まれた断面積 A1', '∫(左＋右)dd（測点間は台形）', `${A1.toFixed(3)} m²`)}
+    ${stepRow(`${model.name}断面積 A2`, isSq ? `${model.W}×${model.T}` : `(${model.W1}+${model.W2})/2×(${model.T}-${lip})+${lip}×${model.W1}`, `${A2.toFixed(3)} m²`)}
+    ${stepRow('間詰め断面積 A=A1-A2', `${A1.toFixed(3)}-${A2.toFixed(3)}`, `<b>${A.toFixed(3)} m²</b>`)}
+    ${stepRow('間詰めコンクリート体積 V=A×H', `${A.toFixed(3)}×${actualH.toFixed(2)}（${pieces}段）`, `<b>${(A * actualH).toFixed(3)} m³</b>`)}
+  </div>${A < 0 ? '<p class="report-note" style="color:var(--ng)">⚠ 間詰め断面がマイナスです。測点を見直してください。</p>' : ''}`;
+}
+
 function renderBackrockGapConcrete(model, wallBeffInfo) {
   const pitD = n('wallCircleD');
   if (!pitD || (wallShaftType !== 'circle' && wallShaftType !== 'casing')) {
@@ -7250,6 +7373,8 @@ function setWallShaft(type, el) {
   el.classList.add('active');
   document.getElementById('wallRectInputs').style.display = (type === 'rect' || type === 'open' || type === 'oval') ? '' : 'none';
   document.getElementById('wallCircleInputs').style.display = (type === 'circle' || type === 'casing') ? '' : 'none';
+  document.getElementById('wallMeasuredInputs').style.display = (type === 'measured') ? '' : 'none';
+  if (type === 'measured') renderMeasuredTable();
   // 補強リングはライナープレート専用のため、鋼製ケーシング（casing）では非表示にする（65章）
   const ringSectionEl = document.getElementById('wallRingSection');
   if (ringSectionEl) ringSectionEl.style.display = (type === 'circle') ? '' : 'none';
@@ -7262,7 +7387,8 @@ function setWallShaft(type, el) {
     circle: '円形立坑: 弦長が支圧壁最大幅の制約となります。管中心と立坑中心を合わせてください。',
     casing: '鋼製ケーシング立坑: 底版一体型は不可。独立型（プレキャストコンクリートブロック）のみ。',
     open: 'オープンカット: 幅制約なし。地盤状況に応じた支圧設計を行います。',
-    oval: '小判型立坑: 矩形部＋半円部の組合せ形状。直線部の内法幅が支圧壁最大幅の制約となります（半円部は考慮しません）。'
+    oval: '小判型立坑: 矩形部＋半円部の組合せ形状。直線部の内法幅が支圧壁最大幅の制約となります（半円部は考慮しません）。半円部に支圧壁を据える場合や芯ずれがある場合は「実測形状」を使ってください。',
+    measured: '実測形状: 推進中心線から左右の壁までの距離を後壁からの奥行きごとに入力し、据付位置・有効幅・厚さ・間詰め量・作業スペースを求めます。'
   };
   document.getElementById('wallTypeNote').textContent = notes[type] || '';
   refreshBackrockModelOptions(); // 立坑形状でbackrockType='auto'時の実効タイプが変わるため選択肢を作り直す
@@ -7289,6 +7415,66 @@ function syncForceFromCalc() {
 function setWallPlanCaption(lines) {
   const el = document.getElementById('wallPlanViewCaption');
   if (el) el.innerHTML = lines.map(l => `<div>${l}</div>`).join('');
+}
+
+// 104章: 実測形状の平面図。左右の壁（実測の折れ線）、後壁、反対側の壁（内法長 L）、
+// バックロック（または現場打ちの前面）、前面での有効幅を描く。
+function drawMeasuredPlanView(ctx, w, h) {
+  const info = computeWallBeff();
+  const ms = info.measured;
+  if (!ms) {
+    ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('実測形状の測点（奥行き・左・右）を2点以上入力すると表示されます', w / 2, h / 2);
+    setWallPlanCaption([]);
+    return;
+  }
+  const pts = ms.pts, L = ms.L > 0 ? ms.L : Math.max(pts[pts.length - 1].d, ms.dF) + 1;
+  const dTop = Math.max(L, pts[pts.length - 1].d);
+  const half = Math.max(...pts.map(p => Math.max(p.l, p.r))) + 0.2;
+  const margin = 34;
+  const scale = Math.min((w - margin * 2) / (2 * half), (h - margin * 2) / (dTop + 0.3));
+  const tx = x => w / 2 + x * scale, ty = d => h - margin - d * scale;
+  const prof = d => measuredHalfAt(pts, d);
+  const ds = []; for (let k = 0; k <= 200; k++) ds.push(dTop * k / 200);
+  pts.forEach(p => ds.push(p.d)); ds.sort((a, b) => a - b);
+  // 間詰め範囲（後壁〜前面）を薄く塗る
+  ctx.fillStyle = 'rgba(176,138,90,0.18)';
+  ctx.beginPath();
+  ds.filter(d => d <= ms.dF).forEach((d, i) => { const q = prof(d); i ? ctx.lineTo(tx(-q.l), ty(d)) : ctx.moveTo(tx(-q.l), ty(d)); });
+  { const q = prof(ms.dF); ctx.lineTo(tx(-q.l), ty(ms.dF)); ctx.lineTo(tx(q.r), ty(ms.dF)); }
+  ds.filter(d => d <= ms.dF).reverse().forEach(d => { const q = prof(d); ctx.lineTo(tx(q.r), ty(d)); });
+  ctx.closePath(); ctx.fill();
+  // 壁（左右・後壁・反対側）
+  ctx.strokeStyle = '#1f4fa0'; ctx.lineWidth = 2.2; ctx.beginPath();
+  ds.forEach((d, i) => { const q = prof(d); i ? ctx.lineTo(tx(-q.l), ty(d)) : ctx.moveTo(tx(-q.l), ty(d)); });
+  ctx.stroke(); ctx.beginPath();
+  ds.forEach((d, i) => { const q = prof(d); i ? ctx.lineTo(tx(q.r), ty(d)) : ctx.moveTo(tx(q.r), ty(d)); });
+  ctx.stroke();
+  { const q0 = prof(pts[0].d); ctx.beginPath(); ctx.moveTo(tx(-q0.l), ty(pts[0].d)); ctx.lineTo(tx(q0.r), ty(pts[0].d)); ctx.stroke(); }
+  if (ms.L > 0) { const qL = prof(ms.L); ctx.save(); ctx.setLineDash([6, 4]); ctx.beginPath(); ctx.moveTo(tx(-qL.l), ty(ms.L)); ctx.lineTo(tx(qL.r), ty(ms.L)); ctx.stroke(); ctx.restore(); }
+  // 測点
+  ctx.fillStyle = '#1f4fa0';
+  pts.forEach(p => { [[-p.l], [p.r]].forEach(([x]) => { ctx.beginPath(); ctx.arc(tx(x), ty(p.d), 2.5, 0, Math.PI * 2); ctx.fill(); }); });
+  // 推進中心線
+  ctx.save(); ctx.strokeStyle = '#c62828'; ctx.setLineDash([9, 3, 1.5, 3]); ctx.beginPath(); ctx.moveTo(tx(0), ty(-0.1)); ctx.lineTo(tx(0), ty(dTop + 0.15)); ctx.stroke(); ctx.restore();
+  // バックロック（台形）または現場打ちの前面
+  const m = backrockUse ? backrockCurrentModel : null;
+  if (m && info.placementOk) {
+    const isSq = m.W1 == null, W1 = isSq ? m.W : m.W1, W2 = isSq ? m.W : m.W2, lip = isSq ? 0 : BACKROCK_TAPER_LIP_H;
+    const y0 = ms.s, y1 = ms.s + m.T - lip, y2 = ms.s + m.T;
+    ctx.fillStyle = '#d3dae3'; ctx.strokeStyle = '#1c2733'; ctx.lineWidth = 1.8; ctx.beginPath();
+    [[-W2 / 2, y0], [W2 / 2, y0], [W1 / 2, y1], [W1 / 2, y2], [-W1 / 2, y2], [-W1 / 2, y1]].forEach(([x, y], i) => i ? ctx.lineTo(tx(x), ty(y)) : ctx.moveTo(tx(x), ty(y)));
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  const qF = prof(ms.dF);
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(tx(-qF.l), ty(ms.dF)); ctx.lineTo(tx(qF.r), ty(ms.dF)); ctx.stroke();
+  ctx.fillStyle = '#111827'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`前面での壁間（有効幅）${info.Beff.toFixed(3)} m`, tx(0), ty(ms.dF) - 6);
+  ctx.textAlign = 'left'; ctx.fillStyle = '#c62828'; ctx.fillText('推進方向 ↑', tx(0) + 6, ty(dTop) + 12);
+  setWallPlanCaption([
+    '<span style="color:#1f4fa0">━</span> 実測の壁（●測点、間は直線補間）　<span style="color:#1f4fa0">┄</span> 反対側の壁（内法長 L）',
+    `後壁〜前面（中央の厚さ）${ms.dF.toFixed(3)} m${m ? `、後壁〜ブロック後面 ${ms.s.toFixed(3)} m` : ''}　<span style="color:#b08a5a">■</span> 間詰め範囲`,
+  ]);
 }
 
 function drawWallPlanView() {
@@ -7324,6 +7510,8 @@ function drawWallPlanView() {
   const tx = (x) => offX + x * scale;
   const ty = (y) => offY - y * scale; // 奥（+）を上に
 
+  // 104章: 実測形状の平面図（推進中心線＝縦の一点鎖線、後壁が下、推進方向が上）
+  if (wallShaftType === 'measured') { drawMeasuredPlanView(ctx, w, h); return; }
   if (isCircle) {
     // 円形立坑: 支圧壁はライナープレート内側の円を弦Beffで切り取った円弓形になる
     // （ユーザー提供の参考図で確認。矩形のように単純な帯状にはならない）。
@@ -7651,6 +7839,18 @@ function requiredWorkDepth() {
 // 弦Beffに対する弓形の最大厚み（矢高、サジッタ）= R − √(R² − (Beff/2)²)。
 function computeWallBeff() {
   const Bw = n('wallBw');
+  if (wallShaftType === 'measured') {
+    // 104章: 実測形状。前面の奥行き dF での左右の壁間＝有効幅、dF＝中央の厚さ（後壁から前面まで）。
+    const pts = measuredProfile();
+    if (!pts) return { Bw, maxBw: Bw, Beff: 0, linerD: null, sagitta: 0, R_eff: null, Rc: null, offset: 0, hCenter: null, placementOk: false, measured: null };
+    let pl;
+    if (backrockUse && backrockCurrentModel) pl = measuredPlacement(pts, backrockCurrentModel);
+    else { const t = Math.max(0, n('wallThickness') || 0); pl = { ok: true, s: 0, dF: t }; }
+    const wF = measuredHalfAt(pts, pl.dF);
+    const Beff = wF.l + wF.r;
+    return { Bw, maxBw: Beff, Beff, linerD: null, sagitta: pl.dF, R_eff: null, Rc: null, offset: 0, hCenter: null,
+      placementOk: pl.ok, measured: { pts, s: pl.s, dF: pl.dF, left: wF.l, right: wF.r, L: n('wallMeasuredL') } };
+  }
   if (wallShaftType === 'circle' || wallShaftType === 'casing') {
     const linerD = Math.max(0, n('wallCircleD'));
     const maxBw = linerD;
@@ -8297,8 +8497,23 @@ function calcBacklock() {
   const usesGeometricBeff = isCircleShaft && (!backrockUse || isBackrockTaperCircle);
   if (usesGeometricBeff && bwEl) bwEl.value = Beff.toFixed(3);
   if (isBackrockTaperCircle && thicknessEl) thicknessEl.value = wallBeffInfo.sagitta.toFixed(3);
+  const isMeasured = wallShaftType === 'measured';
+  const ms = wallBeffInfo.measured;
 
-  if (isBackrockTaperCircle) {
+  if (isMeasured) {
+    // 104章: 実測形状。有効幅は前面での左右の壁間（自動）。バックロックは厚さも据付位置から自動、現場打ちは厚さを入力。
+    if (bwEl) { bwEl.value = Beff ? Beff.toFixed(3) : ''; bwEl.readOnly = true; }
+    if (thicknessEl) {
+      if (backrockUse && ms) thicknessEl.value = ms.dF.toFixed(3);
+      thicknessEl.readOnly = !!backrockUse;
+    }
+    if (thicknessNoteEl) {
+      thicknessNoteEl.innerHTML = !ms ? '<span style="color:var(--ng)">実測形状の測点（奥行き・左・右）を2点以上入力してください。</span>'
+        : !wallBeffInfo.placementOk ? `<span style="color:var(--ng);font-weight:700">⚠ ${backrockCurrentModel ? backrockCurrentModel.name : 'ブロック'}が実測形状の中に収まりません。測点が足りないか、より小さい型番が必要です。</span>`
+        : backrockUse ? `後面を後壁から ${ms.s.toFixed(3)}m の位置まで押し込んで据えると、前面は後壁から ${ms.dF.toFixed(3)}m（中央の厚さ）、前面での壁間（有効幅）は 左${ms.left.toFixed(3)}＋右${ms.right.toFixed(3)}＝${Beff.toFixed(3)}m になります。`
+        : `前面（後壁から ${ms.dF.toFixed(3)}m）での壁間（有効幅）は 左${ms.left.toFixed(3)}＋右${ms.right.toFixed(3)}＝${Beff.toFixed(3)}m です。`;
+    }
+  } else if (isBackrockTaperCircle) {
     if (thicknessEl) thicknessEl.readOnly = true;
     if (bwEl) bwEl.readOnly = true;
     if (thicknessNoteEl) {
@@ -8324,6 +8539,10 @@ function calcBacklock() {
   renderJackStages(wallBeffInfo);
 
   const missing = wallHeightMissing();
+  if (wallShaftType === 'measured') {
+    if (!wallBeffInfo.measured) missing.push('実測形状の測点（2点以上）');
+    if (!(n('wallMeasuredL') > 0)) missing.push('推進中心線上の内法長 L');
+  }
   if (missing.length) {
     document.getElementById('backlockResult').innerHTML = `<div class="note-box"><b>必須項目が未入力です：</b>${missing.join('、')}<br>「🧱 支圧壁の諸元」の高さを入力してください（水準高が分からないときは「直接指定」で h_c・H_w を入力）。</div>`;
     return;
@@ -8394,7 +8613,7 @@ function calcBacklock() {
     // バグになっていた。円形立坑・テーパー形（isBackrockTaperCircle）だけはwallBw自体がBeffで
     // 上書きされる特殊ケースなので従来通りmodel.W1を直接参照し、それ以外はwallBw欄（square形は
     // model.W、taper形はmodel.W1がsetV('wallBw',...)で同期済み）をそのまま使う。
-    const Bo4 = isBackrockTaperCircle
+    const Bo4 = (isBackrockTaperCircle || (wallShaftType === 'measured' && backrockCurrentModel))
       ? (backrockCurrentModel && backrockCurrentModel.W1) || Beff
       : n('wallBw') || (backrockCurrentModel && (backrockCurrentModel.W1 ?? backrockCurrentModel.W)) || Beff;
     const q4 = F / (Bo4 * Hw); // q=F/(Bo×H0)。①のf（Beff基準）とは分母のBoが異なることに注意
@@ -8499,6 +8718,20 @@ function calcBacklock() {
         必要スペース = 残り管長 + Lc2 + 管有効長l′ + Lc2 + 押輪長さ + ストラット計 = ${stub_m.toFixed(3)} + ${collar_m.toFixed(3)} + ${pipeLen_m.toFixed(2)} + ${collar_m.toFixed(3)} + ${pressRing_m.toFixed(3)} + ${strutTotal_m.toFixed(3)} = ${reqDepth.toFixed(3)} m
       `,
       compare: { calc: availDepth, calcLabel: linerThicknessIgnore ? '残りスペース（支圧壁前面〜反対側の立坑壁）' : '残りスペース（支圧壁前面〜発進側ライナー内面）', limit: reqDepth, limitLabel: '必要スペース', cmp: '≥', unit: 'm' },
+    };
+    checks.push(check5);
+  } else if (wallShaftType === 'measured' && wallBeffInfo.measured && wallBeffInfo.measured.L > 0) {
+    // 104章: 実測形状の⑤。残りスペース＝推進中心線上の内法長 L − 後壁〜前面
+    const msr = wallBeffInfo.measured;
+    const availDepth = msr.L - msr.dF;
+    const check5_ok = availDepth >= reqDepth - 1e-9;
+    check5 = {
+      no: '⑤', name: '推進作業スペース照査', ok: check5_ok,
+      formula: `
+        残りスペース = 推進中心線上の内法長 L − 後壁〜支圧壁前面 = ${msr.L.toFixed(3)} − ${msr.dF.toFixed(3)} = ${availDepth.toFixed(3)} m<br>
+        必要スペース = 残り管長 + Lc2 + 管有効長l′ + Lc2 + 押輪長さ + ストラット計 = ${reqDepth.toFixed(3)} m
+      `,
+      compare: { calc: availDepth, calcLabel: '残りスペース（支圧壁前面〜反対側の壁）', limit: reqDepth, limitLabel: '必要スペース', cmp: '≥', unit: 'm' },
     };
     checks.push(check5);
   }
@@ -8913,6 +9146,7 @@ function getProjectData() {
       backrockUse, backrockType, backrockModelOverride, epAlpha: n('wallEpAlpha'),
       steelT: n('wallSteelT'), steelSa: n('wallSteelSa'),
       ringUse: wallRingUse, ringH: n('wallRingH'), linerThicknessIgnore,
+      measuredL: numOrNull('wallMeasuredL'), measuredRows: wallMeasuredRows.map(r => ({ d: r.d, left: r.left, right: r.right })),
       remainingStub: n('wallRemainingStub'), pressRingLen: n('wallPressRingLen'),
       strutUnitLen: n('wallStrutUnitLen'), strutCount: n('wallStrutCount')
     },
@@ -9277,6 +9511,9 @@ function setProjectData(d) {
     wallRingUse = !!wl.ringUse;
     // 103章: ライナー厚さの考慮／無視。キーが無い古いJSONは考慮（従来どおり内面に当てる）。
     linerThicknessIgnore = !!wl.linerThicknessIgnore;
+    // 104章: 実測形状。キーが無い古いJSONは空。
+    wallMeasuredRows = Array.isArray(wl.measuredRows) ? wl.measuredRows.map(r => ({ d: r.d ?? '', left: r.left ?? '', right: r.right ?? '' })) : [];
+    setV('wallMeasuredL', wl.measuredL ?? '');
     { const c = document.getElementById('linerThkBtn_consider'), g = document.getElementById('linerThkBtn_ignore');
       if (c) c.classList.toggle('active', !linerThicknessIgnore); if (g) g.classList.toggle('active', linerThicknessIgnore); }
     const ringOnBtn = document.getElementById('wallRingBtn_on'), ringOffBtn = document.getElementById('wallRingBtn_off');
