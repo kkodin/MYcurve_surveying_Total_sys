@@ -8123,7 +8123,7 @@ function drawFrontView(canvasId) {
   // 表示範囲
   const halfX = Math.max(Ro + 0.05, xTouch + rail.B, showWall ? wallW / 2 : 0, linerHalf, ...jacks.map(j => j.x + jackR)) + 0.05;
   const topY = Math.max(hc + Ro + 0.18, showWall ? Hw + 0.12 : 0);
-  const botY = hasHeights ? -0.30 : railBottom - 0.10;
+  const botY = hasHeights ? -0.30 - (wallLowerProposal ? wallLowerProposal.dProp : 0) : railBottom - 0.10;
   const leftG = 132, rightG = 120, topG = 38, botG = 10;
   const scale = Math.min((w - leftG - rightG) / (2 * halfX), (h - topG - botG) / (topY - botY));
   const cx = leftG + (w - leftG - rightG) / 2;
@@ -8156,6 +8156,12 @@ function drawFrontView(canvasId) {
     line(x0, ty(0), x1, ty(0), '#334155', 1.2);
     ctx.strokeStyle = '#94a3b8'; ctx.strokeRect(x0, ty(-0.15), x1 - x0, ty(-0.30) - ty(-0.15));
     for (let xx = x0 + 6; xx < x1; xx += 12) { ctx.beginPath(); ctx.arc(xx, ty(-0.225), 3, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  // 108章: ⑥の提案（基礎天端を下げる）を破線で示す
+  if (hasHeights && wallLowerProposal) {
+    const yp = -wallLowerProposal.dProp;
+    line(tx(-halfX), ty(yp), tx(halfX), ty(yp), '#b91c1c', 1.6, [8, 4]);
+    text(`提案 基礎CO天端${wallLowerProposal.elBaseNew != null ? ' ▽' + wallLowerProposal.elBaseNew.toFixed(3) : ''}（${Math.round(wallLowerProposal.dProp * 1000)} 下げ）`, tx(halfX), ty(yp) + 13, 'right', '#b91c1c', 'bold 11px sans-serif');
   }
   // 土留め（ライナー、波線）＝支圧壁位置での立坑の内面
   if (hasHeights && linerHalf > 0) {
@@ -8440,6 +8446,9 @@ function wallHeightMissing() {
 // 103章: 元押しジャッキの合力の高さ（基礎天端から）。刃口推進はズリバケットの出し入れのため
 // ジャッキを管の下側に置くので、推力の合力は管芯より低い。各段2基・推力は等しいとして
 // 各段のジャッキ中心の平均をとる。ジャッキ配置が無い・刃口以外は null（管芯で代用）。
+// 108章: ⑥で下側が不足したときの基礎天端を下げる提案（正面図に破線で描く）。null＝提案なし。
+let wallLowerProposal = null;
+
 function jackResultantHeight(hc) {
   if (currentMethod !== 'blade' || !jackStageWidths.length) return null;
   const Ro = (n('pipeOuter') || 0) / 2;
@@ -8706,6 +8715,50 @@ function calcBacklock() {
   ];
   if (check4) checks.push(check4);
 
+  // ⑥ 支圧壁の高さ（反力作用位置の上下）— 108章
+  // 下水道実施設計の手引き（案）推進工法編の方法：反力を作用位置で上下に二等分し、それぞれを
+  // 受働土圧で受けるのに必要な高さ H1（上）・H2（下）を求める。
+  //   上側 (γKp/2)H1² − (2C√Kp＋γh0Kp)H1 ＋ J/(2αB) ＝ 0、下側 (γKp/2)H2² ＋ (2C√Kp＋γh0Kp)H2 − J/(2αB) ＝ 0
+  //   h0＝反力作用位置の深さ（地表から）、B＝有効幅、J＝設備推進力。
+  // 作用位置は②と同じ推力の合力の高さ hj（刃口推進でジャッキ配置がある場合）。手引きの「管下端＋Bc/3」は
+  // ジャッキを管の下側に置く刃口推進では実際の合力より高く、下側の不足を見落とす（桜森一丁目でユーザー指摘）。
+  // 下側が足りないときは、立坑を深くして基礎コンクリート天端を下げる量を提案する（作用位置の標高は変わらない）。
+  const h0_6 = useGL ? n('wallElGround') - (n('wallElBase') + hR) : depthToWallTop + (Hw - hR);
+  const a6 = gamma * Kp / 2, b6 = 2 * C_coh * Math.sqrt(Kp) + gamma * h0_6 * Kp, c6 = F / (2 * alphaEp * Beff);
+  const disc6 = b6 * b6 - 4 * a6 * c6;
+  const H1req = disc6 >= 0 ? (b6 - Math.sqrt(disc6)) / (2 * a6) : Infinity;
+  const H2req = (-b6 + Math.sqrt(b6 * b6 + 4 * a6 * c6)) / (2 * a6);
+  const lowerAvail = hR, upperAvail = Hw - hR;
+  const lowerOk = lowerAvail >= H2req - 1e-9, upperOk = upperAvail >= H1req - 1e-9;
+  const check6_ok = lowerOk && upperOk;
+  wallLowerProposal = null;
+  let proposal6 = '';
+  if (!lowerOk) {
+    const dMin = H2req - lowerAvail;
+    const dProp = Math.ceil(dMin * 20 - 1e-9) / 20; // 0.05m 単位に切り上げ
+    const upperAfter = Hw - (hR + dProp);
+    wallLowerProposal = { dMin, dProp, elBaseNew: useGL ? n('wallElBase') - dProp : null };
+    proposal6 = `<div class="ng-box" style="font-size:12px;margin-top:6px"><b>提案：立坑を深くして基礎コンクリート天端を下げる</b><br>
+      作用位置より下の高さが ${(H2req - lowerAvail).toFixed(3)} m 不足しています。ジャッキ（推力の合力）の位置は管に対して決まっているので、
+      基礎コンクリート天端を <b>${dProp.toFixed(2)} m</b> 下げる（最低 ${dMin.toFixed(3)} m）と、作用位置より下が ${(hR + dProp).toFixed(3)} m ≧ H2 ${H2req.toFixed(3)} m になります。
+      ${useGL ? `基礎コンクリート天端 ▽${n('wallElBase').toFixed(3)} → <b>▽${(n('wallElBase') - dProp).toFixed(3)}</b>（立坑の掘削・ライナーもその分深くなります）。` : ''}
+      このとき作用位置より上は ${upperAfter.toFixed(3)} m（必要 H1 ${isFinite(H1req) ? H1req.toFixed(3) : '—'} m）${upperAfter >= H1req ? 'で足ります' : 'で不足するため、支圧壁の高さも上げてください'}。
+      正面図に提案の基礎天端を破線で示しています。</div>`;
+  }
+  checks.push({
+    no: '⑥', name: '支圧壁の高さ（反力作用位置の上下）', ok: check6_ok,
+    formula: `
+      反力作用位置 ${hj != null ? '＝推力の合力の高さ hj' : '＝管芯 hc（ジャッキ配置が無いため）'} ＝ 基礎天端から ${hR.toFixed(3)} m、深さ h0 ＝ ${h0_6.toFixed(3)} m${useGL ? '（立坑地盤高から）' : '（H最大から推定）'}<br>
+      J/(2αB) ＝ ${F.toFixed(0)}/(2×${alphaEp.toFixed(2)}×${Beff.toFixed(3)}) ＝ ${c6.toFixed(1)} kN/m、γKp/2 ＝ ${a6.toFixed(3)}、2C√Kp＋γh0Kp ＝ ${b6.toFixed(2)}<br>
+      上側 (γKp/2)H1² − (2C√Kp＋γh0Kp)H1 ＋ J/(2αB) ＝ 0 → H1 ＝ ${isFinite(H1req) ? H1req.toFixed(3) + ' m' : '解なし（上側では受けられない）'}、作用位置より上 ${upperAvail.toFixed(3)} m ${upperOk ? '≧' : '＜'} H1<br>
+      下側 (γKp/2)H2² ＋ (2C√Kp＋γh0Kp)H2 − J/(2αB) ＝ 0 → H2 ＝ ${H2req.toFixed(3)} m、作用位置より下（基礎天端まで）${lowerAvail.toFixed(3)} m ${lowerOk ? '≧' : '＜'} H2
+      ${proposal6}
+    `,
+    compare: { calc: Math.round(Math.min(lowerAvail - H2req, upperAvail - H1req) * 1000), calcLabel: '上下の余裕の小さい方', limit: 0, limitLabel: '0 以上', cmp: '≥', unit: 'mm' },
+  });
+  // 提案の基礎天端を正面図に反映する（図は calcBacklock の冒頭で描いているので描き直す）
+  drawWallSectionView(); drawJackPositionDiagram();
+
   // ⑤ 推進作業スペース照査（円形立坑のみ）: 支圧壁幅Bwを広げるほど厚さ（サジッタ）が増し、
   // 支圧壁前面〜反対側ライナー内面（発進側）までの残りスペース(availDepth = hCenter + R_eff)を
   // 圧迫する。この残りスペースが「前回推進終了時点から次の管を据え付け終えるまで」に最低限
@@ -8750,7 +8803,7 @@ function calcBacklock() {
     checks.push(check5);
   }
 
-  const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok) && (!check5 || check5.ok);
+  const allOk = check1_ok && check2_ok && check3_ok && (!check4 || check4.ok) && (!check5 || check5.ok) && check6_ok;
   // 形状拡大の提案（①②③のNG解消用）は、円形立坑の場合はさらに⑤の必要スペースを
   // 侵食しない範囲までしかBeffを広げない（そうでないと結局作業スペースが取れない提案になる）。
   // バックロック使用時（プレキャスト・カタログ型番、47.11章）も対象に含める。実際のサジッタは
