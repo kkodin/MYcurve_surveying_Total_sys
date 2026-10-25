@@ -396,6 +396,13 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row"><label>土被り H 最小 [m]</label><input id="soilHmin" class="mono" type="number" step="0.1" value="2.0" oninput="autoSave()"><span class="unit">m</span></div>
       <div class="field-row"><label>土被り H 最大 [m]</label><input id="soilHmax" class="mono" type="number" step="0.1" value="5.0" oninput="autoSave()"><span class="unit">m</span></div>
       <div class="field-row"><label>付着力 C′ [kN/m²]</label><input id="soilAdh" class="mono" type="number" step="0.5" value="10" oninput="autoSave()"><span class="unit">kN/m²</span></div>
+      <div class="field-row"><label>側方土圧係数の採用</label><select id="soilLatKMode" onchange="autoSave();refreshForceIfCalculated()">
+        <option value="k0">静止土圧係数 K0=1−sinφ</option>
+        <option value="ka">主働土圧係数 Ka=tan²(45°−φ/2)</option>
+        <option value="mid">中間値 (Ka+K0)/2</option>
+        <option value="custom">任意の値（下欄）</option>
+      </select></div>
+      <div class="field-row"><label>側方土圧係数 K（任意の値）</label><input id="soilLatKCustom" class="mono" type="number" step="0.05" value="0.5" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">—</span></div>
     </div>
     <div class="field-row full">
       <label>切羽心抜き</label>
@@ -820,7 +827,8 @@ tr.row-selected{background:#eff6ff}
 
     <div class="card accordion" id="reportCard">
       <div class="card-title" onclick="toggleAccordion(this)">📄 計算書（推進力の設計）</div>
-      <button class="big-btn secondary" onclick="printReport()" style="min-height:40px;font-size:13px;margin-bottom:10px">🖨️ 計画書添付用に印刷 / PDF保存</button>
+      <button class="big-btn secondary" onclick="printReport()" style="min-height:40px;font-size:13px;margin-bottom:6px">🖨️ 計画書添付用に印刷 / PDF保存</button>
+      <button class="big-btn secondary" onclick="exportReportXLSX()" style="min-height:40px;font-size:13px;margin-bottom:10px">📊 Excel出力（計算書と同じ構成・計算式付き）</button>
       <div id="reportBody"></div>
     </div>
 
@@ -4034,6 +4042,30 @@ function drawDistDiagram(total, launch, arrival, ground) {
 // ══════════════════════════════════════
 //  テルツァーギ土圧
 // ══════════════════════════════════════
+// 103章: 曲線部の側方土圧（参考計算）。p = K・σv、σv = γ・h。
+//  σv は地表からの全土かぶり重量（テルツァーギの緩み土圧ではない＝安全側）。
+//  K は主働 Ka=tan²(45°−φ/2) から静止 K0=1−sinφ の間で工学的に判断して採用する
+//  （日本下水道協会『下水道施設耐震計算例 管路施設編』質疑応答、計算例1-4 注）。
+//  比較対象として、管の許容等分布側圧 qa=Ma/(0.239r²)（BC点許容推進力と同じ式）を並べる。
+//  総合判定には入れない（参考値）。地下水圧は含まない。
+function calcLateralPressure(gamma, phi_deg, C, H, spec, mode, custom) {
+  const phi = phi_deg * Math.PI / 180;
+  const Ka = Math.pow(Math.tan(Math.PI / 4 - phi / 2), 2);
+  const K0 = 1 - Math.sin(phi);
+  const K = mode === 'ka' ? Ka : mode === 'mid' ? (Ka + K0) / 2 : mode === 'custom' ? custom : K0;
+  const D = spec.D;
+  const rows = [['管頂', H], ['管中心', H + D / 2], ['管底', H + D]].map(([name, h]) => ({
+    name, h, sv: gamma * h, p: K * gamma * h, pKa: Ka * gamma * h, pK0: K0 * gamma * h,
+    // 参考: 粘着力を考慮したランキン主働土圧（負は0）
+    pRc: Math.max(0, Ka * gamma * h - 2 * C * Math.sqrt(Ka))
+  }));
+  const r = (spec.D + spec.Di) / 4;
+  const Ma = (0.318 * (spec.Pext || 0) + 0.239 * (spec.W || 0)) * r;
+  const qa = r > 0 ? Ma / (0.239 * r * r) : null;
+  const pc = rows[1].p;
+  return { Ka, K0, K, mode, rows, pc, r, Ma, qa, ok: qa != null ? pc <= qa : null };
+}
+
 function calcTerzaghi(gamma, phi_deg, C, H, D, Hlive) {
   // 下水道協会式（テルツァーギの緩み土圧）。D=管外径Bc。
   // 100章: Hlive＝活荷重を求める土被り（省略時は H）。活荷重は土被りが小さいほど大きいので、
@@ -4688,7 +4720,6 @@ function calculate() {
   const Nprime = n('soilNprime') || N;
   const Hmin = n('soilHmin') || 2.0;
   const Hmax = n('soilHmax') || 5.0;
-  const H = Hmax; // 推進力計算は最大土被り（最大推進力）を使用
   const adh = n('soilAdh');
   const GL_wl = n('soilWater') || 0;
   const G = n('soilGravel');
@@ -4717,11 +4748,25 @@ function calculate() {
   const arrivalDist = calcShaftDist('arrival');
   const groundLen = Math.max(0, total - launchDist - arrivalDist);
 
-  // テルツァーギ土圧（最大土被りで計算 → 最大推進力）
   // 100章: 活荷重は「活荷重を計算する土被り」が H最小 なら H最小で求める（土被りが小さいほど大きい）。
+  //   min＝緩み土圧は各 H、活荷重は H最小（H最大で計算すると w(H最大)+p(H最小) の包絡＝安全側）
+  //   max＝活荷重も緩み土圧と同じ H で求める（M_APP_040 までの計算）
   const liveHFor = (h) => v('liveLoadH') === 'max' ? h : Math.min(h, Hmin);
-  const tz = calcTerzaghi(gamma, phi_soil, C, Hmax, D, liveHFor(Hmax));
+  // 104章: 推進力に使う土被り H は、H最小・H最大のうち推進力が大きくなる方とする。
+  // 粘着力で緩み土圧 w=0 になる地盤では q が活荷重 p だけになり、p は浅いほど大きいため、
+  // 活荷重を同じ H で求める（max）と H最小 の方が推進力が大きくなることがある（相模大塚南 φ800: fo 20.18→20.34kN/m）。
+  // 判定は先端位置の Fo + fo×推進延長 で比べる（曲線の K^n は両者に同じく掛かるので順位は変わらない）。
+  // min のときは H最大 側が w(H最大)+p(H最小) の包絡になり、H最小 側を下回らないので、結果として常に H最大 になる。
+  const tz_max = calcTerzaghi(gamma, phi_soil, C, Hmax, D, liveHFor(Hmax));
+  const tz_min = calcTerzaghi(gamma, phi_soil, C, Hmin, D, liveHFor(Hmin));
+  const tipDistBP = total - arrivalDist;
+  const probeF = h => { const r = foForSpec(stdSpec, h, tipDistBP); return r.Fo + r.fo * groundLen; };
+  const H = (Hmin < Hmax && probeF(Hmin) > probeF(Hmax)) ? Hmin : Hmax;
+  const tz = H === Hmax ? tz_max : tz_min;
   const { Be, k0, Ce, q, p_live, q_total } = tz;
+  // 外圧耐荷力の照査は q が大きい方の土被りで行う（推進力の支配土被りとは独立に決める）
+  const Hext = tz_min.q_total > tz_max.q_total ? Hmin : Hmax;
+  const q_ext = Math.max(tz_min.q_total, tz_max.q_total);
 
   // 96章: 計算は最後まで通るが、結果が明らかに不自然になる入力の組合せを警告する（ブロックはしない）。
   const warns = [];
@@ -4766,9 +4811,6 @@ function calculate() {
     warnEl.style.display = '';
   }
 
-  // 最小土被りの土圧（参考値）
-  const tz_min = calcTerzaghi(gamma, phi_soil, C, Hmin, D);
-
   // 区間の実効spec（区間ごとのD・Wを使ってfoを再計算するためのヘルパー）。
   // distFromBP[m]（BP=起点=0）に該当する区間別土質があればその値を、無ければ土質条件タブの
   // 共通値を使う（resolveSoilAt()、区間別土質が1つも無ければ常に共通値＝従来通りの挙動）。
@@ -4781,16 +4823,19 @@ function calculate() {
     const betaReduction = SLURRY_BETA_BY_SOIL[v('soilType')] != null ? SLURRY_BETA_BY_SOIL[v('soilType')] : 0.4;
     const p = { D: spec.D, W: spec.W, t: spec.t, N: zone.N, Nprime: zone.Nprime, phi_soil: zone.phi, phi_pipe: zone.phiPipe || zone.phi, C: zone.C, adh: zone.adh, q_total: tzLocal.q_total, GL_wl, H: hVal, Bs, G, m_gravel, alpha: alpha_coef, beta: beta_coef, betaReduction, foFormula };
     const r = calcFoFo(currentMethod, p);
-    return { ...r, q_total: tzLocal.q_total, zone };
+    // 外圧照査用: H最小・H最大のうち大きい方の q（104章）
+    const q_ext = Math.max(tzLocal.q_total,
+      calcTerzaghi(zone.gamma, zone.phi, zone.C, hVal === Hmax ? Hmin : Hmax, spec.D, liveHFor(hVal === Hmax ? Hmin : Hmax)).q_total);
+    return { ...r, q_total: tzLocal.q_total, q_ext, zone };
   }
 
   // 先端抵抗Fo・foは「今まさに掘進している位置」の土質を使う。区間別土質のBP距離は
   // 到達側立坑の手前（total-arrivalDist）を先端の位置とみなす（到達側から積算する設計のため）。
-  const tipDistBP = total - arrivalDist;
   const { Fo, fo, foDetail } = foForSpec(stdSpec, H, tipDistBP);
 
-  // fo（最小土被り、参考値。先端と同じ位置の土質を使う）
+  // fo（H最小・H最大それぞれ、参考表示用。先端と同じ位置の土質を使う）
   const { fo: fo_min } = foForSpec(stdSpec, Hmin, tipDistBP);
+  const { fo: fo_max } = foForSpec(stdSpec, Hmax, tipDistBP);
 
   // 区間分割: 曲線区間を EP→SP 方向で処理
   // curves配列順 = SP側（発進側）から到達側の順とする
@@ -4838,11 +4883,11 @@ function calculate() {
   // 最終直線（到達側）＝直線区間の個別仕様カードの「最終直線」パネルに対応
   if (epStraight > 0) {
     const segSpec = resolveSpec(straightSpecs[N_curves] && straightSpecs[N_curves].spec, resolveStraightCushionS4(N_curves), resolveStraightCushionCrush(N_curves));
-    const { fo: segFo, q_total: segQ } = foForSpec(segSpec, H, bpCursor - epStraight/2);
+    const { fo: segFo, q_total: segQ, q_ext: segQx } = foForSpec(segSpec, H, bpCursor - epStraight/2);
     const dF = segFo * epStraight;
     F_cum += dF;
     const lastOpen = straightJointOpenMm(N_curves);
-    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec, qTotal: segQ, straightIdx: N_curves, openMm: lastOpen.mm, openSrc: lastOpen.src });
+    segments.push({ label:'最終直線', type:'straight', L:epStraight, fo:segFo, dF, F_cum: F_cum, ord: 2*N_curves + 1, spec: segSpec, qTotal: segQ, qExt: segQx, straightIdx: N_curves, openMm: lastOpen.mm, openSrc: lastOpen.src });
     bpCursor -= epStraight;
   }
   // 先端抵抗（先端一箇所の値。標準仕様のD・Wを使用）
@@ -4880,11 +4925,11 @@ function calculate() {
       const midLen = useRealLengths ? straightLenAt(curveNo - 1) : intermediateStraightFallback;
       if (midLen > 0) {
         const midSpec = resolveSpec(straightSpecs[curveNo - 1] && straightSpecs[curveNo - 1].spec, resolveStraightCushionS4(curveNo - 1), resolveStraightCushionCrush(curveNo - 1));
-        const { fo: midFo, q_total: midQ } = foForSpec(midSpec, H, bpCursor - midLen/2);
+        const { fo: midFo, q_total: midQ, q_ext: midQx } = foForSpec(midSpec, H, bpCursor - midLen/2);
         const dF = midFo * midLen;
         F_cum += dF;
         const midOpen = straightJointOpenMm(curveNo - 1);
-        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec, qTotal: midQ, straightIdx: curveNo - 1, openMm: midOpen.mm, openSrc: midOpen.src });
+        segments.push({ label:`第${curveNo}直線`, type:'straight', L:midLen, fo:midFo, dF, F_cum, ord: 2*curveNo - 1, spec: midSpec, qTotal: midQ, qExt: midQx, straightIdx: curveNo - 1, openMm: midOpen.mm, openSrc: midOpen.src });
         bpCursor -= midLen;
       }
     }
@@ -4896,22 +4941,22 @@ function calculate() {
     : (reversedCurves.length > 0 ? spStraight - intermediateStraightFallback * (reversedCurves.length - 1) : spStraight);
   if (spRemain > 0) {
     const firstSpec = resolveSpec(straightSpecs[0] && straightSpecs[0].spec, resolveStraightCushionS4(0), resolveStraightCushionCrush(0));
-    const { fo: firstFo, q_total: firstQ } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
+    const { fo: firstFo, q_total: firstQ, q_ext: firstQx } = foForSpec(firstSpec, H, bpCursor - spRemain/2);
     const dF = firstFo * spRemain;
     F_cum += dF;
     const firstOpen = straightJointOpenMm(0);
-    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec, qTotal: firstQ, straightIdx: 0, openMm: firstOpen.mm, openSrc: firstOpen.src });
+    segments.push({ label:'第1直線', type:'straight', L:spRemain, fo:firstFo, dF, F_cum, ord: 1, spec: firstSpec, qTotal: firstQ, qExt: firstQx, straightIdx: 0, openMm: firstOpen.mm, openSrc: firstOpen.src });
     bpCursor -= spRemain;
   }
 
   const F_total = F_cum;
 
   // 外圧耐荷力照査（標準仕様、サマリー表示用）
-  const extCheck = calcExtPressureCheck(Di, t, W, P_ext, q_total);
+  const extCheck = calcExtPressureCheck(Di, t, W, P_ext, q_ext);
   // 外圧耐荷力照査（区間ごと。区間ごとの管厚・重量・外圧強さに加え、区間別土質があれば
   // その区間の土圧qTotalを反映する。無ければ共通の土質条件から求めたq_totalを使う）
   const extResults = segments.filter(s => s.type !== 'tip').map(s => {
-    const c = calcExtPressureCheck(s.spec.Di, s.spec.t, s.spec.W, s.spec.Pext, s.qTotal != null ? s.qTotal : q_total);
+    const c = calcExtPressureCheck(s.spec.Di, s.spec.t, s.spec.W, s.spec.Pext, s.qExt != null ? s.qExt : q_ext);
     return { label: s.label, isCurve: s.type === 'curve', individual: !!(s.spec && s.spec.on), ...c };
   });
 
@@ -4949,8 +4994,11 @@ function calculate() {
     return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel, chosen, Ae: spec.Ae, aeApprox };
   });
 
+  const latMode = v('soilLatKMode') || 'k0';
+  const lat = calcLateralPressure(gamma, phi_soil, C, Hmax, stdSpec, latMode, n('soilLatKCustom'));
+
   lastCalcResult = {
-    F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, cushionResults, sigmaAllowCushion, q_total, foDetail, tz, tz_min, Hmin, Hmax,
+    lat, H, Hext, q_ext, tz_max, fo_max, F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, cushionResults, sigmaAllowCushion, q_total, foDetail, tz, tz_min, Hmin, Hmax,
     // ── 計算書（PDF準拠レポート）用に保持する入力値・中間値 ──
     stdSpec, dia, Bs, gamma, phi_soil, phi_pipe, C, N, Nprime, adh, alpha_coef, beta_coef, method: currentMethod,
     curList, realStraightLengths: realStraightLengths.slice(), groundLen, launchDist, arrivalDist, total,
@@ -4980,15 +5028,17 @@ function selectJackConfig(cap, count) {
 
 function renderResults(res) {
   const { F_total, Fo, fo, fo_min, Fa, segments, extCheck, extResults, bcResults, cushionResults, sigmaAllowCushion, q_total, foDetail, tz, tz_min, Hmin, Hmax } = res;
+  const H = res.H ?? Hmax, tz_max = res.tz_max || tz, fo_max = res.fo_max ?? fo;
+  const hTag = h => h === Hmin && Hmin < Hmax ? 'H最小' : 'H最大';
   const okForce = F_total <= Fa;
 
   // サマリーメトリクス
   const sm = document.getElementById('summaryMetrics');
   sm.innerHTML = `
-    <div class="metric-card"><div class="metric-label">最大推進力 F（H最大=${Hmax}m）</div><div class="metric-value ${okForce?'ok':'ng'}">${F_total.toFixed(0)}</div><div class="metric-sub">kN ← 設計値</div></div>
+    <div class="metric-card"><div class="metric-label">最大推進力 F（${hTag(H)}=${H}m）</div><div class="metric-value ${okForce?'ok':'ng'}">${F_total.toFixed(0)}</div><div class="metric-sub">kN ← 設計値</div></div>
     <div class="metric-card"><div class="metric-label">許容耐荷力 Fa</div><div class="metric-value">${Fa.toFixed(0)}</div><div class="metric-sub">kN</div></div>
-    <div class="metric-card"><div class="metric-label">fo 周面摩擦（H最大）</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
-    <div class="metric-card"><div class="metric-label">fo 周面摩擦（H最小=${Hmin}m）</div><div class="metric-value">${fo_min.toFixed(2)}</div><div class="metric-sub">kN/m（参考）</div></div>
+    <div class="metric-card"><div class="metric-label">fo 周面摩擦（${hTag(H)}=${H}m）</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m ← 設計値</div></div>
+    <div class="metric-card"><div class="metric-label">fo 周面摩擦（${hTag(H)==='H最大'?'H最小='+Hmin:'H最大='+Hmax}m）</div><div class="metric-value">${(hTag(H)==='H最大'?fo_min:fo_max).toFixed(2)}</div><div class="metric-sub">kN/m（参考）</div></div>
     <div class="metric-card"><div class="metric-label">先端抵抗 Fo</div><div class="metric-value">${Fo.toFixed(0)}</div><div class="metric-sub">kN</div></div>
     <div class="metric-card"><div class="metric-label">周面摩擦 fo</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
     <div class="metric-card"><div class="metric-label">Mr/M（外圧・標準仕様）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${extCheck.ratio.toFixed(2)}</div><div class="metric-sub">≥1.2 要求（区間別は下表参照）</div></div>
@@ -5020,22 +5070,23 @@ function renderResults(res) {
   // 計算根拠表
   const { Be, k0, Ce, q, p_live } = tz;
   const basisRows = [
-    ['土被り H 最小', Hmin.toFixed(1), 'm', '参考計算用'],
-    ['土被り H 最大', Hmax.toFixed(1), 'm', '設計計算用（推進力最大）'],
+    ['土被り H 最小', Hmin.toFixed(2), 'm', H === Hmin && Hmin < Hmax ? '設計計算用（推進力が大きい方）' : '参考計算用'],
+    ['土被り H 最大', Hmax.toFixed(2), 'm', H === Hmax ? '設計計算用（推進力が大きい方）' : '参考計算用'],
     ['Be 緩み幅', Be.toFixed(3), 'm', '(Bc+0.1)(1+sin(45°-φ/2))/cos(45°-φ/2)'],
     ['K 側方土圧係数', k0.toFixed(3), '—', 'テルツァーギ慣用値（=1）'],
-    ['Ce サイロ係数（H最大）', Ce.toFixed(3), '—', 'テルツァーギ式'],
-    ['q 鉛直土圧（H最大）', q.toFixed(1), 'kN/m²', '(γ-2C/Be)×Ce'],
-    ['q 鉛直土圧（H最小）', tz_min.q.toFixed(1), 'kN/m²', '参考値'],
-    ['p_live 活荷重', p_live.toFixed(2), 'kN/m²', 'T-25道路荷重'],
-    ['q_total 合計土圧（H最大）', q_total.toFixed(1), 'kN/m²', '設計値'],
-    ['q_total 合計土圧（H最小）', tz_min.q_total.toFixed(1), 'kN/m²', '参考値'],
+    ['Ce サイロ係数（' + hTag(H) + '）', Ce.toFixed(3), '—', 'テルツァーギ式'],
+    ['w 鉛直土圧（H最大）', tz_max.q.toFixed(1), 'kN/m²', '(γ-2C/Be)×Ce'],
+    ['w 鉛直土圧（H最小）', tz_min.q.toFixed(1), 'kN/m²', '(γ-2C/Be)×Ce'],
+    ['p_live 活荷重（H最大側、活荷重は H=' + tz_max.Hlive + '）', tz_max.p_live.toFixed(2), 'kN/m²', 'T-25道路荷重'],
+    ['p_live 活荷重（H最小）', tz_min.p_live.toFixed(2), 'kN/m²', 'T-25道路荷重（浅いほど大きい）'],
+    ['q_total 合計土圧（H最大）', tz_max.q_total.toFixed(1), 'kN/m²', H === Hmax ? '設計値' : '参考値'],
+    ['q_total 合計土圧（H最小）', tz_min.q_total.toFixed(1), 'kN/m²', H === Hmin && Hmin < Hmax ? '設計値' : '参考値'],
     ['Fo 先端抵抗力', Fo.toFixed(1), 'kN', '工法別計算'],
-    ['fo 周面摩擦力（H最大）', fo.toFixed(3), 'kN/m', '設計値'],
-    ['fo 周面摩擦力（H最小）', fo_min.toFixed(3), 'kN/m', '参考値'],
+    ['fo 周面摩擦力（H最大）', fo_max.toFixed(3), 'kN/m', H === Hmax ? '設計値' : '参考値'],
+    ['fo 周面摩擦力（H最小）', fo_min.toFixed(3), 'kN/m', H === Hmin && Hmin < Hmax ? '設計値' : '参考値'],
     ['P_ext 外圧強さ（ひび割れ荷重）', extCheck.P_ext ? extCheck.P_ext.toFixed(1) : '—', 'kN/m', '規格表のひび割れ荷重'],
     ['r 管壁中心半径', extCheck.r.toFixed(3), 'm', '(Di/2)+t/2'],
-    ['M 外圧曲げモーメント', extCheck.M.toFixed(3), 'kN·m/m', '0.275×q×r²'],
+    ['M 外圧曲げモーメント', extCheck.M.toFixed(3), 'kN·m/m', '0.275×q×r²（q は H最小・H最大の大きい方 ' + (res.q_ext ?? q_total).toFixed(2) + '）'],
     ['Mr 抵抗モーメント', extCheck.Mr.toFixed(3), 'kN·m/m', '0.318×Pext×r+0.239×W×r'],
     ['Mr/M 安全率', extCheck.ratio.toFixed(3), '—', extCheck.ok?'≥1.2 OK':'<1.2 NG'],
   ];
@@ -5141,6 +5192,7 @@ function renderResults(res) {
 // ══════════════════════════════════════
 const SOIL_TYPE_LABEL = { clay:'粘性土', sand:'砂質土', gravel:'礫質土' };
 const CAT_LABEL = { hume:'ヒューム管', resin:'レジン管', steel:'鋼管' };
+const LAT_K_LABEL = { k0:'静止土圧係数 K0', ka:'主働土圧係数 Ka', mid:'中間値 (Ka+K0)/2', custom:'任意の値' };
 const METHOD_LABEL = { blade:'刃口推進工法', slurry:'泥水推進工法', epb:'泥土圧推進工法', deinoh:'泥濃推進工法' };
 
 function fmt(x, d) { return (x == null || isNaN(x)) ? '—' : Number(x).toFixed(d ?? 2); }
@@ -5169,6 +5221,14 @@ function renderReport(res) {
   const jointSel = document.getElementById('pipeJointType');
   const jointLabel = jointSel ? jointSel.options[jointSel.selectedIndex].text : '—';
   const curveSegs = segments.filter(s => s.type === 'curve');
+  // 104章: 推進力に使った土被り（H最小・H最大のうち推進力が大きい方）
+  const Hmin = res.Hmin, Hc = res.H ?? Hmax;
+  const hReason = Hmin < Hmax
+    ? (Hc === Hmin ? 'H最小の方が推進力が大きい（緩み土圧が0で、浅いほど活荷重が大きいため）'
+      // 100章の「活荷重を計算する土被り」が H最小 なら、H最大側は w(H最大)+p(H最小) の包絡になる
+      : (res.tz && res.tz.Hlive < Hc ? `緩み土圧は H最大、活荷重は H最小（${fmt(res.tz.Hlive,2)}m）で求める（安全側）`
+        : 'H最大の方が推進力が大きい'))
+    : '土被り一定';
 
   // ── 1. 管の仕様 ──
   const s1 = `
@@ -5200,7 +5260,8 @@ function renderReport(res) {
   }).join('　');
   const s3 = `
     <table class="report-table"><tbody>
-      <tr><th>平均土被り H</th><td class="mono">${fmt(Hmax,2)}</td><td>m</td><th>推進延長 L（地山内）</th><td class="mono">${fmt(groundLen,3)}</td><td>m</td></tr>
+      <tr><th>土被り H（最小〜最大）</th><td class="mono">${fmt(Hmin,2)}〜${fmt(Hmax,2)}</td><td>m</td><th>推進延長 L（地山内）</th><td class="mono">${fmt(groundLen,3)}</td><td>m</td></tr>
+      <tr><th>推進力計算に用いる土被り H</th><td class="mono">${fmt(Hc,2)}</td><td>m</td><td colspan="3" class="left" style="font-size:12px">${hReason}</td></tr>
       <tr><th>適応管種</th><td colspan="5">${catLabel}${gradeLabel ? '　' + gradeLabel : ''}</td></tr>
       <tr><th>直線長内訳</th><td colspan="5" class="left" style="font-size:12.5px">${straightList3}</td></tr>
     </tbody></table>
@@ -5240,14 +5301,14 @@ function renderReport(res) {
       <tr><th>鉛直土圧 w</th><td class="mono">${fmt(tz.q,2)}</td><td>kN/m²</td><th>活荷重 p（T-25）</th><td class="mono">${fmt(tz.p_live,2)}</td><td>kN/m²</td></tr>
       <tr><th colspan="2">等分布荷重 q = w + p</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(q_total,2)} kN/m²</td></tr>
     </tbody></table>
-    ${svgLoadCrossSection(stdSpec.D, tz, phi_soil, Hmax)}
+    ${svgLoadCrossSection(stdSpec.D, tz, phi_soil, Hc)}
     <p class="report-note" style="margin-top:10px;font-weight:700">計算過程</p>
     ${calcSteps([
       stepRow('Bt = Bc+0.1', `${fmt(stdSpec.D,3)}+0.1`, `${fmt(tz.Bt,3)} m`),
       stepRow('すべり角 45°-φ/2', `45-${fmt(phi_soil,1)}/2`, `${fmt(tz.slipHalfDeg,3)} °`),
       stepRow('Be = Bt(1+sin(45°-φ/2))/cos(45°-φ/2)', `${fmt(tz.Bt,3)}×(1+sin${fmt(tz.slipHalfDeg,2)}°)/cos${fmt(tz.slipHalfDeg,2)}°`, `${fmt(tz.Be,3)} m`),
       stepRow('μ = tanφ', `tan${fmt(phi_soil,1)}°`, fmt(tz.mu,4)),
-      stepRow('Ce = (Be/2Kμ)(1-e<sup>-2KμH/Be</sup>)', `(${fmt(tz.Be,3)}/(2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}))×(1-e<sup>-2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}×${fmt(Hmax,2)}/${fmt(tz.Be,3)}</sup>)`, fmt(tz.Ce,3)),
+      stepRow('Ce = (Be/2Kμ)(1-e<sup>-2KμH/Be</sup>)', `(${fmt(tz.Be,3)}/(2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}))×(1-e<sup>-2×${fmt(tz.k0,2)}×${fmt(tz.mu,4)}×${fmt(Hc,2)}/${fmt(tz.Be,3)}</sup>)`, fmt(tz.Ce,3)),
       stepRow('w = (γ-2C/Be)Ce', `(${fmt(gamma,1)}-2×${fmt(C,1)}/${fmt(tz.Be,3)})×${fmt(tz.Ce,3)}`, `${fmt(tz.q,2)} kN/m²`),
       stepRow(`衝撃係数 i = 0.65-0.1H（0≤i≤0.5、H=${tz.Hlive < Hmax ? 'H最小' : 'H最大'}）`, `0.65-0.1×${fmt(tz.Hlive,2)}`, fmt(tz.impactI,3)),
       stepRow('活荷重 p = 2P(1+i)β/(c(a+2H))', `2×${tz.P}×(1+${fmt(tz.impactI,3)})×${tz.betaLive}/(${tz.c}×(${tz.a}+2×${fmt(tz.Hlive,2)}))`, `${fmt(tz.p_live,2)} kN/m²`),
@@ -5259,22 +5320,11 @@ function renderReport(res) {
   const s5 = `
     <table class="report-table"><tbody>
       <tr><th colspan="2">先端抵抗 F0</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(Fo,1)} kN</td></tr>
-      <tr><th>せん断抵抗 τa</th><td class="mono">${fmt(foDetail.tau_a,2)}</td><td>kN/m²</td><th>μ′=tan(φ/2)</th><td class="mono">${fmt(foDetail.mu,4)}</td><td>—</td></tr>
+      ${method==='blade' ? `<tr><th>せん断抵抗 τa</th><td class="mono">${fmt(foDetail.tau_a,2)}</td><td>kN/m²</td><th>μ′=tan(φ/2)</th><td class="mono">${fmt(foDetail.mu,4)}</td><td>—</td></tr>` : ''}
       <tr><th colspan="2">推進1m当たり抵抗 f（=fo）</th><td colspan="4" class="mono" style="font-weight:800;font-size:15px">${fmt(fo,3)} kN/m</td></tr>
     </tbody></table>
-    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程${foDetail.formula==='satoyamamoto' ? '（佐藤・山本改定式）' : foDetail.formula==='kyokai' ? '（下水道協会式・自立地山用）' : ''}</p>
-    ${foDetail.formula==='satoyamamoto' ? calcSteps([
-      stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
-      stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(foDetail.mu,4)),
-      stepRow("σ′ = α・q + 2W/{π²(Bc-t)}", `${fmt(alpha_coef,3)}×${fmt(q_total,2)}+2×${fmt(stdSpec.W,2)}/(π²×(${fmt(stdSpec.D,3)}-${fmt(stdSpec.t,3)}))`, `${fmt(foDetail.sigma_prime,2)} kN/m²`),
-      stepRow('τa = β・Ca + σ′・μ′', `${fmt(beta_coef,3)}×${fmt(adh,1)}+${fmt(foDetail.sigma_prime,2)}×${fmt(foDetail.mu,4)}`, `${fmt(foDetail.tau_a,2)} kN/m²`),
-      stepRow('f = π・Bc・τa', `π×${fmt(stdSpec.D,3)}×${fmt(foDetail.tau_a,2)}`, `<b>${fmt(fo,3)} kN/m</b>`),
-    ]) : calcSteps([
-      stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
-      stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(foDetail.mu,4)),
-      stepRow('τa = β・q・μ′+C′', `${fmt(beta_coef,2)}×${fmt(q_total,2)}×${fmt(foDetail.mu,4)}+${fmt(adh,1)}`, `${fmt(foDetail.tau_a,2)} kN/m²`),
-      stepRow('f = α・π・Bc・τa + W・μ′', `${fmt(alpha_coef,3)}×π×${fmt(stdSpec.D,3)}×${fmt(foDetail.tau_a,2)}+${fmt(stdSpec.W,2)}×${fmt(foDetail.mu,4)}`, `<b>${fmt(fo,3)} kN/m</b>`),
-    ])}
+    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程（${FO_FORMULA_TITLE(method, foDetail)}）</p>
+    ${reportFoSteps(res, Hc)}
   `;
 
   // ── 6. 区間推進力 ──
@@ -5349,6 +5399,31 @@ function renderReport(res) {
     </tbody></table>
     <p class="report-note">「📊 計算結果サマリー」カードの「採用ジャッキ」欄で、実際に採用する台数・能力に変更できます。</p>`;
 
+  // ── 9. 曲線部の側方土圧（参考計算、103章） ──
+  const lat = res.lat;
+  const s9 = !lat ? '' : `
+    <p class="report-note">側方土圧 p = K・σv（σv = γ・h、地表からの全土かぶり重量。深いほど大きいので H最大 で計算）。K は主働土圧係数 Ka から静止土圧係数 K0 の間で工学的に判断して採用する。
+      地下水圧は含まない。管の許容等分布側圧 qa との比較は<b>参考</b>で、総合判定には含めない。</p>
+    <table class="report-table"><tbody>
+      <tr><th>主働土圧係数 Ka</th><td class="mono">${fmt(lat.Ka,4)}</td><td>—</td><th>静止土圧係数 K0</th><td class="mono">${fmt(lat.K0,4)}</td><td>—</td></tr>
+      <tr><th colspan="2">採用する K（${LAT_K_LABEL[lat.mode] || lat.mode}）</th><td colspan="4" class="mono" style="font-weight:800">${fmt(lat.K,4)}</td></tr>
+    </tbody></table>
+    <div class="tbl-wrap" style="margin-top:8px"><table class="report-table">
+      <thead><tr><th>位置</th><th>深さ h(m)</th><th>σv=γh(kN/m²)</th><th>Ka・σv</th><th>K0・σv</th><th>採用 p=K・σv</th></tr></thead>
+      <tbody>${lat.rows.map(x => `<tr><td class="left">${x.name}</td><td class="mono">${fmt(x.h,3)}</td><td class="mono">${fmt(x.sv,2)}</td><td class="mono">${fmt(x.pKa,2)}</td><td class="mono">${fmt(x.pK0,2)}</td><td class="mono"><b>${fmt(x.p,2)}</b></td></tr>`).join('')}</tbody>
+    </table></div>
+    <p class="report-note" style="margin-top:10px;font-weight:700">計算過程</p>
+    ${calcSteps([
+      stepRow('Ka = tan²(45°−φ/2)', `tan²(45−${fmt(phi_soil,1)}/2)`, fmt(lat.Ka,4)),
+      stepRow('K0 = 1−sinφ', `1−sin${fmt(phi_soil,1)}°`, fmt(lat.K0,4)),
+      stepRow('管中心深さ h = H最大 + Bc/2', `${fmt(Hmax,2)}+${fmt(stdSpec.D,3)}/2`, `${fmt(lat.rows[1].h,3)} m`),
+      stepRow('σv = γ・h', `${fmt(gamma,1)}×${fmt(lat.rows[1].h,3)}`, `${fmt(lat.rows[1].sv,2)} kN/m²`),
+      stepRow('p = K・σv（管中心）', `${fmt(lat.K,4)}×${fmt(lat.rows[1].sv,2)}`, `<b>${fmt(lat.pc,2)} kN/m²</b>`),
+      stepRow('（参考）粘着力考慮の主働 Ka・σv−2C√Ka', `${fmt(lat.Ka,4)}×${fmt(lat.rows[1].sv,2)}−2×${fmt(C,1)}×√${fmt(lat.Ka,4)}`, `${fmt(lat.rows[1].pRc,2)} kN/m²`),
+      stepRow('管の許容等分布側圧 qa = Ma/(0.239r²)', `Ma=${fmt(lat.Ma,3)}, r=${fmt(lat.r,3)}`, lat.qa != null ? `${fmt(lat.qa,2)} kN/m²` : '—'),
+    ])}
+    ${lat.qa != null ? `<p class="report-note">（参考）管中心の側方土圧 p = ${fmt(lat.pc,2)} kN/m² ${lat.ok ? '≤' : '＞'} qa = ${fmt(lat.qa,2)} kN/m²　→ <span class="pill ${lat.ok ? 'ok' : 'ng'}">${lat.ok ? 'OK' : 'NG'}</span></p>` : ''}`;
+
   // ── 総合判定（各検討事項の合否を一覧で表示） ──
   const pipeOk = F_total <= Fa;
   const verdictItems = [
@@ -5383,6 +5458,7 @@ function renderReport(res) {
     ${reportSection(6,'区間推進力',s6)}
     ${reportSection(7,'管の許容耐荷力の検討',s7)}
     ${reportSection(8,'推進設備の検討（元押ジャッキ）',s8)}
+    ${s9 ? reportSection(9,'曲線部の側方土圧（参考計算）',s9) : ''}
   `;
 
   // reportCardが開いている（=canvasにサイズがある）場合のみ即座に描画できる。
@@ -5393,6 +5469,59 @@ function renderReport(res) {
     setupAlignmentVisualInteraction('reportAlignmentVisual');
     drawAlignmentVisual('reportAlignmentVisual');
   }
+}
+
+// 105章: 計算書5章の計算過程を工法ごとに出し分ける。
+// 以前は刃口の佐藤・山本式以外はすべて協会式の行を出しており、泥水・泥土圧・泥濃では
+// τa が未定義（—）のまま協会式の式が印刷されていた（calcFoFo() の実際の式と食い違っていた）。
+function FO_FORMULA_TITLE(method, d) {
+  if (method === 'blade') return d.formula === 'satoyamamoto' ? '刃口・佐藤・山本改定式' : '刃口・下水道協会式・自立地山用';
+  return { slurry: '泥水推進 修正式(I)', epb: '泥土圧推進 修正式(I)', deinoh: '泥濃推進' }[method] || method;
+}
+function reportFoSteps(res, Hc) {
+  const { Fo, fo, foDetail: d, method, stdSpec, Bs, phi_soil, phi_pipe, C, N, Nprime, adh, alpha_coef, beta_coef, q_total } = res;
+  const GL = n('soilWater') || 0;
+  const A = `π×(${fmt(Bs,3)}/2)²`;
+  if (method === 'blade' && d.formula === 'satoyamamoto') return calcSteps([
+    stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
+    stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(d.mu,4)),
+    stepRow("σ′ = α・q + 2W/{π²(Bc-t)}", `${fmt(alpha_coef,3)}×${fmt(q_total,2)}+2×${fmt(stdSpec.W,2)}/(π²×(${fmt(stdSpec.D,3)}-${fmt(stdSpec.t,3)}))`, `${fmt(d.sigma_prime,2)} kN/m²`),
+    stepRow('τa = β・Ca + σ′・μ′', `${fmt(beta_coef,3)}×${fmt(adh,1)}+${fmt(d.sigma_prime,2)}×${fmt(d.mu,4)}`, `${fmt(d.tau_a,2)} kN/m²`),
+    stepRow('f = π・Bc・τa', `π×${fmt(stdSpec.D,3)}×${fmt(d.tau_a,2)}`, `<b>${fmt(fo,3)} kN/m</b>`),
+  ]);
+  if (method === 'blade') return calcSteps([
+    stepRow('F0 = 10×1.32π×Bs×N′', `10×1.32×π×${fmt(Bs,3)}×${fmt(Nprime,1)}`, `<b>${fmt(Fo,1)} kN</b>`),
+    stepRow('μ′ = tan(φ/2)', `tan(${fmt(phi_soil,1)}°/2)`, fmt(d.mu,4)),
+    stepRow('τa = β・q・μ′+C′', `${fmt(beta_coef,2)}×${fmt(q_total,2)}×${fmt(d.mu,4)}+${fmt(adh,1)}`, `${fmt(d.tau_a,2)} kN/m²`),
+    stepRow('f = α・π・Bc・τa + W・μ′', `${fmt(alpha_coef,3)}×π×${fmt(stdSpec.D,3)}×${fmt(d.tau_a,2)}+${fmt(stdSpec.W,2)}×${fmt(d.mu,4)}`, `<b>${fmt(fo,3)} kN/m</b>`),
+  ]);
+  const foRows = [
+    stepRow('μ′ = tan(φ管体部/2)', `tan(${fmt(phi_pipe,1)}°/2)`, fmt(d.mu,4)),
+    stepRow("C′（N<10 は 8、N≧10 は 5）", `N=${fmt(N,1)}`, `${fmt(d.C_prime,1)} kN/m²`),
+    stepRow('fo = β×{(π・Bc・q + W)×μ′ + π・Bc・C′}', `${fmt(d.beta,2)}×{(π×${fmt(stdSpec.D,3)}×${fmt(q_total,2)}+${fmt(stdSpec.W,2)})×${fmt(d.mu,4)}+π×${fmt(stdSpec.D,3)}×${fmt(d.C_prime,1)}}`, `<b>${fmt(fo,3)} kN/m</b>`),
+  ];
+  if (method === 'slurry') return calcSteps([
+    stepRow('Pe = N×10（150〜500 に収める）', `${fmt(N,1)}×10`, `${fmt(d.Pe,1)} kN/m²`),
+    stepRow('Pw = (H−地下水位)×10 + 20', `(${fmt(Hc,2)}−${fmt(GL,2)})×10+20（負は0+20）`, `${fmt(d.Pw,1)} kN/m²`),
+    stepRow('F0 = (Pe+Pw)×π(Bs/2)²', `(${fmt(d.Pe,1)}+${fmt(d.Pw,1)})×${A}`, `<b>${fmt(Fo,1)} kN</b>`),
+    ...foRows,
+  ]);
+  if (method === 'epb') return calcSteps([
+    stepRow('Ka = tan²(45°−φ/2)', `tan²(45−${fmt(phi_soil,1)}/2)`, fmt(d.Ka,4)),
+    stepRow('Pe = Ka・q − 2C√Ka（負は0）', `${fmt(d.Ka,4)}×${fmt(q_total,2)}−2×${fmt(C,1)}×√${fmt(d.Ka,4)}`, `${fmt(d.Pe,1)} kN/m²`),
+    stepRow('Pw = (H−地下水位)×10（負は0）', `(${fmt(Hc,2)}−${fmt(GL,2)})×10`, `${fmt(d.Pw,1)} kN/m²`),
+    stepRow('F0 = (Pe+Pw)×π(Bs/2)²', `(${fmt(d.Pe,1)}+${fmt(d.Pw,1)})×${A}`, `<b>${fmt(Fo,1)} kN</b>`),
+    ...foRows,
+  ]);
+  if (method === 'deinoh') return calcSteps([
+    stepRow('Pe = N×4.0', `${fmt(N,1)}×4.0`, `${fmt(d.Pe,1)} kN/m²`),
+    stepRow('Pw = (H−地下水位)×10（負は0）', `(${fmt(Hc,2)}−${fmt(GL,2)})×10`, `${fmt(d.Pw,1)} kN/m²`),
+    stepRow('F0 = (Pe+Pw)×π(Bs/2)²', `(${fmt(d.Pe,1)}+${fmt(d.Pw,1)})×${A}`, `<b>${fmt(Fo,1)} kN</b>`),
+    stepRow('M/Bc（最大礫径÷管外径）', `${fmt(d.m_gravel,3)}/${fmt(stdSpec.D,3)}`, fmt(d.M_ratio,4)),
+    stepRow('f = {0.2+0.3(G/100)²+2.7(G/100)(M/Bc)²}×10', `{0.2+0.3×(${fmt(d.G,1)}/100)²+2.7×(${fmt(d.G,1)}/100)×${fmt(d.M_ratio,4)}²}×10`, `${fmt(d.f,3)} kN/m²`),
+    stepRow('fo = f・π・Bc', `${fmt(d.f,3)}×π×${fmt(stdSpec.D,3)}`, `<b>${fmt(fo,3)} kN/m</b>`),
+  ]);
+  return '';
 }
 
 function reportSection(no, title, bodyHtml) {
@@ -5422,6 +5551,581 @@ function printReport() {
     document.body.classList.remove('printing-report');
     document.title = originalTitle;
   }, 300);
+}
+
+// ══════════════════════════════════════
+//  102章: 計算書（推進力の設計）を Excel(.xlsx) で出力する。
+//  印刷用の計算書と同じ章立て（総合判定・1〜8）を1枚のシートに縦に並べる。
+//  入力値は黄色の数値セル、計算値は Excel の計算式で埋める（入力セルを書き換えると Excel 上で
+//  再計算される）。「代入」列も =TEXT() の連結式なので、入力を変えると代入の数字も追従する。
+//  区間別仕様・区間別土質で標準と異なる値になる区間だけは、式ではなくアプリの計算値を貼り付ける。
+//  ZIP・セル書式のヘルパーは測量タブのExcel出力（xlsx*）を共用し、スタイルだけ計算書用を別に持つ。
+// ══════════════════════════════════════
+const RS = { TEXT:1, NUM3:2, INT:3, HEAD:4, TITLE:5, SEC:6, NUM1:7, NUM2:8, NUM4:9, RESULT:10, NOTE:11, INPUT:12, OKNG:13, PLAIN:14 };
+const RS_FONT = '<name val="游ゴシック"/><family val="3"/><charset val="128"/>';
+const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+  + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+  + '<numFmts count="5"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="0"/>'
+  + '<numFmt numFmtId="166" formatCode="0.0"/><numFmt numFmtId="167" formatCode="0.00"/><numFmt numFmtId="168" formatCode="0.0000"/></numFmts>'
+  + `<fonts count="5"><font><sz val="10"/>${RS_FONT}</font><font><b/><sz val="10"/>${RS_FONT}</font>`
+  + `<font><b/><sz val="16"/>${RS_FONT}</font><font><b/><sz val="12"/>${RS_FONT}</font>`
+  + `<font><sz val="9"/><color rgb="FF595959"/>${RS_FONT}</font></fonts>`
+  + '<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'
+  + '<fill><patternFill patternType="solid"><fgColor rgb="FFD9E2F3"/><bgColor indexed="64"/></patternFill></fill>'
+  + '<fill><patternFill patternType="solid"><fgColor rgb="FFBDD7EE"/><bgColor indexed="64"/></patternFill></fill>'
+  + '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill>'
+  + '<fill><patternFill patternType="solid"><fgColor rgb="FFFCE4D6"/><bgColor indexed="64"/></patternFill></fill></fills>'
+  + '<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>'
+  + '<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right>'
+  + '<top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>'
+  + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
+  + '<cellXfs count="15">'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
+  + '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+  + '<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+  + '<xf numFmtId="0" fontId="3" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1"/>'
+  + '<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="167" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="168" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
+  + '<xf numFmtId="166" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+  + '<xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
+  + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '</cellXfs>'
+  + '<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>'
+  + '</styleSheet>';
+
+// 計算書シート用: 枠線非表示・A4縦1ページ幅に収める印刷設定・図（drawing）付き
+function reportSheetXml(sheet, hasDrawing) {
+  const body = xlsxSheetXml(sheet, hasDrawing ? 'rId1' : null);
+  const head = '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews>';
+  const tail = '<printOptions horizontalCentered="1"/>'
+    + '<pageMargins left="0.5" right="0.4" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>'
+    + '<pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/>';
+  return body
+    .replace(/(<worksheet[^>]*>)/, `$1${head}`)
+    .replace('</sheetData>', `</sheetData>${tail}`);
+}
+function xlsxPicAnchorXml(col, row, wPx, hPx, rId, id) {
+  const EMU = 9525;
+  return '<xdr:oneCellAnchor>'
+    + `<xdr:from><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>`
+    + `<xdr:ext cx="${Math.round(wPx * EMU)}" cy="${Math.round(hPx * EMU)}"/>`
+    + `<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="${id}" name="図${id}"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr>`
+    + `<xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>`
+    + '<xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor>';
+}
+async function canvasPngBytes(cv) {
+  const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+  return blob ? new Uint8Array(await blob.arrayBuffer()) : null;
+}
+async function svgPngBytes(svgStr, w, h, scale) {
+  const sized = svgStr.replace('<svg ', `<svg width="${w}" height="${h}" `);
+  const url = URL.createObjectURL(new Blob([sized], { type: 'image/svg+xml' }));
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const cv = document.createElement('canvas');
+    cv.width = w * scale; cv.height = h * scale;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    return await canvasPngBytes(cv);
+  } finally { URL.revokeObjectURL(url); }
+}
+
+async function exportReportXLSX() {
+  const res = lastCalcResult;
+  if (!res) { showToast('先に推進力計算を実行してください'); return; }
+  const {
+    F_total, Fo, fo, Fa, segments, q_total, foDetail, tz, Hmax, extCheck,
+    stdSpec, dia, Bs, gamma, phi_soil, C, N, Nprime, adh, alpha_coef, beta_coef, method,
+    curList, groundLen, launchDist, arrivalDist, total
+  } = res;
+
+  const sh = xlsxMakeSheet('推進力計算書');
+  xlsxSetColWidths(sh, { 1: 30, 2: 34, 3: 52, 4: 13, 5: 9, 6: 11, 7: 11, 8: 11 });
+  const T = (row, col, text, st) => xlsxStr(sh, row, col, text, st ?? RS.TEXT);
+  const NUMST = d => ({ 0: RS.INT, 1: RS.NUM1, 2: RS.NUM2, 3: RS.NUM3, 4: RS.NUM4 })[d] ?? RS.NUM3;
+  const inp = (row, col, x) => xlsxNum(sh, row, col, x, RS.INPUT);
+  const fx = (row, col, f, cached, d, st) => xlsxFormula(sh, row, col, f, cached, st ?? NUMST(d));
+  const fxs = (row, col, f, cached, st) => xlsxFormulaStr(sh, row, col, f, cached, st ?? RS.OKNG);
+  // 代入式: parts = ['文字', [セル番地, 小数桁, 値], ...] → ="文字"&TEXT(番地,"0.000")&...
+  // （キャッシュ文字列もJSで同じ桁数に整形して作るので、開いた直後も代入の数字が見える）
+  const subst = (row, col, parts) => {
+    const f = [], c = [];
+    parts.forEach(p => {
+      if (typeof p === 'string') { f.push('"' + p.replace(/"/g, '""') + '"'); c.push(p); }
+      else { const [a, d, x] = p; f.push(`TEXT(${a},"${d > 0 ? '0.' + '0'.repeat(d) : '0'}")`); c.push(Number(x).toFixed(d)); }
+    });
+    return xlsxFormulaStr(sh, row, col, f.join('&'), c.join(''), RS.TEXT);
+  };
+  const blank = (row, cols) => cols.forEach(c => T(row, c, ''));
+  let r = 1;
+  const sec = (no, title) => {
+    r++;
+    T(r, 1, `${no}　${title}`, RS.SEC); [2, 3, 4, 5].forEach(c => T(r, c, '', RS.SEC));
+    r++;
+  };
+  const hdr = labels => { labels.forEach((l, i) => T(r, i + 1, l, RS.HEAD)); r++; };
+  const note = text => { T(r, 1, text, RS.NOTE); r++; };
+  // 入力値の行: 項目｜記号｜（空）｜値（黄色）｜単位。値セルの番地を返す
+  const inRow = (label, sym, x, unit) => {
+    T(r, 1, label); T(r, 2, sym); T(r, 3, '');
+    const a = inp(r, 4, x); T(r, 5, unit); r++; return a;
+  };
+  // 計算式の行: 項目｜式｜代入｜値（計算式）｜単位
+  const calcRow = (label, expr, parts, f, cached, d, unit, st) => {
+    T(r, 1, label); T(r, 2, expr);
+    if (parts) subst(r, 3, parts); else T(r, 3, '');
+    const a = fx(r, 4, f, cached, d, st); T(r, 5, unit || ''); r++; return a;
+  };
+
+  const siteName = v('siteName') || '（現場名未入力）';
+  const siteSpan = v('siteSpan') || '';
+  const gradeLabel = (CATEGORY_GRADES[stdSpec.category] || []).find(g => g.value === stdSpec.grade)?.label || '';
+  const catLabel = CAT_LABEL[stdSpec.category] || stdSpec.category;
+  const jointSel = document.getElementById('pipeJointType');
+  const jointLabel = jointSel ? jointSel.options[jointSel.selectedIndex].text : '—';
+  const methodLabel = METHOD_LABEL[method] || method;
+
+  T(r, 1, '推進力の設計計算書', RS.TITLE); r++;
+  T(r, 1, `${siteName}${siteSpan ? '　スパン: ' + siteSpan : ''}　／　φ${dia} ${catLabel}${gradeLabel ? ' ' + gradeLabel : ''}　／　${methodLabel}`, RS.PLAIN); r++;
+  note(`MYcurve 推進力設計 版 ${APP_BUILD}（${APP_BUILD_DATE}）　出力日 ${new Date().toISOString().slice(0, 10)}${calcInputsDirty ? '　※計算後に入力が変更されています（再計算してから出力してください）' : ''}`);
+  note('黄色のセル＝入力値（書き換えると Excel 上で再計算されます）。白のセル＝計算式。「代入」列も式で、入力に追従します。');
+  // 画面の「⚠ 入力の確認」をそのまま注記として載せる
+  const warnEl = document.getElementById('calcWarn');
+  if (warnEl && warnEl.style.display !== 'none') {
+    warnEl.querySelectorAll('li').forEach(li => note('⚠ ' + li.textContent.trim()));
+  }
+
+  // 総合判定は最後に埋める（参照先のセルが後ろで決まるため、行だけ確保しておく）
+  r++;
+  const verdictRow = r;
+  r += 6;
+
+  // ── 1. 管の仕様 ──
+  sec(1, '管の仕様');
+  hdr(['項目', '記号', '', '値', '単位']);
+  inRow('呼び径 Dc', 'Dc', dia, 'mm');
+  const aBc = inRow('管外径', 'Bc', stdSpec.D, 'm');
+  const aDi = inRow('内径', 'Di', stdSpec.Di, 'm');
+  const aT = inRow('管厚', 't', stdSpec.t, 'm');
+  const aW = inRow('管重量', 'W', stdSpec.W, 'kN/m');
+  const aBs = inRow('先導体外径', 'Bs', Bs, 'm');
+  const aLp = inRow('有効長', 'l′', stdSpec.lp, 'm');
+  const aP = inRow('外圧強さ（ひび割れ荷重）', 'P', stdSpec.Pext, 'kN/m');
+  T(r, 1, '継手種別'); T(r, 2, ''); T(r, 3, jointLabel); blank(r, [4, 5]); r++;
+  T(r, 1, '適用管種'); T(r, 2, ''); T(r, 3, `${catLabel}${gradeLabel ? '　' + gradeLabel : ''}（推進工法: ${methodLabel}）`); blank(r, [4, 5]); r++;
+
+  // ── 2. 土質条件 ──
+  sec(2, '土質条件');
+  hdr(['項目', '記号', '', '値', '単位']);
+  T(r, 1, '主な土質区分'); T(r, 2, ''); T(r, 3, SOIL_TYPE_LABEL[v('soilType')] || v('soilType')); blank(r, [4, 5]); r++;
+  const aGam = inRow('単位体積重量', 'γ', gamma, 'kN/m³');
+  const aPhi = inRow('内部摩擦角', 'φ', phi_soil, '°');
+  const aC = inRow('粘着力', 'C', C, 'kN/m²');
+  const aAdh = inRow('付着力', 'C′', adh, 'kN/m²');
+  const aNv = inRow('標準貫入試験 N値', 'N', N, '—');
+  const aNp = inRow('貫入抵抗設計値', 'N′', Nprime, '—');
+  const aAlpha = inRow('周面抵抗係数', 'α', alpha_coef, '—');
+  const aBeta = inRow('周面抵抗係数', 'β', beta_coef, '—');
+  T(r, 1, '周面抵抗の算定式'); T(r, 2, '');
+  T(r, 3, foDetail.formula === 'satoyamamoto' ? '佐藤・山本改定式' : foDetail.formula === 'kyokai' ? '下水道協会式（自立地山用）' : methodLabel + 'の算定式');
+  blank(r, [4, 5]); r++;
+  if (soilZones.length) note('※区間別土質が設定されています。区間ごとの値が上と異なる区間は、6章で f を値貼り付けにしています。');
+
+  // ── 3. 施工条件 ──
+  sec(3, '施工条件');
+  hdr(['項目', '記号・式', '代入', '値', '単位']);
+  const aHmin = inRow('土被り（最小）', 'Hmin', res.Hmin, 'm');
+  const aHmax = inRow('土被り（最大）', 'Hmax', Hmax, 'm');
+  const Hc = res.H ?? Hmax;
+  const aH = calcRow('推進力計算に用いる土被り', 'H（推進力が大きくなる方）', null,
+    `${Hc === res.Hmin && res.Hmin < Hmax ? aHmin : aHmax}`, Hc, 2, 'm');
+  // 100章: 活荷重を求める土被り（「活荷重を計算する土被り」が H最小 なら H最小、H最大 なら上の H と同じ）
+  const HlC = res.tz && res.tz.Hlive > 0 ? res.tz.Hlive : Hc;
+  const aHl = HlC === Hc ? aH : calcRow('活荷重を求める土被り', 'H（活荷重、H最小）', null, `${aHmin}`, HlC, 2, 'm');
+  const aTotal = inRow('路線長', 'Ltotal', total, 'm');
+  const aLaunch = inRow('発進側 立坑内（除外）', '', launchDist, 'm');
+  const aArrival = inRow('到達側 立坑内（除外）', '', arrivalDist, 'm');
+  const aL = calcRow('推進延長（地山内）', 'L = Ltotal − 発進側 − 到達側',
+    [[aTotal, 2, total], '−', [aLaunch, 2, launchDist], '−', [aArrival, 2, arrivalDist]],
+    `MAX(0,${aTotal}-${aLaunch}-${aArrival})`, groundLen, 3, 'm');
+  r++;
+  hdr(['曲線', 'R(m)', '方向', 'IA(°)', 'CL(m)']);
+  const curveCells = curList.map((c, i) => {
+    const IA = (c.deg || 0) + (c.min || 0) / 60 + (c.sec || 0) / 3600;
+    T(r, 1, `第${i + 1}曲線`);
+    const aR = xlsxNum(sh, r, 2, c.R, RS.INPUT);
+    T(r, 3, c.dir === 'R' ? '右' : '左');
+    xlsxNum(sh, r, 4, IA, RS.INPUT);
+    const aCL = xlsxNum(sh, r, 5, c.CL, RS.INPUT);
+    r++;
+    return { aR, aCL };
+  });
+  if (!curList.length) { T(r, 1, '曲線区間なし（直線推進）'); blank(r, [2, 3, 4, 5]); r++; }
+  note(`路線長 ${fmt(total, 2)}m のうち、発進側 ${fmt(launchDist, 2)}m・到達側 ${fmt(arrivalDist, 2)}m は立坑内（地山摩擦が生じない区間）として除外している。`);
+
+  // 図の差し込み（線形の平面図）。計算書カード内の canvas をそのまま PNG にする
+  const images = [];
+  const reserveImage = async (bytesPromise, wPx, hPx) => {
+    const bytes = await bytesPromise.catch(() => null);
+    if (!bytes) return;
+    images.push({ bytes, row: r - 1, wPx, hPx });
+    r += Math.ceil(hPx / 20) + 1;
+  };
+  const visCv = document.getElementById('reportAlignmentVisual');
+  if (visCv) {
+    setupAlignmentVisualInteraction('reportAlignmentVisual');
+    drawAlignmentVisual('reportAlignmentVisual');
+    if (visCv.width > 0 && visCv.height > 0) {
+      const w = 520, h = Math.round(w * visCv.height / visCv.width);
+      await reserveImage(canvasPngBytes(visCv), w, h);
+    }
+  }
+
+  // ── 4. 管にかかる等分布荷重 ──
+  sec(4, '管にかかる等分布荷重');
+  hdr(['項目', '記号・式', '代入', '値', '単位']);
+  const aK = inRow('テルツァーギの側方土圧係数', 'K', tz.k0, '—');
+  const aPw = inRow('T-25 後輪荷重', 'P', tz.P, 'kN');
+  const aA = inRow('タイヤ接地長', 'a', tz.a, 'm');
+  const aCw = inRow('車体占有幅', 'c', tz.c, 'm');
+  const aBl = inRow('断面力の低減係数', 'β', tz.betaLive, '—');
+  const aBt = calcRow('トンネル直径', 'Bt = Bc + 0.1', [[aBc, 3, stdSpec.D], '+0.1'], `${aBc}+0.1`, tz.Bt, 3, 'm');
+  const aSlip = calcRow('すべり角', '45° − φ/2', ['45−', [aPhi, 1, phi_soil], '/2'], `45-${aPhi}/2`, tz.slipHalfDeg, 3, '°');
+  const aBe = calcRow('緩み幅', 'Be = Bt(1+sin(45°−φ/2))/cos(45°−φ/2)',
+    [[aBt, 3, tz.Bt], '×(1+sin', [aSlip, 2, tz.slipHalfDeg], '°)/cos', [aSlip, 2, tz.slipHalfDeg], '°'],
+    `${aBt}*(1+SIN(RADIANS(${aSlip})))/COS(RADIANS(${aSlip}))`, tz.Be, 3, 'm');
+  const aMu = calcRow('土の摩擦係数', 'μ = tanφ', ['tan', [aPhi, 1, phi_soil], '°'], `TAN(RADIANS(${aPhi}))`, tz.mu, 4, '—');
+  const aCe = calcRow('サイロ係数', 'Ce = (Be/2Kμ)(1−e^(−2KμH/Be))',
+    ['(', [aBe, 3, tz.Be], '/(2×', [aK, 2, tz.k0], '×', [aMu, 4, tz.mu], '))×(1−e^(−2×', [aK, 2, tz.k0], '×', [aMu, 4, tz.mu], '×', [aH, 2, Hc], '/', [aBe, 3, tz.Be], '))'],
+    `IF(${aK}*${aMu}<1E-9,${aH},${aBe}/(2*${aK}*${aMu})*(1-EXP(-2*${aK}*${aMu}*${aH}/${aBe})))`, tz.Ce, 3, '—');
+  calcRow('（参考）粘着力による支え', '2C/Be', ['2×', [aC, 1, C], '/', [aBe, 3, tz.Be]], `2*${aC}/${aBe}`, 2 * C / tz.Be, 1, 'kN/m³');
+  const aWv = calcRow('鉛直土圧', 'w = (γ − 2C/Be)・Ce（負は0）',
+    ['(', [aGam, 1, gamma], '−2×', [aC, 1, C], '/', [aBe, 3, tz.Be], ')×', [aCe, 3, tz.Ce]],
+    `MAX(0,(${aGam}-2*${aC}/${aBe})*${aCe})`, tz.q, 2, 'kN/m²');
+  const aI = calcRow('衝撃係数', 'i = 0.65 − 0.1H（0≤i≤0.5）', ['0.65−0.1×', [aHl, 2, HlC]],
+    `MIN(0.5,MAX(0,0.65-0.1*${aHl}))`, tz.impactI, 3, '—');
+  const aPl = calcRow('活荷重（T-25）', 'p = 2P(1+i)β/(c(a+2H))',
+    ['2×', [aPw, 0, tz.P], '×(1+', [aI, 3, tz.impactI], ')×', [aBl, 2, tz.betaLive], '/(', [aCw, 2, tz.c], '×(', [aA, 2, tz.a], '+2×', [aHl, 2, HlC], '))'],
+    `2*${aPw}*(1+${aI})*${aBl}/(${aCw}*(${aA}+2*${aHl}))`, tz.p_live, 2, 'kN/m²');
+  const aQ = calcRow('等分布荷重', 'q = w + p', [[aWv, 2, tz.q], '+', [aPl, 2, tz.p_live]],
+    `${aWv}+${aPl}`, q_total, 2, 'kN/m²', RS.RESULT);
+  r++;
+  await reserveImage(svgPngBytes(svgLoadCrossSection(stdSpec.D, tz, phi_soil, Hc), 760, 340, 2), 520, Math.round(520 * 340 / 760));
+
+  // ── 5. 推進力の計算 ──
+  sec(5, '推進力の計算');
+  hdr(['項目', '記号・式', '代入', '値', '単位']);
+  let aFo, aFoPer;
+  if (method === 'blade') {
+    aFo = calcRow('先端抵抗', 'F0 = 10×1.32π×Bs×N′', ['10×1.32×π×', [aBs, 3, Bs], '×', [aNp, 1, Nprime]],
+      `10*1.32*PI()*${aBs}*${aNp}`, Fo, 1, 'kN', RS.RESULT);
+    const aMuP = calcRow('管と土の摩擦係数', 'μ′ = tan(φ/2)', ['tan(', [aPhi, 1, phi_soil], '°/2)'],
+      `TAN(RADIANS(${aPhi}/2))`, foDetail.mu, 4, '—');
+    if (foDetail.formula === 'satoyamamoto') {
+      const aSig = calcRow('有効垂直応力', "σ′ = α・q + 2W/{π²(Bc−t)}",
+        [[aAlpha, 3, alpha_coef], '×', [aQ, 2, q_total], '+2×', [aW, 2, stdSpec.W], '/(π²×(', [aBc, 3, stdSpec.D], '−', [aT, 3, stdSpec.t], '))'],
+        `${aAlpha}*${aQ}+2*${aW}/(PI()^2*(${aBc}-${aT}))`, foDetail.sigma_prime, 2, 'kN/m²');
+      const aTau = calcRow('せん断抵抗', 'τa = β・Ca + σ′・μ′',
+        [[aBeta, 3, beta_coef], '×', [aAdh, 1, adh], '+', [aSig, 2, foDetail.sigma_prime], '×', [aMuP, 4, foDetail.mu]],
+        `${aBeta}*${aAdh}+${aSig}*${aMuP}`, foDetail.tau_a, 2, 'kN/m²');
+      aFoPer = calcRow('推進1m当たり抵抗', 'f = π・Bc・τa', ['π×', [aBc, 3, stdSpec.D], '×', [aTau, 2, foDetail.tau_a]],
+        `PI()*${aBc}*${aTau}`, fo, 3, 'kN/m', RS.RESULT);
+    } else {
+      const aTau = calcRow('せん断抵抗', 'τa = β・q・μ′ + C′',
+        [[aBeta, 2, beta_coef], '×', [aQ, 2, q_total], '×', [aMuP, 4, foDetail.mu], '+', [aAdh, 1, adh]],
+        `${aBeta}*${aQ}*${aMuP}+${aAdh}`, foDetail.tau_a, 2, 'kN/m²');
+      aFoPer = calcRow('推進1m当たり抵抗', 'f = α・π・Bc・τa + W・μ′',
+        [[aAlpha, 3, alpha_coef], '×π×', [aBc, 3, stdSpec.D], '×', [aTau, 2, foDetail.tau_a], '+', [aW, 2, stdSpec.W], '×', [aMuP, 4, foDetail.mu]],
+        `${aAlpha}*PI()*${aBc}*${aTau}+${aW}*${aMuP}`, fo, 3, 'kN/m', RS.RESULT);
+    }
+  } else {
+    // 105章: 泥水・泥土圧・泥濃も calcFoFo() と同じ式を Excel の計算式で展開する
+    const d = foDetail;
+    const aGL = inRow('地下水位（地表から）', 'GL', n('soilWater') || 0, 'm');
+    const aA0 = calcRow('先導体断面積', 'A = π(Bs/2)²', ['π×(', [aBs, 3, Bs], '/2)²'], `PI()*(${aBs}/2)^2`, Math.PI * Math.pow(Bs / 2, 2), 4, 'm²');
+    let aPe, aPw;
+    if (method === 'slurry') {
+      aPe = calcRow('切羽の土圧', 'Pe = N×10（150〜500 に収める）', [[aNv, 1, N], '×10'], `MIN(MAX(${aNv}*10,150),500)`, d.Pe, 1, 'kN/m²');
+      aPw = calcRow('泥水圧', 'Pw = (H−GL)×10 + 20（H−GL の負は0）', ['(', [aH, 2, Hc], '−', [aGL, 2, n('soilWater') || 0], ')×10+20'], `MAX(0,${aH}-${aGL})*10+20`, d.Pw, 1, 'kN/m²');
+    } else if (method === 'epb') {
+      const aKa5 = calcRow('主働土圧係数', 'Ka = tan²(45° − φ/2)', ['tan²(45−', [aPhi, 1, phi_soil], '/2)'], `TAN(RADIANS(45-${aPhi}/2))^2`, d.Ka, 4, '—');
+      aPe = calcRow('切羽の土圧', 'Pe = Ka・q − 2C√Ka（負は0）', [[aKa5, 4, d.Ka], '×', [aQ, 2, q_total], '−2×', [aC, 1, C], '×√', [aKa5, 4, d.Ka]],
+        `MAX(0,${aKa5}*${aQ}-2*${aC}*SQRT(${aKa5}))`, d.Pe, 1, 'kN/m²');
+      aPw = calcRow('水圧', 'Pw = (H−GL)×10（負は0）', ['(', [aH, 2, Hc], '−', [aGL, 2, n('soilWater') || 0], ')×10'], `MAX(0,${aH}-${aGL})*10`, d.Pw, 1, 'kN/m²');
+    } else {
+      aPe = calcRow('切羽の土圧', 'Pe = N×4.0', [[aNv, 1, N], '×4.0'], `${aNv}*4`, d.Pe, 1, 'kN/m²');
+      aPw = calcRow('水圧', 'Pw = (H−GL)×10（負は0）', ['(', [aH, 2, Hc], '−', [aGL, 2, n('soilWater') || 0], ')×10'], `MAX(0,${aH}-${aGL})*10`, d.Pw, 1, 'kN/m²');
+    }
+    aFo = calcRow('先端抵抗', 'F0 = (Pe + Pw)×A', ['(', [aPe, 1, d.Pe], '+', [aPw, 1, d.Pw], ')×', [aA0, 4, Math.PI * Math.pow(Bs / 2, 2)]],
+      `(${aPe}+${aPw})*${aA0}`, Fo, 1, 'kN', RS.RESULT);
+    if (method === 'deinoh') {
+      const aG = inRow('礫率', 'G', d.G, '%');
+      const aMg = inRow('最大礫径', 'M', d.m_gravel, 'm');
+      const aMr = calcRow('礫径比', 'M/Bc', [[aMg, 3, d.m_gravel], '/', [aBc, 3, stdSpec.D]], `${aMg}/${aBc}`, d.M_ratio, 4, '—');
+      const aF5 = calcRow('単位周面抵抗', 'f = {0.2+0.3(G/100)²+2.7(G/100)(M/Bc)²}×10',
+        ['{0.2+0.3×(', [aG, 1, d.G], '/100)²+2.7×(', [aG, 1, d.G], '/100)×', [aMr, 4, d.M_ratio], '²}×10'],
+        `(0.2+0.3*(${aG}/100)^2+2.7*(${aG}/100)*${aMr}^2)*10`, d.f, 3, 'kN/m²');
+      aFoPer = calcRow('推進1m当たり抵抗', 'fo = f・π・Bc', [[aF5, 3, d.f], '×π×', [aBc, 3, stdSpec.D]], `${aF5}*PI()*${aBc}`, fo, 3, 'kN/m', RS.RESULT);
+    } else {
+      const aPp = inRow('内部摩擦角（管体部）', 'φ管', res.phi_pipe, '°');
+      const aMu5 = calcRow('管と土の摩擦係数', 'μ′ = tan(φ管/2)', ['tan(', [aPp, 1, res.phi_pipe], '°/2)'], `TAN(RADIANS(${aPp}/2))`, d.mu, 4, '—');
+      const aCp = calcRow('付着力（工法の標準値）', 'C′ = N<10 なら 8、N≧10 なら 5', ['N=', [aNv, 1, N]], `IF(${aNv}<10,8,5)`, d.C_prime, 1, 'kN/m²');
+      const aBr = inRow('推進力低減係数（土質別標準値）', 'β', d.beta, '—');
+      aFoPer = calcRow('推進1m当たり抵抗', 'fo = β×{(π・Bc・q + W)×μ′ + π・Bc・C′}',
+        [[aBr, 2, d.beta], '×{(π×', [aBc, 3, stdSpec.D], '×', [aQ, 2, q_total], '+', [aW, 2, stdSpec.W], ')×', [aMu5, 4, d.mu], '+π×', [aBc, 3, stdSpec.D], '×', [aCp, 1, d.C_prime], '}'],
+        `${aBr}*((PI()*${aBc}*${aQ}+${aW})*${aMu5}+PI()*${aBc}*${aCp})`, fo, 3, 'kN/m', RS.RESULT);
+    }
+  }
+
+  // ── 6. 区間推進力 ──
+  sec(6, '区間推進力');
+  note('曲線1本あたりの折れ角 θx と推進抵抗増加率 Kx（=1/(cosθx−k・sinθx)、k=tan(max(φ,15°)/2)）。管本数 nx 本を通過するたびに Kx が複利で乗算される。');
+  const same = (a, b) => Math.abs(a - b) < 1e-9;
+  const curveSegs = segments.filter(s => s.type === 'curve');
+  const curveRef = {};
+  curveSegs.forEach(s => {
+    const cc = curveCells[s.curveNo - 1];
+    hdr([`${s.label}`, '記号・式', '代入', '値', '単位']);
+    const aRr = calcRow('曲線半径', 'R', null, `${cc.aR}`, s.R, 3, 'm');
+    const aD = same(s.spec.D, stdSpec.D) ? calcRow('管外径', 'Bc', null, `${aBc}`, s.spec.D, 3, 'm') : inRow('管外径（区間別仕様）', 'Bc', s.spec.D, 'm');
+    const aL1 = same(s.spec.lp, stdSpec.lp) ? calcRow('有効長', 'l′', null, `${aLp}`, s.spec.lp, 3, 'm') : inRow('有効長（区間別仕様）', 'l′', s.spec.lp, 'm');
+    const phiK = Math.atan(s.kConst) * 2 * 180 / Math.PI; // k から逆算した φ（15°下限適用後）
+    const aPh = s.kSrc === 'input' ? null : same(Math.max(phi_soil, 15), phiK) ? calcRow('内部摩擦角', 'φ', null, `${aPhi}`, phi_soil, 1, '°')
+      : inRow('内部摩擦角（区間別土質）', 'φ', phiK, '°');
+    const aTh = calcRow('折れ角', 'θx = 2・sin⁻¹(l′/(2(R−Bc/2)))',
+      ['2×sin⁻¹(', [aL1, 3, s.spec.lp], '/(2×(', [aRr, 3, s.R], '−', [aD, 3, s.spec.D], '/2)))'],
+      `DEGREES(2*ASIN(${aL1}/(2*(${aRr}-${aD}/2))))`, s.alpha_deg, 4, '°');
+    // 100章: k を入力（ヒューム管設計施工要覧）にしたときは式ではなく入力セル
+    const aKc = s.kSrc === 'input' ? inRow('係数（ヒューム管設計施工要覧の入力値）', 'k', s.kConst, '—')
+      : calcRow('係数', 'k = tan(max(φ,15°)/2)', ['tan(max(', [aPh, 1, phi_soil], '°,15°)/2)'],
+        `TAN(RADIANS(MAX(${aPh},15)/2))`, s.kConst, 4, '—');
+    const aKx = calcRow('推進抵抗増加率', 'Kx = 1/(cosθx − k・sinθx)',
+      ['1/(cos', [aTh, 4, s.alpha_deg], '°−', [aKc, 4, s.kConst], '×sin', [aTh, 4, s.alpha_deg], '°)'],
+      `1/(COS(RADIANS(${aTh}))-${aKc}*SIN(RADIANS(${aTh})))`, s.K, 4, '—');
+    const aOpen = inRow(`目地開口長（${s.openSrc === 'jk' ? '軸力検証の結果' : 'S4−つぶれ代'}）`, 'e', s.openMm || 0, 'mm');
+    const aIn = calcRow('内側弧長', 'CL・(1 − Bc/2R)', [[cc.aCL, 3, s.L], '×(1−', [aD, 3, s.spec.D], '/(2×', [aRr, 1, s.R], '))'],
+      `${cc.aCL}*(1-${aD}/(2*${aRr}))`, curveInnerArcM(s.L, s.R, s.spec.D), 3, 'm');
+    const aN = calcRow('管本数', 'nx = 内側弧長 ÷ (l′ + e/1000)（四捨五入）',
+      [[aIn, 3, curveInnerArcM(s.L, s.R, s.spec.D)], '÷(', [aL1, 3, s.spec.lp], '+', [aOpen, 1, s.openMm || 0], '/1000)'],
+      `MAX(1,ROUND(${aIn}/(${aL1}+${aOpen}/1000),0))`, s.n, 0, '本');
+    const aLam = calcRow('抵抗比率', 'λx = (Kx^(nx+1) − Kx)/(nx(Kx − 1))',
+      ['(', [aKx, 4, s.K], '^', [aN, 0, s.n], '+1−', [aKx, 4, s.K], ')/(', [aN, 0, s.n], '×(', [aKx, 4, s.K], '−1))'],
+      `IF(${aN}>1,(${aKx}^(${aN}+1)-${aKx})/(${aN}*(${aKx}-1)),${aKx})`, s.lambda, 4, '—');
+    curveRef[s.curveNo] = { aKx, aN, aLam, aCL: cc.aCL };
+    r++;
+  });
+
+  hdr(['区間（到達側→発進側の積算順）', '計算式', '代入', '累計F(kN)', '単位', 'L(m)', 'f(kN/m)', 'ΔF(kN)']);
+  let prevA = null, prevF = 0;
+  segments.forEach(s => {
+    const row = r;
+    const prevRef = prevA || '0';
+    const prevPart = prevA ? [prevA, 1, prevF] : '0';
+    let aCum;
+    if (s.type === 'tip') {
+      T(row, 1, s.label); T(row, 2, 'F = F前 + F0');
+      subst(row, 3, [prevPart, '+', [aFo, 1, Fo]]);
+      aCum = fx(row, 4, `${prevRef}+${aFo}`, s.F_cum, 1);
+      T(row, 6, '—'); T(row, 7, '—');
+    } else {
+      const aSegL = s.type === 'curve' ? xlsxFormula(sh, row, 6, `${curveRef[s.curveNo].aCL}`, s.L, NUMST(3)) : xlsxNum(sh, row, 6, s.L, RS.INPUT);
+      const aF = same(s.fo, fo) ? xlsxFormula(sh, row, 7, `${aFoPer}`, s.fo, NUMST(3)) : xlsxNum(sh, row, 7, s.fo, RS.INPUT);
+      T(row, 1, s.label + (same(s.fo, fo) ? '' : '（区間別の f）'));
+      if (s.type === 'straight') {
+        T(row, 2, 'F = F前 + f・L');
+        subst(row, 3, [prevPart, '+', [aF, 3, s.fo], '×', [aSegL, 3, s.L]]);
+        aCum = fx(row, 4, `${prevRef}+${aF}*${aSegL}`, s.F_cum, 1);
+      } else {
+        const c = curveRef[s.curveNo];
+        T(row, 2, 'F = F前・Kx^nx + λx・f・CL');
+        subst(row, 3, [prevPart, '×', [c.aKx, 4, s.K], '^', [c.aN, 0, s.n], '+', [c.aLam, 4, s.lambda], '×', [aF, 3, s.fo], '×', [aSegL, 3, s.L]]);
+        aCum = fx(row, 4, `${prevRef}*${c.aKx}^${c.aN}+${c.aLam}*${aF}*${aSegL}`, s.F_cum, 1);
+      }
+    }
+    T(row, 5, 'kN');
+    fx(row, 8, `${aCum}-${prevRef}`, s.F_cum - prevF, 1);
+    prevA = aCum; prevF = s.F_cum; r++;
+  });
+  const aSumL = (() => {
+    T(r, 1, '（検算）区間長の合計'); T(r, 2, 'ΣL'); T(r, 3, '推進延長 L と一致すること');
+    const firstRow = r - segments.length;
+    const a = fx(r, 4, `SUM(F${firstRow}:F${r - 1})`, segments.reduce((t, s) => t + (s.L || 0), 0), 3);
+    T(r, 5, 'm'); r++; return a;
+  })();
+  fxs(r, 4, `IF(ABS(${aSumL}-${aL})<0.001,"一致","不一致")`, Math.abs(segments.reduce((t, s) => t + (s.L || 0), 0) - groundLen) < 0.001 ? '一致' : '不一致');
+  T(r, 1, '（検算）ΣL と L の比較'); T(r, 2, ''); T(r, 3, ''); T(r, 5, ''); r++;
+  T(r, 1, '総推力'); T(r, 2, 'F'); T(r, 3, '');
+  const aFt = fx(r, 4, `${prevA}`, F_total, 1, RS.RESULT); T(r, 5, 'kN'); r++;
+
+  // ── 7. 管の許容耐荷力の検討 ──
+  sec(7, '管の許容耐荷力の検討');
+  let aFr = null;
+  if (stdSpec.category === 'hume') {
+    const Fr50 = (PIPE_DB.hume['1shu'][dia] || {}).Fa;
+    const Fr70 = (PIPE_DB.hume['2shu'][dia] || {}).Fa;
+    hdr(['強度種別', 'σmean(kN/m²)', 'Fr = 1000σmean×Ae', 'Fr(kN)', '判定 F≤Fr']);
+    let a50 = null;
+    [['1種（50N）', 13000, Fr50], ['2種（70N）', 17500, Fr70], ['3種（90N）', 22500, Fr50 != null ? Fr50 * 22500 / 13000 : null]].forEach((x, i) => {
+      T(r, 1, x[0] + (x[2] === Fa ? '　← 採用' : '')); xlsxNum(sh, r, 2, x[1], RS.INT);
+      let a;
+      if (x[2] == null) { T(r, 3, '規格表に該当なし'); T(r, 4, '—'); T(r, 5, '—'); r++; return; }
+      if (i === 2 && a50) { T(r, 3, '1種の Fr × 22500/13000'); a = fx(r, 4, `${a50}*22500/13000`, x[2], 0); }
+      else { T(r, 3, '規格表（JSWAS A-2）の値'); a = xlsxNum(sh, r, 4, x[2], RS.INPUT); }
+      if (i === 0) a50 = a;
+      if (x[2] === Fa) aFr = a;
+      fxs(r, 5, `IF(${aFt}<=${a},"OK","NG")`, F_total <= x[2] ? 'OK' : 'NG');
+      r++;
+    });
+    note(`現在選択中の種別は ${gradeLabel}（Fr=${fmt(Fa, 0)}kN）。表中で条件を満たす最も安価な種別を採用すること。`);
+  }
+  if (!aFr) {
+    hdr(['項目', '記号', '', '値', '単位']);
+    aFr = inRow('許容耐荷力', 'Fr（=Fa）', Fa, 'kN');
+  }
+
+  // ── 8. 推進設備の検討（元押ジャッキ） ──
+  sec(8, '推進設備の検討（元押ジャッキ）');
+  hdr(['項目', '記号・式', '代入', '値', '単位']);
+  const jackCap = n('jackCapUnit') || 0, jackCnt = n('jackCount') || 0, jackTotal = jackCap * jackCnt;
+  const aJc = inRow('ジャッキ能力（1本）', '', jackCap, 'kN');
+  const aJn = inRow('ジャッキ本数', '', jackCnt, '本');
+  const aJt = calcRow('ジャッキ総能力', '能力 × 本数', [[aJc, 0, jackCap], '×', [aJn, 0, jackCnt]], `${aJc}*${aJn}`, jackTotal, 0, 'kN');
+  calcRow('使用率', 'F ÷ 総能力 × 100', [[aFt, 1, F_total], '÷', [aJt, 0, jackTotal], '×100'],
+    `IF(${aJt}>0,${aFt}/${aJt}*100,0)`, jackTotal > 0 ? F_total / jackTotal * 100 : 0, 1, '%');
+
+  // ── 9. 外圧耐荷力の検討（補足：総合判定②の内訳） ──
+  sec(9, '外圧耐荷力の検討（総合判定②の内訳）');
+  hdr(['項目', '記号・式', '代入', '値', '単位']);
+  // 外圧照査の q は H最小・H最大の大きい方（104章）。推進力と同じ土被りなら 4章の q を参照する
+  const qExt = res.q_ext ?? q_total;
+  const aQx = same(qExt, q_total) ? aQ : inRow(`外圧照査に用いる q（H=${res.Hext} の値）`, 'q', qExt, 'kN/m²');
+  const aR0 = calcRow('管厚中心半径', 'r = Di/2 + t/2', [[aDi, 3, stdSpec.Di], '/2+', [aT, 3, stdSpec.t], '/2'], `${aDi}/2+${aT}/2`, extCheck.r, 3, 'm');
+  const aM = calcRow('等分布荷重による曲げモーメント', 'M = 0.275・q・r²', ['0.275×', [aQx, 2, qExt], '×', [aR0, 3, extCheck.r], '²'],
+    `0.275*${aQx}*${aR0}^2`, extCheck.M, 3, 'kN·m/m');
+  const aMr = calcRow('管の抵抗モーメント', 'Mr = 0.318・P・r + 0.239・W・r',
+    ['0.318×', [aP, 1, stdSpec.Pext], '×', [aR0, 3, extCheck.r], '+0.239×', [aW, 2, stdSpec.W], '×', [aR0, 3, extCheck.r]],
+    `0.318*${aP}*${aR0}+0.239*${aW}*${aR0}`, extCheck.Mr, 3, 'kN·m/m');
+  const aRatio = calcRow('安全率', 'Mr / M（≧1.2）', [[aMr, 3, extCheck.Mr], '÷', [aM, 3, extCheck.M]],
+    `IF(${aM}>0,${aMr}/${aM},999)`, extCheck.ratio, 2, '—');
+
+  // ── 10. 曲線部の側方土圧（参考計算、103章） ──
+  const lat = res.lat;
+  if (lat) {
+    sec(10, '曲線部の側方土圧（参考計算）');
+    note('p = K・σv（σv = γ・h、地表からの全土かぶり重量）。K は Ka〜K0 の間で工学的に判断して採用。地下水圧は含まない。qa との比較は参考で、総合判定には含めない。');
+    hdr(['項目', '記号・式', '代入', '値', '単位']);
+    const aKa = calcRow('主働土圧係数', 'Ka = tan²(45° − φ/2)', ['tan²(45−', [aPhi, 1, phi_soil], '/2)'],
+      `TAN(RADIANS(45-${aPhi}/2))^2`, lat.Ka, 4, '—');
+    const aK0 = calcRow('静止土圧係数', 'K0 = 1 − sinφ', ['1−sin', [aPhi, 1, phi_soil], '°'],
+      `1-SIN(RADIANS(${aPhi}))`, lat.K0, 4, '—');
+    let aKL;
+    if (lat.mode === 'custom') aKL = inRow('採用する側方土圧係数（任意の値）', 'K', lat.K, '—');
+    else {
+      const f = lat.mode === 'ka' ? `${aKa}` : lat.mode === 'mid' ? `(${aKa}+${aK0})/2` : `${aK0}`;
+      aKL = calcRow(`採用する側方土圧係数（${LAT_K_LABEL[lat.mode]}）`, 'K', null, f, lat.K, 4, '—');
+    }
+    let aPc = null;
+    lat.rows.forEach((x, i) => {
+      const off = ['0', `${aBc}/2`, `${aBc}`][i];
+      const offTxt = ['', '+Bc/2', '+Bc'][i];
+      const aHh = calcRow(`${x.name}の深さ`, `h = Hmax${offTxt}`, [[aHmax, 2, Hmax], i ? '+' : '', ...(i ? [[aBc, 3, stdSpec.D], i === 1 ? '/2' : ''] : [])],
+        `${aHmax}+${off}`, x.h, 3, 'm');
+      const aSv = calcRow(`${x.name}の鉛直土圧`, 'σv = γ・h', [[aGam, 1, gamma], '×', [aHh, 3, x.h]], `${aGam}*${aHh}`, x.sv, 2, 'kN/m²');
+      const a = calcRow(`${x.name}の側方土圧`, 'p = K・σv', [[aKL, 4, lat.K], '×', [aSv, 2, x.sv]], `${aKL}*${aSv}`, x.p, 2, 'kN/m²', i === 1 ? RS.RESULT : undefined);
+      if (i === 1) {
+        aPc = a;
+        calcRow('（参考）粘着力考慮の主働土圧', 'Ka・σv − 2C√Ka（負は0）', [[aKa, 4, lat.Ka], '×', [aSv, 2, x.sv], '−2×', [aC, 1, C], '×√', [aKa, 4, lat.Ka]],
+          `MAX(0,${aKa}*${aSv}-2*${aC}*SQRT(${aKa}))`, x.pRc, 2, 'kN/m²');
+      }
+    });
+    if (lat.qa != null) {
+      const aRq = calcRow('管厚中心半径', 'r = (Bc + Di)/4', ['(', [aBc, 3, stdSpec.D], '+', [aDi, 3, stdSpec.Di], ')/4'], `(${aBc}+${aDi})/4`, lat.r, 3, 'm');
+      const aMa = calcRow('管の保証モーメント', 'Ma = 0.318・P・r + 0.239・W・r', ['0.318×', [aP, 1, stdSpec.Pext], '×', [aRq, 3, lat.r], '+0.239×', [aW, 2, stdSpec.W], '×', [aRq, 3, lat.r]],
+        `0.318*${aP}*${aRq}+0.239*${aW}*${aRq}`, lat.Ma, 3, 'kN·m/m');
+      const aQa = calcRow('管の許容等分布側圧', 'qa = Ma/(0.239・r²)', [[aMa, 3, lat.Ma], '/(0.239×', [aRq, 3, lat.r], '²)'], `${aMa}/(0.239*${aRq}^2)`, lat.qa, 2, 'kN/m²');
+      T(r, 1, '（参考）管中心の p と qa の比較'); T(r, 2, 'p ≤ qa');
+      subst(r, 3, [[aPc, 2, lat.pc], ' ≤ ', [aQa, 2, lat.qa]]);
+      fxs(r, 4, `IF(${aPc}<=${aQa},"OK","NG")`, lat.ok ? 'OK' : 'NG'); T(r, 5, ''); r++;
+    }
+  }
+
+  // ── 総合判定（確保しておいた行に書く） ──
+  {
+    const rr = r; r = verdictRow;
+    const pipeOk = F_total <= Fa, jackOk = F_total <= jackTotal;
+    const allOk = pipeOk && extCheck.ok && jackOk;
+    T(r, 1, '総合判定', RS.SEC); [2, 3, 4, 5].forEach(c => T(r, c, '', RS.SEC));
+    r++;
+    hdr(['検討項目', '判定基準', '結果', '判定', '']);
+    const vRow = (name, crit, parts, f, cached) => { T(r, 1, name); T(r, 2, crit); subst(r, 3, parts); const a = fxs(r, 4, f, cached); T(r, 5, ''); r++; return a; };
+    const v1 = vRow('① 推進力（管の許容耐荷力）', 'F ≤ Fr', [[aFt, 0, F_total], ' ≤ ', [aFr, 0, Fa], ' kN'], `IF(${aFt}<=${aFr},"OK","NG")`, pipeOk ? 'OK' : 'NG');
+    const v2 = vRow('② 外圧耐荷力', 'Mr/M ≥ 1.2', ['Mr/M = ', [aRatio, 2, extCheck.ratio]], `IF(${aRatio}>=1.2,"OK","NG")`, extCheck.ok ? 'OK' : 'NG');
+    const v3 = vRow('③ 推進設備（元押ジャッキ）', 'F ≤ ジャッキ総能力', [[aFt, 0, F_total], ' ≤ ', [aJt, 0, jackTotal], ' kN'], `IF(${aFt}<=${aJt},"OK","NG")`, jackOk ? 'OK' : 'NG');
+    T(r, 1, '総合'); T(r, 2, ''); T(r, 3, '');
+    fxs(r, 4, `IF(AND(${v1}="OK",${v2}="OK",${v3}="OK"),"すべてOK","要見直し")`, allOk ? 'すべてOK' : '要見直し');
+    T(r, 5, '');
+    r = rr;
+  }
+
+  // ── ZIPにまとめてダウンロード ──
+  const enc = new TextEncoder();
+  const hasDrawing = images.length > 0;
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Default Extension="png" ContentType="image/png"/>'
+    + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+    + (hasDrawing ? '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>' : '')
+    + '</Types>';
+  const wbRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+    + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    + '</Relationships>';
+  const files = [
+    { name: '[Content_Types].xml', data: enc.encode(contentTypes) },
+    { name: '_rels/.rels', data: enc.encode(XLSX_RELS_ROOT) },
+    { name: 'xl/workbook.xml', data: enc.encode(xlsxWorkbookXml([sh.name])) },
+    { name: 'xl/_rels/workbook.xml.rels', data: enc.encode(wbRels) },
+    { name: 'xl/styles.xml', data: enc.encode(REPORT_XLSX_STYLES) },
+    { name: 'xl/worksheets/sheet1.xml', data: enc.encode(reportSheetXml(sh, hasDrawing)) },
+  ];
+  if (hasDrawing) {
+    files.push({ name: 'xl/worksheets/_rels/sheet1.xml.rels', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
+      + '</Relationships>') });
+    files.push({ name: 'xl/drawings/drawing1.xml', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+      + images.map((im, i) => xlsxPicAnchorXml(0, im.row, im.wPx, im.hPx, `rId${i + 1}`, i + 2)).join('')
+      + '</xdr:wsDr>') });
+    files.push({ name: 'xl/drawings/_rels/drawing1.xml.rels', data: enc.encode('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      + images.map((im, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image${i + 1}.png"/>`).join('')
+      + '</Relationships>') });
+    images.forEach((im, i) => files.push({ name: `xl/media/image${i + 1}.png`, data: im.bytes }));
+  }
+  const zipBytes = xlsxBuildZip(files);
+  const blob = new Blob([zipBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${v('siteName') || '現場名未入力'}${siteSpan}推力計算.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('計算書のExcelファイルを保存しました');
 }
 
 // 管にかかる等分布荷重の断面模式図: 緩み幅Be・トンネル直径Bt・すべり面の概念図（縦方向は模式的表示で実寸比例ではない）
@@ -8844,6 +9548,7 @@ function getProjectData() {
       Hmin: n('soilHmin'), Hmax: n('soilHmax'), adh: n('soilAdh'), water: n('soilWater'),
       gravel: n('soilGravel'), gravelM: n('soilGravelM'),
       alpha: n('soilAlpha'), beta: n('soilBeta'),
+      latKMode: v('soilLatKMode'), latKCustom: n('soilLatKCustom'),
       foFormula: v('bladeFoFormula'), selfSupport: v('soilSelfSupport'),
       // 100章: 活荷重の土被り（'min'/'max'）と曲線推進の k（'tanphi'/'input' と入力値）
       liveLoadH: v('liveLoadH'), curveKMode: v('curveKMode'), curveK: n('curveKValue'),
@@ -9036,6 +9741,7 @@ function setProjectData(d) {
     setV('soilAdh', d.soil.adh ?? 10); setV('soilWater', d.soil.water||2);
     setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
     setV('soilAlpha', d.soil.alpha ?? 0.625); setV('soilBeta', d.soil.beta ?? 1.20);
+    setV('soilLatKMode', d.soil.latKMode || 'k0'); setV('soilLatKCustom', d.soil.latKCustom ?? 0.5);
     setV('bladeFoFormula', d.soil.foFormula||'kyokai'); setV('soilSelfSupport', d.soil.selfSupport||'');
     // 100章: 100章より前のJSONにはキーが無い。保存時の計算結果を再現できるよう、その場合は
     // 従来の計算（活荷重＝H最大、k=tan(φ/2)）で読み込む。新規作成時の既定は H最小。
