@@ -4988,7 +4988,9 @@ function calculate() {
     const fa = (spec.category !== 'steel' && spec.grade) ? calcFaBC(spec, bc.alpha) : null;
     const FaBC = fa ? fa.Fa : null;
     const gradeLabel = (CATEGORY_GRADES[spec.category]||[]).find(g=>g.value===spec.grade)?.label || '';
-    return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, faDetail: fa, ok: FaBC!=null ? bc.F <= FaBC : null };
+    // 107章: BC点の推進力は曲線を通り終えた発進側の端（＝BC点、F_EC・Kⁿ＋λ・f・CL）。以前は到達側の端
+    // （曲線に入る前＝EC点の推進力 bc.F）を使っており、BC点照査とクッション材選定が危険側だった（99.6節）。
+    return { name:`BC.${bc.idx+1}`, FBC:bc.FBC, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, faDetail: fa, ok: FaBC!=null ? bc.FBC <= FaBC : null };
   });
 
   // クッション材（PB/FJ）選定: BC点ごとの軸力FBCを管の有効断面積で除した無潰れ想定の
@@ -5007,10 +5009,10 @@ function calculate() {
     const A_mm2 = aeApprox
       ? Math.PI / 4 * (Math.pow(spec.D * 1000, 2) - Math.pow(spec.Di * 1000, 2))
       : spec.Ae * 1e6;
-    const sigmaReq = A_mm2 > 0 ? (bc.F * 1000) / A_mm2 : 0;
+    const sigmaReq = A_mm2 > 0 ? (bc.FBC * 1000) / A_mm2 : 0; // 107章: 発進側の端（BC点）の推進力
     const sel = selectCushionMaterial(sigmaReq, sigmaAllowCushion);
     const chosen = spec.cushionMaterial ? evaluateCushionMaterial(spec.cushionMaterial, sigmaReq, sigmaAllowCushion) : null;
-    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel, chosen, Ae: spec.Ae, aeApprox };
+    return { name: `BC.${bc.idx + 1}`, FBC: bc.FBC, sigmaReq, sel, chosen, Ae: spec.Ae, aeApprox };
   });
 
   lastCalcResult = {
