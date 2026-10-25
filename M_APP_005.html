@@ -1222,6 +1222,8 @@ const v = id => {
   return el.type === 'checkbox' ? el.checked : el.value;
 };
 const n = id => parseFloat(v(id)) || 0;
+// 102章: 0が正当な値の欄用。空欄の時だけ既定値（`n(id)||既定値`だと0が既定値に化ける）。
+const nOr = (id, def) => v(id) === '' ? def : n(id);
 const setV = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
 
 // innerHTMLを丸ごと差し替えると、その中の入力欄にフォーカス中の場合カーソルごと失われ、
@@ -2079,8 +2081,8 @@ function addSoilZone() {
   const prevEnd = soilZones.length ? (soilZones[soilZones.length-1].toM || 0) : 0;
   soilZones.push({
     id, fromM: prevEnd, toM: prevEnd + 10,
-    gamma: n('soilGamma') || 18, phi: n('soilPhi') || 30, phiPipe: n('soilPhiPipe') || 20,
-    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10,
+    gamma: n('soilGamma') || 18, phi: nOr('soilPhi', 30), phiPipe: n('soilPhiPipe') || 20,
+    C: n('soilC') || 0, N: nOr('soilN', 15), Nprime: nOr('soilNprime', 15), adh: nOr('soilAdh', 10),
     shinnukiUse: false
   });
   renderSoilZones();
@@ -2165,8 +2167,8 @@ function renderSoilZones() {
 // 共通値を返す。区間が重なる場合は先に登録した区間（配列の先頭）を優先する。
 function resolveSoilAt(distFromBP) {
   const std = {
-    gamma: n('soilGamma') || 18, phi: n('soilPhi') || 30, phiPipe: n('soilPhiPipe') || 20,
-    C: n('soilC') || 0, N: n('soilN') || 15, Nprime: n('soilNprime') || 15, adh: n('soilAdh') || 10
+    gamma: n('soilGamma') || 18, phi: nOr('soilPhi', 30), phiPipe: n('soilPhiPipe') || 20,
+    C: n('soilC') || 0, N: nOr('soilN', 15), Nprime: nOr('soilNprime', 15), adh: nOr('soilAdh', 10)
   };
   const zone = soilZones.find(z => distFromBP >= Math.min(z.fromM, z.toM) && distFromBP <= Math.max(z.fromM, z.toM));
   return zone ? { gamma: zone.gamma, phi: zone.phi, phiPipe: zone.phiPipe, C: zone.C, N: zone.N, Nprime: zone.Nprime, adh: zone.adh } : std;
@@ -9011,11 +9013,11 @@ function setProjectData(d) {
     // 土質種別: 旧フォーマットは日本語表記、新フォーマットは英字キー
     const soilTypeMap = {'粘性土':'clay','砂質土':'sand','礫質土':'gravel','clay':'clay','sand':'sand','gravel':'gravel'};
     setV('soilType', soilTypeMap[d.soil.type] || d.soil.type || 'sand');
-    setV('soilGamma', d.soil.gamma||18); setV('soilPhi', d.soil.phi||30);
+    setV('soilGamma', d.soil.gamma||18); setV('soilPhi', d.soil.phi ?? 30);
     setV('soilPhiPipe', d.soil.phiPipe||20);
     // C フィールド: 旧フォーマットは小文字 c
     setV('soilC', d.soil.C ?? d.soil.c ?? 0);
-    setV('soilN', d.soil.N||15);
+    setV('soilN', d.soil.N ?? 15);
     // N′: 旧保存データには無いため、未保存ならN値と同じにする（後方互換）
     setV('soilNprime', d.soil.Nprime ?? d.soil.N ?? 15);
     // 76章: 切羽心抜きチェック状態を復元（保存済みN′値はそのまま使い、再計算はしない）
@@ -9033,8 +9035,9 @@ function setProjectData(d) {
     setV('soilHmax', d.soil.Hmax ?? (cover ?? 5.0));
     // adh・alpha・betaは0が正当な値（砂礫のCa=0、関東ロームのα=0等）のため、`||`ではなく
     // `??`で「未保存（旧フォーマット等でキー自体が無い）の時だけ既定値」にする。
-    setV('soilAdh', d.soil.adh ?? 10); setV('soilWater', d.soil.water||2);
-    setV('soilGravel', d.soil.gravel||30); setV('soilGravelM', d.soil.gravelM||0.05);
+    // 102章: φ（粘性土のφ=0）・N値・地下水位（GL-0）・礫率・礫長径（礫なし）も同じ。
+    setV('soilAdh', d.soil.adh ?? 10); setV('soilWater', d.soil.water ?? 2);
+    setV('soilGravel', d.soil.gravel ?? 30); setV('soilGravelM', d.soil.gravelM ?? 0.05);
     setV('soilAlpha', d.soil.alpha ?? 0.625); setV('soilBeta', d.soil.beta ?? 1.20);
     setV('bladeFoFormula', d.soil.foFormula||'kyokai'); setV('soilSelfSupport', d.soil.selfSupport||'');
     // 100章: 100章より前のJSONにはキーが無い。保存時の計算結果を再現できるよう、その場合は
@@ -9056,8 +9059,8 @@ function setProjectData(d) {
     soilZoneCounter = 0;
     soilZones = (d.soil.zones || []).map(z => ({
       id: ++soilZoneCounter, fromM: z.fromM||0, toM: z.toM||0,
-      gamma: z.gamma||18, phi: z.phi||30, phiPipe: z.phiPipe||20,
-      C: z.C||0, N: z.N||15, Nprime: z.Nprime ?? z.N ?? 15, adh: z.adh||10,
+      gamma: z.gamma||18, phi: z.phi ?? 30, phiPipe: z.phiPipe||20,
+      C: z.C||0, N: z.N ?? 15, Nprime: z.Nprime ?? z.N ?? 15, adh: z.adh ?? 10,
       shinnukiUse: !!z.shinnukiUse
     }));
     renderSoilZones();
@@ -9142,7 +9145,7 @@ function setProjectData(d) {
     // 101章: 除外距離0（立坑中心間で計算する）は正当な値。`||`だと0が既定値に化けるので、キーが無い時だけ既定値。
     setV('launchDirect', sh.launchDirect ?? 1.5);
     setV('launchW', sh.launchW||3); setV('launchLdim', sh.launchL||4);
-    setV('launchOffset', sh.launchOffset||0.3); setV('launchCircleD', sh.launchCircleD||3.5);
+    setV('launchOffset', sh.launchOffset ?? 0.3); setV('launchCircleD', sh.launchCircleD||3.5);
     setV('launchCircleOff', sh.launchCircleOff||0);
     setV('launchCircleCasing', sh.launchCircleCasing||'steel');
     // 65章: 土留め工法別の呼び径/板厚・外径/板厚。旧保存データ（材料内訳が無く、立坑内径のみ
@@ -9188,7 +9191,8 @@ function setProjectData(d) {
     setV('wallPitW', wl.pitW||3); setV('wallPitL', wl.pitL||4);
     setV('wallCircleD', wl.circleD||3.5);
     setV('wallBw', wl.Bw||3); setV('wallHw', wl.Hw||2);
-    setV('wallHc', wl.hc||0.8);
+    // 102章: 管中心高さ・水準高・支圧壁厚さ・推進定規の下がり量も0が正当な値。キーが無い時だけ既定値。
+    setV('wallHc', wl.hc ?? 0.8);
     // wallFaは旧バージョンではkN/m²単位で保存されていた（既定値3000など）。コンクリートの
     // 許容支圧応力度はどんな基準でもN/mm²で数百に達することはないため、200を超える値は
     // 旧kN/m²形式とみなして÷1000で変換する（後方互換）。新形式（N/mm²、既定24）はそのまま使う。
@@ -9197,16 +9201,16 @@ function setProjectData(d) {
     setV('wallForce', wl.force||0);
     setV('jackPlateW', wl.jackPlateW||0.5); setV('jackPlateH', wl.jackPlateH||0.5);
     setV('wallFc', wl.fc||24);
-    setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert||0.5);
-    setV('wallElWallTop', wl.elWallTop||2.5); setV('wallElGround', wl.elGround||0);
+    setV('wallElBase', wl.elBase||0); setV('wallElPipeInvert', wl.elPipeInvert ?? 0.5);
+    setV('wallElWallTop', wl.elWallTop ?? 2.5); setV('wallElGround', wl.elGround||0);
     setV('wallCenterOffset', wl.centerOffset||0);
-    setV('wallThickness', wl.thickness||0.8);
+    setV('wallThickness', wl.thickness ?? 0.8);
     setV('wallRemainingStub', wl.remainingStub!=null ? wl.remainingStub : 300);
     setV('wallPressRingLen', wl.pressRingLen!=null ? wl.pressRingLen : 300);
     setV('wallStrutUnitLen', wl.strutUnitLen!=null ? wl.strutUnitLen : 400);
     setV('wallStrutCount', wl.strutCount!=null ? wl.strutCount : 4);
     // wallCollarAllowanceは呼び径から自動参照する値になったため、保存/復元は行わない（calcBacklock()で同期）
-    setV('railDrop', wl.railDrop||50);
+    setV('railDrop', wl.railDrop ?? 50);
     // railSizeは新形式（H形鋼規格の選択）。旧形式はrailWidth（幅の実測値[mm]）を直接保存していたため、
     // 最も近い規格に丸めて後方互換をとる。
     let railSizeVal = wl.railSize;

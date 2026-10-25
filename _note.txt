@@ -36,6 +36,11 @@ M_APP_041 （最新）
     検討書の条件のJSONを読み込んだだけで F=1,940.12（検討書 1,940.2）になる
   - service-worker.js の CACHE_NAME v105 → v106（版数は M_APP_041 のまま）
 
+追加の修正（102章、2026-10-25）:
+  - 計算側 resolveSoilAt()/addSoilZone() が φ・N・N′・Ca の 0 を 30/15/15/10 に化かしていた（63章の漏れ）→ nOr() で修正
+  - setProjectData() の φ・N・地下水位・礫率・礫長径・区間別土質の φ/N/Ca・launchOffset・wallHc・水準高・wallThickness・railDrop を || → ??
+  - service-worker.js の CACHE_NAME v106 → v107（版数は M_APP_041 のまま）
+
 未対応（申し送り）:
   - 99.6節: BC点照査の推進力が曲線の到達側の端のまま（検討書・要覧は発進側の端）。ユーザー判断で見送り
   - 中押し管は呼び径900mmから（800mm管には無い。2026-10-22 ユーザー指摘）。
