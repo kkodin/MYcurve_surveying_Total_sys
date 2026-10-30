@@ -459,7 +459,7 @@ tr.row-selected{background:#eff6ff}
         <label>周面抵抗の算定式</label>
         <select id="bladeFoFormula" onchange="onBladeFoFormulaChange()">
           <option value="kyokai" selected>下水道協会式（2000年版指針・自立地山用）</option>
-          <option value="satoyamamoto">佐藤・山本改定式（実績ベース補正式）</option>
+          <!-- 106章: 佐藤・山本改定式は不明な点が多いため選択肢から外した（計算コードは残してあるが選べない） -->
         </select>
       </div>
       <div id="satoyamamotoSoilRow" class="field-row full" style="display:none">
@@ -481,8 +481,7 @@ tr.row-selected{background:#eff6ff}
       </div>
       <div class="note-box" style="font-size:11px">
         <b>下水道協会式</b>: f=α×π×Bc×τa+W×μ′, τa=β×q×μ′+C′（αは式全体、βはqにかかる）。<b>α=0.50〜0.75、β=1.0〜1.5</b>（一次資料「推進工法の設計」式(4.11) p.36。97章で出典確認済み。既定値0.625はαの範囲の中央値）。付着力C′は<b>大きくとも10kN/m²程度</b>が目安（同 4.5節(1)4)）。<br>
-        <b>佐藤・山本改定式</b>: f=π×Bc×τa, τa=β×Ca+σ′×μ′, σ′=α×q+2W/{π²(Bc-t)}（αはqのみ、βはCaのみにかかる点が下水道協会式と異なる）。出典: 佐藤直昭・山本稔「鉄筋コンクリート管を用いた推進工法実績から考えられる推進力算定式」（土木学会年次学術講演会概要集III-237）、望月崇「大中口径管推進工法の推進力算定式の変遷」（月刊推進技術2014年2月号）。土質・自立性区分を選ぶとα・β・Ca（付着力C′欄）に文献の目安値（範囲がある場合は中央値）を自動入力しますが、現場条件に応じて範囲内で手動調整してください（③④はCa=0のためβの値は計算に影響しません）。<br>
-        <b>α・βは算定式ごとに別々に保持されます</b>（96章）。式を切り替えると、その式で前回使った値に付け替わります（初期状態の協会式は α=0.625 / β=1.20）。両式でαの意味が違う（協会式=第1項全体、佐藤・山本式=qのみ）ため、一方の値をもう一方に持ち込むと結果が桁違いになります。なお付着力C′は式の係数ではなく土質の値なので共用です。
+        佐藤・山本改定式は不明な点が多いため、選択肢から外しました（106章）。佐藤・山本式で保存したデータを読み込むと、協会式の α・β に戻して計算し、推進力計算タブに注意を出します。
       </div>
     </div>
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
@@ -1345,7 +1344,7 @@ function showPage(idx) {
 // ══════════════════════════════════════
 let currentMethod = 'blade';
 const METHOD_NOTES = {
-  blade:  '刃口推進: Fo = 10×1.32×π×Bs×N′（共通）。周面抵抗foは下水道協会式／佐藤・山本改定式から選択可（「🌱 土質条件」カードの「周面抵抗の算定式」欄）',
+  blade:  '刃口推進: Fo = 10×1.32×π×Bs×N′（共通）。周面抵抗foは下水道協会式（自立地山用。α・βは「🌱 土質条件」カードで入力）',
   slurry: '泥水推進（泥水圧式）: fo = β×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=clip(N×10,150,500) Pw=ΔH×10+20　β=土質別標準値(粘性土0.35/砂質土0.45/礫質土0.60)、C′=N<10なら8・N≧10なら5',
   epb:    '泥土圧推進（土圧式）: fo = β×{(πDq+W)×μ′ + πDC′}, Fo = (Pe+Pw)×π(Bs/2)²  Pe=主働土圧式 Pw=ΔH×10　β=土質別標準値(粘性土0.35/砂質土0.45/礫質土0.60)、C′=N<10なら8・N≧10なら5',
   deinoh: '泥濃推進（礫率ベース式）: fo = f×πD, f={0.2+0.3(G/100)²+2.7(G/100)M²}×10, Fo=(Pe+Pw)×π(Bs/2)²  Pe=N×4.0'
@@ -1389,6 +1388,7 @@ const SATO_YAMAMOTO_TABLE = {
 const FO_COEF_DEFAULT_KYOKAI = { alpha: '0.625', beta: '1.20' };
 let foCoefStore = { kyokai: { ...FO_COEF_DEFAULT_KYOKAI }, satoyamamoto: null };
 let foCoefCurrent = 'kyokai'; // いま入力欄に載っている係数がどちらの式のものか
+let loadedSatoYamamoto = false; // 106章: 最後に読み込んだJSONが佐藤・山本式だったか（推進力タブで注意を出す）
 
 // 空欄は「既定値を使う」という正当な状態（calculate()側で判定している）なので、
 // n()で数値化せず v() の生文字列のまま退避・復帰する。
@@ -4772,6 +4772,11 @@ function calculate() {
   const warns = [];
   // 97章: 一次資料（推進工法の設計 式(4.11)、p.36）が定める協会式のα・βの範囲。
   // αは0.50〜0.75、βは1.0〜1.5。既定値0.625はαの範囲の中央値。
+  if (currentMethod === 'blade' && loadedSatoYamamoto) {
+    warns.push('このデータは<b>佐藤・山本改定式</b>で保存されていましたが、佐藤・山本式は不明な点が多いため選択肢から外しました（106章）。'
+      + '<b>下水道協会式</b>で計算しています。α・β は協会式の値に戻しましたが、付着力 C′ は保存時の値のままなので、'
+      + '佐藤・山本式の Ca（関東ローム=26.95 等）が残っていないか確認してください。');
+  }
   if (currentMethod === 'blade' && foFormula === 'kyokai') {
     if (alpha_coef === 0) {
       warns.push('下水道協会式で <b>周面抵抗係数 α = 0</b> になっています。協会式の α は '
@@ -9756,6 +9761,17 @@ function setProjectData(d) {
     if (d.soil.foCoef) {
       if (d.soil.foCoef.kyokai) foCoefStore.kyokai = { ...d.soil.foCoef.kyokai };
       if (d.soil.foCoef.satoyamamoto) foCoefStore.satoyamamoto = { ...d.soil.foCoef.satoyamamoto };
+    }
+    // 106章: 佐藤・山本改定式は選択肢から外した。そのJSONは協会式で読み込み、α・βは協会式の値に戻す
+    // （佐藤・山本式のα=0等を協会式に持ち込むと推進力が桁違いになるため。96章）。付着力C′は土質の値なのでそのまま。
+    loadedSatoYamamoto = d.soil.foFormula === 'satoyamamoto';
+    if (loadedSatoYamamoto) {
+      const kc = foCoefStore.kyokai || FO_COEF_DEFAULT_KYOKAI;
+      setV('bladeFoFormula', 'kyokai');
+      setV('soilAlpha', kc.alpha); setV('soilBeta', kc.beta);
+      setV('soilSelfSupport', '');
+      document.getElementById('satoyamamotoSoilRow').style.display = 'none';
+      showToast('佐藤・山本式のデータを協会式で読み込みました（α・β・C′を確認してください）');
     }
     foCoefCurrent = v('bladeFoFormula') || 'kyokai';
     foCoefStore[foCoefCurrent] = { alpha: v('soilAlpha'), beta: v('soilBeta') };
