@@ -851,7 +851,7 @@ tr.row-selected{background:#eff6ff}
       <div class="card-title" onclick="toggleAccordion(this)">🔩 詳細: 1本毎の推進力計算表</div>
       <button class="big-btn secondary" onclick="exportPipeForceCSV()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 CSV出力</button>
       <button class="big-btn secondary" onclick="exportPipeForceXLSX()" style="min-height:42px;font-size:14px;margin-bottom:8px">📊 Excel出力（計算式入り・距離を変えると推力も変わる）</button>
-      <p class="report-note" style="margin:0 2px 6px">距離は発進坑口（地山に入る位置）からの中心線距離で、管を実ピッチで順に並べた位置です。色の付いた行は BC・EC など位置の推進力です。直線のピッチは 管長＋目地開口長（S4−つぶれ代）、曲線は内側で 管長＋内側の開口長 です。区間の境をまたぐ管はそのまま1本に数え、到達坑口で余った分は端数の管になります。</p>
+      <p class="report-note" style="margin:0 2px 6px">距離は発進人孔芯からの中心線距離、地山内は発進坑口（ライナープレート）からの距離です。管を実ピッチで順に並べ、人孔芯〜坑口は空押し（推力なし）、到達坑口〜押し終わりは先端抵抗なしで計算します。色の付いた行は BC・EC など位置の推進力です。直線のピッチは 管長＋目地開口長（S4−つぶれ代）、曲線は内側で 管長＋内側の開口長 です。区間の境をまたぐ管はそのまま1本に数え、到達坑口で余った分は端数の管になります。</p>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
 
@@ -5617,7 +5617,7 @@ function printReport() {
 //  区間別仕様・区間別土質で標準と異なる値になる区間だけは、式ではなくアプリの計算値を貼り付ける。
 //  ZIP・セル書式のヘルパーは測量タブのExcel出力（xlsx*）を共用し、スタイルだけ計算書用を別に持つ。
 // ══════════════════════════════════════
-const RS = { TEXT:1, NUM3:2, INT:3, HEAD:4, TITLE:5, SEC:6, NUM1:7, NUM2:8, NUM4:9, RESULT:10, NOTE:11, INPUT:12, OKNG:13, PLAIN:14, INPUT3:15, INPUT4:16 };
+const RS = { TEXT:1, NUM3:2, INT:3, HEAD:4, TITLE:5, SEC:6, NUM1:7, NUM2:8, NUM4:9, RESULT:10, NOTE:11, INPUT:12, OKNG:13, PLAIN:14, INPUT3:15, INPUT4:16, MTEXT:17, MNUM3:18, MNUM1:19, MNUM4:20, MINT:21 };
 const RS_FONT = '<name val="游ゴシック"/><family val="3"/><charset val="128"/>';
 const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -5635,7 +5635,7 @@ const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right>'
   + '<top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>'
   + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-  + '<cellXfs count="17">'
+  + '<cellXfs count="22">'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
   + '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
@@ -5653,6 +5653,11 @@ const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
   + '<xf numFmtId="164" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
   + '<xf numFmtId="168" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="0" fontId="1" fillId="5" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="164" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="166" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="168" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="165" fontId="1" fillId="5" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>'
   + '</cellXfs>'
   + '<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>'
   + '</styleSheet>';
@@ -6287,11 +6292,11 @@ function computeProgressiveSegments(segments, Fo) {
 
 function computeProgressiveTrace(segments, Fo) {
   const ordered = [...segments].filter(s => s.type !== 'tip').sort((a,b) => a.ord - b.ord);
-  const points = [{ x:0, F:Fo, type:'tip', label:'発進坑口' }];
-  const pipeRows = [];
-  const markers = [{ label:'E1', title:'発進坑口', x:0 }];
-  let CumK = 1, S = 0, x = 0;
-  // 区間ごとに、起点の距離・S・CumK と管のピッチを持つ。
+  const launchX = Math.max(0, calcShaftDist('launch') || 0);
+  const pushOut = Math.max(0, n('arrivalPushOut') || 0);
+  const markers = [{ label:'E1', title:'発進坑口', x:launchX }];
+  let CumK = 1, S = 0, x = launchX;
+  // 区間ごとに、起点の距離・S・CumK と管のピッチを持つ。tip=0 の区間は先端抵抗がかからない。
   const secs = [];
   ordered.forEach(seg => {
     if (!(seg.L > 0) || !seg.spec) return;
@@ -6299,7 +6304,7 @@ function computeProgressiveTrace(segments, Fo) {
     // 無ければ従来どおり S4−つぶれ代。
     const openMm = Number.isFinite(seg.openMm) ? seg.openMm
                  : Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0));
-    secs.push({ seg, L: seg.L, x0: x, S0: S, K0: CumK, openMm, realPitch: segPitchM(seg.spec, openMm),
+    secs.push({ seg, L: seg.L, x0: x, S0: S, K0: CumK, tip: 1, openMm, realPitch: segPitchM(seg.spec, openMm),
                 pitch: segCenterPitchM(seg.spec, openMm, seg.type === 'curve' ? seg.R : 0) });
     if (seg.type === 'curve') {
       markers.push({ label:`BC${seg.curveNo}`, x });
@@ -6312,6 +6317,19 @@ function computeProgressiveTrace(segments, Fo) {
       x += seg.L;
     }
   });
+  markers.push({ label:'E2', title:'到達坑口(EP)', x });
+  const groundEnd = x, F_total = S + Fo * CumK;
+  if (!secs.length) return { points: [], pipeRows: [], markers, secs, stateAt: null, launchX, groundL: 0, pushOut, maxL: 0, F_total, startF: Fo };
+  // 111章: 人孔芯〜発進坑口は空押し（周面抵抗・先端抵抗とも無し）。到達坑口の先は先端抵抗が無くなり、
+  // 地山に接する長さは増えないので S は一定。どちらも管は同じピッチで並ぶ。
+  const firstSec = secs[0], lastSec = secs[secs.length - 1];
+  const dummySec = (label, type, L, x0, S0, K0, from) => ({
+    seg: { label, type, L, fo: 0, K: 1, n: 1, R: 0, spec: from.seg.spec },
+    L, x0, S0, K0, tip: 0, openMm: from.openMm, realPitch: from.realPitch, pitch: segPitchM(from.seg.spec, from.openMm),
+  });
+  if (pushOut > 0) secs.push(dummySec('到達坑口の先', 'pushout', pushOut, groundEnd, S, CumK, lastSec));
+  if (launchX > 0) secs.unshift(dummySec('発進立坑内（空押し）', 'idle', launchX, 0, 0, 1, firstSec));
+  const firstGround = secs.indexOf(firstSec), lastGround = secs.indexOf(lastSec);
   // 区間の起点から d[m] 進んだ位置の S・CumK。曲線の K は calculate() の本数 n で d に比例して
   // 効かせるので、EC で必ず K^n・到達坑口で必ず最大推進力に一致する。
   const stateAt = (sec, d) => {
@@ -6321,16 +6339,21 @@ function computeProgressiveTrace(segments, Fo) {
     const sum = Math.abs(seg.K - 1) < 1e-12 ? t : (Math.pow(seg.K, t + 1) - seg.K) / (seg.K - 1);
     return { S: sec.S0 + sec.K0 * seg.fo * (seg.L / seg.n) * sum, K: sec.K0 * Math.pow(seg.K, t) };
   };
+  const forceAt = (sec, d) => { const st = stateAt(sec, d); return st.S + Fo * st.K * sec.tip; };
   // 107章: 区間長÷本数で割らず、実ピッチで発進側から管を並べる。
+  const pipeRows = [];
   let curveCount = 0, lastCurveIdx = -1;
   layPipesAlongRoute(secs).forEach(p => {
     const sec = secs[p.toIdx], seg = sec.seg;
-    const st = stateAt(sec, p.end - sec.x0);
-    const F = st.S + Fo * st.K;
+    const d = p.end - sec.x0, st = stateAt(sec, d), F = forceAt(sec, d);
     const stub = p.frac < 1 - 1e-6 ? '・端数の管' : '';
     let formula;
     if (p.fromIdx !== p.toIdx) {
       formula = `F=F前+ΔF（${secs[p.fromIdx].seg.label}→${seg.label}をまたぐ管${stub}・K累積=${st.K.toFixed(4)}）`;
+    } else if (seg.type === 'idle') {
+      formula = `空押し（周面抵抗・先端抵抗なし${stub}）`;
+    } else if (seg.type === 'pushout') {
+      formula = `F=周面抵抗のみ（先端抵抗なし${stub}）`;
     } else if (seg.type === 'curve') {
       if (lastCurveIdx !== p.toIdx) { lastCurveIdx = p.toIdx; curveCount = 0; }
       curveCount++;
@@ -6338,40 +6361,32 @@ function computeProgressiveTrace(segments, Fo) {
     } else {
       formula = `F=F前+fo×l（${seg.fo.toFixed(2)}×${(p.end - p.start).toFixed(3)}${stub}）`;
     }
-    points.push({ x: p.end, F, type: seg.type, label: seg.label });
     pipeRows.push({ kind: 'pipe', seg: seg.label, type: seg.type, x: p.end, F, formula, crossCount: p.toIdx - p.fromIdx });
   });
-  markers.push({ label:'E2', title:'到達坑口(EP)', x });
-  const F_total = S + Fo * CumK;
   // 110章: 発進坑口・BC・EC・到達坑口の行を、距離の順に差し込む。
   const markAt = (label, mx, secIdx, formula) => {
-    const st = stateAt(secs[secIdx], mx - secs[secIdx].x0);
-    return { kind: 'mark', label, seg: secs[secIdx].seg.label, type: secs[secIdx].seg.type, x: mx, F: st.S + Fo * st.K, formula, secIdx };
+    const sec = secs[secIdx];
+    return { kind: 'mark', label, seg: sec.seg.label, type: sec.seg.type, x: mx, F: forceAt(sec, mx - sec.x0), formula, secIdx };
   };
   const marks = [];
+  if (launchX > 0) marks.push(markAt('発進人孔芯', 0, 0, '空押し開始（推力なし）'));
+  marks.push(markAt('発進坑口', launchX, firstGround, '鏡を切り、地山に当たって推力が発生（F=F0）'));
   secs.forEach((sec, i) => {
     if (sec.seg.type !== 'curve') return;
     marks.push(markAt(`BC${sec.seg.curveNo}`, sec.x0, i, `第${sec.seg.curveNo}曲線の始点`));
     marks.push(markAt(`EC${sec.seg.curveNo}`, sec.x0 + sec.L, i, `第${sec.seg.curveNo}曲線の終点`));
   });
+  marks.push(markAt('到達坑口', groundEnd, lastGround, '到達の鏡を切る直前（最大推進力）'));
+  if (pushOut > 0) marks.push(markAt('押し終わり', groundEnd + pushOut, secs.length - 1, '先端抵抗なし（周面抵抗のみ）'));
   const merged = [];
-  if (secs.length) merged.push(markAt('発進坑口', 0, 0, '鏡を切り、地山に当たって推力が発生（F=F0）'));
   pipeRows.forEach(r => {
-    while (marks.length && marks[0].x <= r.x + 1e-9) merged.push(marks.shift());
+    while (marks.length && marks[0].x < r.x - 1e-9) merged.push(marks.shift());
     merged.push(r);
   });
   merged.push(...marks);
-  if (secs.length) merged.push(markAt('到達坑口', x, secs.length - 1, '到達の鏡を切る直前（最大推進力）'));
-  // 110章: 到達の鏡を切ると先端抵抗がなくなり、周面抵抗だけで押す。地山に接する長さは増えないので S は一定。
-  const pushOut = Math.max(0, n('arrivalPushOut') || 0);
-  let maxL = x;
-  if (pushOut > 0 && secs.length) {
-    maxL = x + pushOut;
-    merged.push({ kind: 'pushout', label: '鏡切り後', seg: '到達坑口の先', type: 'straight', x: maxL, F: S,
-      formula: `F=F前−F0×K累積（先端抵抗なし・周面抵抗のみ、押し込み${pushOut.toFixed(3)}m）` });
-    points.push({ x: maxL, F: S, type: 'straight', label: '鏡切り後' });
-  }
-  return { points, pipeRows: merged, markers, secs, stateAt, groundL: x, pushOut, maxL, F_total };
+  const points = merged.map(r => ({ x: r.x, F: r.F, type: r.type, label: r.seg, pipe: r.kind === 'pipe' }));
+  return { points, pipeRows: merged, markers, secs, stateAt, launchX, firstGround, lastGround, groundL: groundEnd, pushOut,
+           maxL: groundEnd + pushOut, F_total, startF: launchX > 0 ? 0 : Fo };
 }
 
 // ══════════════════════════════════════
@@ -6385,10 +6400,11 @@ function buildPipeForceTable(segments, Fo) {
   const trace = computeProgressiveTrace(segments, Fo);
   const rows = trace.pipeRows;
   // 管の行だけ本数を数える。BC・EC などの行は位置の推力を示すだけで、F区間は持たない。
-  let prevF = Fo, pipeNo = 0;
+  let prevF = trace.startF, pipeNo = 0;
   rows.forEach(r => {
+    r.groundX = Math.max(0, r.x - trace.launchX);
     if (r.kind === 'mark') { r.no = r.label; r.dF = null; return; }
-    r.no = r.kind === 'pipe' ? ++pipeNo : r.label;
+    r.no = ++pipeNo;
     r.dF = r.F - prevF; prevF = r.F;
   });
   lastPipeForceRows = rows;
@@ -6399,11 +6415,12 @@ function buildPipeForceTable(segments, Fo) {
   if (!tableEl) return;
   if (!rows.length) { tableEl.innerHTML = ''; return; }
   tableEl.innerHTML =
-    '<thead><tr><th>本数</th><th>区間</th><th>距離(m)</th><th>F区間(kN)</th><th>F累計(kN)</th><th>計算式</th></tr></thead><tbody>' +
-    rows.map(r => `<tr${r.kind === 'pipe' ? '' : ' style="background:var(--bg);font-weight:600"'}>
+    '<thead><tr><th>本数</th><th>区間</th><th>距離(m)<br>人孔芯から</th><th>地山内(m)</th><th>F区間(kN)</th><th>F累計(kN)</th><th>計算式</th></tr></thead><tbody>' +
+    rows.map(r => `<tr${r.kind === 'pipe' ? '' : ' style="background:#fde3c0;color:#7a3e00;font-weight:700"'}>
       <td class="mono">${r.no}</td>
       <td class="left">${r.seg}</td>
       <td class="mono">${r.x.toFixed(3)}</td>
+      <td class="mono">${r.groundX.toFixed(3)}</td>
       <td class="mono">${r.dF == null ? '—' : r.dF.toFixed(1)}</td>
       <td class="mono"><b>${r.F.toFixed(1)}</b></td>
       <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
@@ -6418,10 +6435,10 @@ function csvEscape(v) {
 
 function exportPipeForceCSV() {
   if (!lastPipeForceRows.length) { showToast('先に推進力計算を実行してください'); return; }
-  const header = ['本数', '区間', '距離(m)', 'F区間(kN)', 'F累計(kN)', '計算式'];
+  const header = ['本数', '区間', '距離(m)', '地山内(m)', 'F区間(kN)', 'F累計(kN)', '計算式'];
   const lines = [header.map(csvEscape).join(',')];
   lastPipeForceRows.forEach(r => {
-    lines.push([r.no, r.seg, r.x.toFixed(3), r.dF == null ? '' : r.dF.toFixed(1), r.F.toFixed(1), r.formula].map(csvEscape).join(','));
+    lines.push([r.no, r.seg, r.x.toFixed(3), r.groundX.toFixed(3), r.dF == null ? '' : r.dF.toFixed(1), r.F.toFixed(1), r.formula].map(csvEscape).join(','));
   });
   const csv = '﻿' + lines.join('\r\n'); // BOM付きでExcelの文字化けを防ぐ
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -6440,31 +6457,31 @@ function exportPipeForceCSV() {
 // 書き換えると推力が再計算される。F は距離の関数（computeProgressiveTrace の stateAt と同じ式）なので、
 // 距離が BC・EC をまたいでも区間を MATCH で引き直して正しく計算する。
 function buildPipeForceXlsxBytes() {
-  const rows = lastPipeForceRows, secs = lastPipeForceTrace.secs, stateAt = lastPipeForceTrace.stateAt, Fo = lastPipeForceFo;
+  const rows = lastPipeForceRows, tr = lastPipeForceTrace, secs = tr.secs, stateAt = tr.stateAt, Fo = lastPipeForceFo;
   const sh = xlsxMakeSheet('1本毎推進力');
-  xlsxSetColWidths(sh, { 1: 22, 2: 14, 3: 11, 4: 11, 5: 11, 6: 9, 7: 10, 8: 10, 9: 10, 10: 10, 11: 12, 12: 10, 13: 11 });
+  xlsxSetColWidths(sh, { 1: 22, 2: 18, 3: 11, 4: 11, 5: 11, 6: 9, 7: 10, 8: 10, 9: 10, 10: 10, 11: 12, 12: 10, 13: 11, 14: 9 });
   const T = (row, col, text, st) => xlsxStr(sh, row, col, text, st ?? RS.TEXT);
 
   T(1, 1, `1本毎の推進力計算表　${v('siteName') || ''} ${v('siteSpan') || ''}`, RS.TITLE);
   T(2, 1, '黄色のセルを書き換えると推力が再計算されます。距離は 前の距離＋ピッチ の式で、直接書き換えると以降の距離と推力も変わります。', RS.NOTE);
-  T(3, 1, '区間条件の K は書き換えた値をそのまま使います（R や管長を変えても K は計算し直しません）。直線は K=1・n=1・R=0 です。', RS.NOTE);
+  T(3, 1, '区間条件の K は書き換えた値をそのまま使います（R や管長を変えても K は計算し直しません）。直線は K=1・n=1・R=0 です。先端抵抗が 0 の区間は F0 がかかりません。', RS.NOTE);
 
   const ns = secs.length, s0 = 10, s1 = s0 + ns - 1;
   const ix = (col, i) => `INDEX($${col}$${s0}:$${col}$${s1},${i})`;
   T(5, 1, '初期抵抗値 F0 (kN)');
   const aF0 = '$B$5'; xlsxNum(sh, 5, 2, Fo, RS.INPUT3);
-  T(6, 1, '地山内の推進距離 (m)');
-  const aTotal = '$B$6'; xlsxFormula(sh, 6, 2, `B${s1}+C${s1}`, lastPipeForceTrace.groundL, RS.NUM3);
-  T(7, 1, '鏡切り後の押し込み (m)');
-  const aPush = '$B$7'; xlsxNum(sh, 7, 2, lastPipeForceTrace.pushOut, RS.INPUT3);
+  T(6, 1, '押し終わりまでの距離 (m)');
+  const aTotal = '$B$6'; xlsxFormula(sh, 6, 2, `B${s1}+C${s1}`, tr.maxL, RS.NUM3);
+  T(7, 1, '発進坑口までの距離 (m)');
+  const aLaunch = '$B$7'; xlsxFormula(sh, 7, 2, `B${s0 + tr.firstGround}`, tr.launchX, RS.NUM3);
 
-  ['区間', '起点距離(m)', '区間長L(m)', 'fo(kN/m)', 'K', 'n(本)', '管長(m)', '目地開口(mm)', 'R(m)', '管外径(m)', 'ピッチ(m)', '起点K累積', '起点S(kN)']
+  ['区間', '起点距離(m)', '区間長L(m)', 'fo(kN/m)', 'K', 'n(本)', '管長(m)', '目地開口(mm)', 'R(m)', '管外径(m)', 'ピッチ(m)', '起点K累積', '起点S(kN)', '先端抵抗']
     .forEach((h, i) => T(s0 - 1, i + 1, h, RS.HEAD));
   secs.forEach((sec, i) => {
     const r = s0 + i, seg = sec.seg, isCurve = seg.type === 'curve';
     T(r, 1, seg.label);
     if (i === 0) xlsxNum(sh, r, 2, 0, RS.NUM3); else xlsxFormula(sh, r, 2, `B${r - 1}+C${r - 1}`, sec.x0, RS.NUM3);
-    xlsxNum(sh, r, 3, seg.L, RS.INPUT3);
+    xlsxNum(sh, r, 3, sec.L, RS.INPUT3);
     xlsxNum(sh, r, 4, seg.fo, RS.INPUT3);
     xlsxNum(sh, r, 5, isCurve ? seg.K : 1, RS.INPUT4);
     xlsxNum(sh, r, 6, isCurve ? seg.n : 1, RS.INPUT);
@@ -6481,52 +6498,47 @@ function buildPipeForceXlsxBytes() {
       xlsxFormula(sh, r, 12, `L${p}*E${p}^F${p}`, sec.K0, RS.NUM4);
       xlsxFormula(sh, r, 13, `M${p}+L${p}*D${p}*(C${p}/F${p})*IF(E${p}=1,F${p},(E${p}^(F${p}+1)-E${p})/(E${p}-1))`, sec.S0, RS.NUM3);
     }
+    xlsxNum(sh, r, 14, sec.tip, RS.INPUT);
   });
 
   const h0 = s1 + 2, r0 = h0 + 1;
-  ['本数', '区間', '距離(m)', 'F区間(kN)', 'F累計(kN)', '区間番号', '換算本数', 'K累積', 'S(kN)', 'l(m)', '計算式']
+  ['本数', '区間', '距離(m)', 'F区間(kN)', 'F累計(kN)', '区間番号', '換算本数', 'K累積', 'S(kN)', 'l(m)', '地山内(m)', '計算式']
     .forEach((h, i) => T(h0, i + 1, h, RS.HEAD));
 
   const secAt = x => secs.reduce((n, s, i) => (s.x0 <= x ? i : n), 0);
-  // 区間番号・換算本数・K累積・S・F累計（距離から求める部分は管の行も BC・EC の行も同じ）
-  const stateCells = (r, x) => {
-    const idx = secAt(x), sec = secs[idx], seg = sec.seg;
+  // 区間番号・換算本数・K累積・S・F累計・地山内（距離から求める部分は管の行も BC・EC の行も同じ）。
+  // BC・EC などの行は区間番号を固定する（到達坑口は先端抵抗がかかる側の値を出すため）。
+  const stateCells = (r, x, fixedIdx, mark) => {
+    const idx = fixedIdx ?? secAt(x), sec = secs[idx], seg = sec.seg;
     const d = x - sec.x0, ell = seg.L / (seg.type === 'curve' ? seg.n : 1), st = stateAt(sec, d);
-    const bI = ix('B', `$F${r}`), cI = ix('C', `$F${r}`), dI = ix('D', `$F${r}`), eI = ix('E', `$F${r}`), fI = ix('F', `$F${r}`), lI = ix('L', `$F${r}`), mI = ix('M', `$F${r}`);
-    xlsxFormula(sh, r, 5, `I${r}+${aF0}*H${r}`, st.S + Fo * st.K, RS.NUM1);
-    xlsxFormula(sh, r, 6, `MATCH(C${r},$B$${s0}:$B$${s1},1)`, idx + 1, RS.INT);
-    xlsxFormula(sh, r, 7, `(C${r}-${bI})/(${cI}/${fI})`, d / ell, RS.NUM3);
-    xlsxFormula(sh, r, 8, `${lI}*${eI}^G${r}`, st.K, RS.NUM4);
-    xlsxFormula(sh, r, 9, `${mI}+${lI}*${dI}*(${cI}/${fI})*IF(${eI}=1,G${r},(${eI}^(G${r}+1)-${eI})/(${eI}-1))`, st.S, RS.NUM3);
-    return { idx, sec, seg, st, dI, eI };
+    const at = c => ix(c, `$F${r}`);
+    xlsxFormula(sh, r, 5, `I${r}+${aF0}*H${r}*${at('N')}`, st.S + Fo * st.K * sec.tip, mark ? RS.MNUM1 : RS.NUM1);
+    if (fixedIdx != null) xlsxNum(sh, r, 6, idx + 1, RS.MINT);
+    else xlsxFormula(sh, r, 6, `MATCH(C${r},$B$${s0}:$B$${s1},1)`, idx + 1, RS.INT);
+    xlsxFormula(sh, r, 7, `(C${r}-${at('B')})/(${at('C')}/${at('F')})`, d / ell, mark ? RS.MNUM3 : RS.NUM3);
+    xlsxFormula(sh, r, 8, `${at('L')}*${at('E')}^G${r}`, st.K, mark ? RS.MNUM4 : RS.NUM4);
+    xlsxFormula(sh, r, 9, `${at('M')}+${at('L')}*${at('D')}*(${at('C')}/${at('F')})*IF(${at('E')}=1,G${r},(${at('E')}^(G${r}+1)-${at('E')})/(${at('E')}-1))`, st.S, mark ? RS.MNUM3 : RS.NUM3);
+    xlsxFormula(sh, r, 11, `MAX(0,C${r}-${aLaunch})`, Math.max(0, x - tr.launchX), mark ? RS.MNUM3 : RS.NUM3);
+    return { idx, sec, seg, st, at };
   };
 
-  let lastPipeR = 0, lastPipeRow = null, reachR = 0;
+  let lastPipeR = 0, lastPipeRow = null;
   rows.forEach((row, k) => {
     const r = r0 + k;
     if (row.kind === 'mark') {
-      T(r, 1, row.label, RS.PLAIN);
-      T(r, 2, row.seg);
+      T(r, 1, row.label, RS.MTEXT);
+      T(r, 2, row.seg, RS.MTEXT);
       const sr = s0 + row.secIdx;
-      const f = row.label === '発進坑口' ? '0' : row.label === '到達坑口' ? aTotal
-        : row.label.startsWith('BC') ? `$B$${sr}` : `$B$${sr}+$C$${sr}`;
-      xlsxFormula(sh, r, 3, f, row.x, RS.NUM3);
-      T(r, 4, '—');
-      stateCells(r, row.x);
-      T(r, 11, row.formula, RS.PLAIN);
-      if (row.label === '到達坑口') reachR = r;
+      const f = row.label === '発進人孔芯' ? '0' : row.label === '押し終わり' ? aTotal
+        : (row.label === '発進坑口' || row.label.startsWith('BC')) ? `$B$${sr}` : `$B$${sr}+$C$${sr}`;
+      xlsxFormula(sh, r, 3, f, row.x, RS.MNUM3);
+      T(r, 4, '—', RS.MTEXT);
+      stateCells(r, row.x, row.secIdx, true);
+      T(r, 10, '', RS.MTEXT);
+      T(r, 12, row.formula, RS.MTEXT);
       return;
     }
-    if (row.kind === 'pushout') {
-      T(r, 1, row.label, RS.PLAIN);
-      T(r, 2, row.seg);
-      xlsxFormula(sh, r, 3, `${aTotal}+${aPush}`, row.x, RS.NUM3);
-      xlsxFormula(sh, r, 4, `E${r}-E${reachR}`, row.dF, RS.NUM1);
-      xlsxFormula(sh, r, 5, `I${reachR}`, row.F, RS.NUM1);
-      T(r, 11, '到達の鏡を切り、先端抵抗なし（F=S、周面抵抗のみ）', RS.PLAIN);
-      return;
-    }
-    const prevC = lastPipeR ? `C${lastPipeR}` : '0', prevI = lastPipeR ? `F${lastPipeR}` : '1', prevF = lastPipeR ? `E${lastPipeR}` : aF0;
+    const prevC = lastPipeR ? `C${lastPipeR}` : '0', prevI = lastPipeR ? `F${lastPipeR}` : '1', prevF = lastPipeR ? `E${lastPipeR}` : (tr.launchX > 0 ? '0' : aF0);
     const prevX = lastPipeRow ? lastPipeRow.x : 0;
     xlsxNum(sh, r, 1, row.no, RS.INT);
     if (row.crossCount >= 2) {
@@ -6536,23 +6548,25 @@ function buildPipeForceXlsxBytes() {
       const P = ix('K', prevI), E = `(${ix('B', prevI)}+${ix('C', prevI)})`, nextP = ix('K', `MIN(${prevI}+1,${ns})`);
       xlsxFormula(sh, r, 3, `MIN(${aTotal},IF(${prevC}+${P}<=${E},${prevC}+${P},${E}+(1-(${E}-${prevC})/${P})*${nextP}))`, row.x, RS.INPUT3);
     }
-    const { idx, seg, st, dI, eI } = stateCells(r, row.x);
+    const { idx, sec, seg, st, at } = stateCells(r, row.x);
     const prevIdx = lastPipeRow ? secAt(prevX) : 0;
-    xlsxFormulaStr(sh, r, 2, ix('A', `$F${r}`), seg.label);
+    xlsxFormulaStr(sh, r, 2, at('A'), seg.label);
     xlsxFormula(sh, r, 4, `E${r}-${prevF}`, row.dF, RS.NUM1);
     const len = row.x - prevX;
     xlsxFormula(sh, r, 10, `C${r}-${prevC}`, len, RS.NUM3);
     const cached = idx !== prevIdx ? `F=F前+ΔF（区間をまたぐ管・K累積=${st.K.toFixed(4)}）`
+      : !sec.tip ? '先端抵抗なし（周面抵抗のみ、空押しは推力なし）'
       : seg.type === 'curve' ? `F=F前+ΔF（曲線内・K累積=${st.K.toFixed(4)}）`
       : `F=F前+fo×l（${seg.fo.toFixed(2)}×${len.toFixed(3)}）`;
-    xlsxFormulaStr(sh, r, 11,
+    xlsxFormulaStr(sh, r, 12,
       `IF(F${r}<>${prevI},"F=F前+ΔF（区間をまたぐ管・K累積="&TEXT(H${r},"0.0000")&"）",`
-      + `IF(${eI}=1,"F=F前+fo×l（"&TEXT(${dI},"0.00")&"×"&TEXT(J${r},"0.000")&"）",`
-      + `"F=F前+ΔF（曲線内・K累積="&TEXT(H${r},"0.0000")&"）"))`, cached, RS.PLAIN);
+      + `IF(${at('N')}=0,"先端抵抗なし（周面抵抗のみ、空押しは推力なし）",`
+      + `IF(${at('E')}=1,"F=F前+fo×l（"&TEXT(${at('D')},"0.00")&"×"&TEXT(J${r},"0.000")&"）",`
+      + `"F=F前+ΔF（曲線内・K累積="&TEXT(H${r},"0.0000")&"）")))`, cached, RS.PLAIN);
     lastPipeR = r; lastPipeRow = row;
   });
-  T(8, 1, '到達坑口までの確認');
-  xlsxFormulaStr(sh, 8, 2, `IF(C${lastPipeR}<${aTotal}-0.0005,"管の行が足りません（行を挿入して管の行をコピーしてください）","到達坑口まで届いています")`, '到達坑口まで届いています', RS.PLAIN);
+  T(8, 1, '押し終わりまでの確認');
+  xlsxFormulaStr(sh, 8, 2, `IF(C${lastPipeR}<${aTotal}-0.0005,"管の行が足りません（行を挿入して管の行をコピーしてください）","押し終わりまで届いています")`, '押し終わりまで届いています', RS.PLAIN);
 
   const enc = new TextEncoder();
   const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -7625,7 +7639,7 @@ function exportSurveyXLSX() {
 }
 
 // 種別ごとの色（曲線=青、直線=緑）
-const FORCE_GRAPH_COLOR = { curve:'#1d6fd8', straight:'#16a34a' };
+const FORCE_GRAPH_COLOR = { curve:'#1d6fd8', straight:'#16a34a', idle:'#94a3b8', pushout:'#94a3b8' };
 
 function drawForceGraph(segments, Fa, Fo) {
   const canvas = document.getElementById('forceGraph');
@@ -7680,10 +7694,13 @@ function drawForceGraph(segments, Fa, Fo) {
   }
 
   // 管1本ごとに小さな○、5本ごとに●（本数を数えやすくする）
-  for (let i = 1; i < points.length; i++) {
+  let dotNo = 0;
+  for (let i = 0; i < points.length; i++) {
     const p = points[i];
+    if (!p.pipe) continue;
+    dotNo++;
     const px = sx(p.x), py = sy(p.F);
-    const filled = (i % 5 === 0);
+    const filled = (dotNo % 5 === 0);
     ctx.beginPath();
     ctx.arc(px, py, filled ? 3 : 1.8, 0, Math.PI * 2);
     ctx.fillStyle = '#fff';
@@ -7709,7 +7726,7 @@ function drawForceGraph(segments, Fa, Fo) {
   });
 
   ctx.fillStyle='#374151'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('推進距離 (m)　E1(発進坑口) → E2(到達坑口)　●=5本ごと／推進の進行とともに推力は増加', pad.left + cw/2, h - 5);
+  ctx.fillText('発進人孔芯からの距離 (m)　E1(発進坑口) → E2(到達坑口)　●=5本ごと／推進の進行とともに推力は増加', pad.left + cw/2, h - 5);
 }
 
 // ══════════════════════════════════════
