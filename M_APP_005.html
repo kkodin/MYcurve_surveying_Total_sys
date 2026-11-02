@@ -844,6 +844,7 @@ tr.row-selected{background:#eff6ff}
     <div class="card accordion">
       <div class="card-title" onclick="toggleAccordion(this)">🔩 詳細: 1本毎の推進力計算表</div>
       <button class="big-btn secondary" onclick="exportPipeForceCSV()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 CSV出力</button>
+      <button class="big-btn secondary" onclick="exportPipeForceXLSX()" style="min-height:42px;font-size:14px;margin-bottom:8px">📊 Excel出力（計算式入り・距離を変えると推力も変わる）</button>
       <p class="report-note" style="margin:0 2px 6px">距離は発進坑口からの中心線距離で、管を実ピッチで順に並べた位置です。直線のピッチは 管長＋目地開口長（S4−つぶれ代）、曲線は内側で 管長＋内側の開口長 です。区間の境をまたぐ管はそのまま1本に数え、到達坑口で余った分は端数の管になります。</p>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
@@ -5594,7 +5595,7 @@ function printReport() {
 //  区間別仕様・区間別土質で標準と異なる値になる区間だけは、式ではなくアプリの計算値を貼り付ける。
 //  ZIP・セル書式のヘルパーは測量タブのExcel出力（xlsx*）を共用し、スタイルだけ計算書用を別に持つ。
 // ══════════════════════════════════════
-const RS = { TEXT:1, NUM3:2, INT:3, HEAD:4, TITLE:5, SEC:6, NUM1:7, NUM2:8, NUM4:9, RESULT:10, NOTE:11, INPUT:12, OKNG:13, PLAIN:14 };
+const RS = { TEXT:1, NUM3:2, INT:3, HEAD:4, TITLE:5, SEC:6, NUM1:7, NUM2:8, NUM4:9, RESULT:10, NOTE:11, INPUT:12, OKNG:13, PLAIN:14, INPUT3:15, INPUT4:16 };
 const RS_FONT = '<name val="游ゴシック"/><family val="3"/><charset val="128"/>';
 const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
   + '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
@@ -5612,7 +5613,7 @@ const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<border><left style="thin"><color indexed="64"/></left><right style="thin"><color indexed="64"/></right>'
   + '<top style="thin"><color indexed="64"/></top><bottom style="thin"><color indexed="64"/></bottom><diagonal/></border></borders>'
   + '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-  + '<cellXfs count="15">'
+  + '<cellXfs count="17">'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>'
   + '<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>'
@@ -5628,6 +5629,8 @@ const REPORT_XLSX_STYLES = '<?xml version="1.0" encoding="UTF-8" standalone="yes
   + '<xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1"/>'
   + '<xf numFmtId="0" fontId="1" fillId="0" borderId="1" xfId="0" applyFont="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>'
   + '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
+  + '<xf numFmtId="164" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
+  + '<xf numFmtId="168" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1"/>'
   + '</cellXfs>'
   + '<cellStyles count="1"><cellStyle name="標準" xfId="0" builtinId="0"/></cellStyles>'
   + '</styleSheet>';
@@ -6274,7 +6277,7 @@ function computeProgressiveTrace(segments, Fo) {
     // 無ければ従来どおり S4−つぶれ代。
     const openMm = Number.isFinite(seg.openMm) ? seg.openMm
                  : Math.max(0, (seg.spec.S4 || 0) - (seg.spec.crush || 0));
-    secs.push({ seg, L: seg.L, x0: x, S0: S, K0: CumK, realPitch: segPitchM(seg.spec, openMm),
+    secs.push({ seg, L: seg.L, x0: x, S0: S, K0: CumK, openMm, realPitch: segPitchM(seg.spec, openMm),
                 pitch: segCenterPitchM(seg.spec, openMm, seg.type === 'curve' ? seg.R : 0) });
     if (seg.type === 'curve') {
       markers.push({ label:`BC${seg.curveNo}`, x });
@@ -6314,10 +6317,10 @@ function computeProgressiveTrace(segments, Fo) {
       formula = `F=F前+fo×l（${seg.fo.toFixed(2)}×${(p.end - p.start).toFixed(3)}${stub}）`;
     }
     points.push({ x: p.end, F, type: seg.type, label: seg.label });
-    pipeRows.push({ seg: seg.label, type: seg.type, x: p.end, F, formula });
+    pipeRows.push({ seg: seg.label, type: seg.type, x: p.end, F, formula, crossCount: p.toIdx - p.fromIdx });
   });
   markers.push({ label:'E2', title:'到達坑口(EP)', x });
-  return { points, pipeRows, markers, maxL: x, F_total: S + Fo * CumK };
+  return { points, pipeRows, markers, secs, stateAt, maxL: x, F_total: S + Fo * CumK };
 }
 
 // ══════════════════════════════════════
@@ -6325,6 +6328,7 @@ function computeProgressiveTrace(segments, Fo) {
 //  逆向き＝発進側を1本目として数える。推力が本数とともに増えていく向きに揃えるため）
 // ══════════════════════════════════════
 let lastPipeForceRows = [];
+let lastPipeForceTrace = null, lastPipeForceFo = 0;
 
 function buildPipeForceTable(segments, Fo) {
   const trace = computeProgressiveTrace(segments, Fo);
@@ -6332,6 +6336,8 @@ function buildPipeForceTable(segments, Fo) {
   let prevF = Fo;
   rows.forEach((r, i) => { r.no = i + 1; r.dF = r.F - prevF; prevF = r.F; });
   lastPipeForceRows = rows;
+  lastPipeForceTrace = trace;
+  lastPipeForceFo = Fo;
 
   const tableEl = document.getElementById('pipeForceTable');
   if (!tableEl) return;
@@ -6372,6 +6378,128 @@ function exportPipeForceCSV() {
   a.click();
   URL.revokeObjectURL(url);
   showToast('CSVファイルを保存しました');
+}
+
+// 108章: 1本毎の推進力計算表を、計算式入りの Excel で出す。黄色のセル（初期抵抗値・区間の条件・距離）を
+// 書き換えると推力が再計算される。F は距離の関数（computeProgressiveTrace の stateAt と同じ式）なので、
+// 距離が BC・EC をまたいでも区間を MATCH で引き直して正しく計算する。
+function buildPipeForceXlsxBytes() {
+  const rows = lastPipeForceRows, secs = lastPipeForceTrace.secs, stateAt = lastPipeForceTrace.stateAt, Fo = lastPipeForceFo;
+  const sh = xlsxMakeSheet('1本毎推進力');
+  xlsxSetColWidths(sh, { 1: 22, 2: 14, 3: 11, 4: 11, 5: 11, 6: 9, 7: 10, 8: 10, 9: 10, 10: 10, 11: 12, 12: 10, 13: 11 });
+  const T = (row, col, text, st) => xlsxStr(sh, row, col, text, st ?? RS.TEXT);
+
+  T(1, 1, `1本毎の推進力計算表　${v('siteName') || ''} ${v('siteSpan') || ''}`, RS.TITLE);
+  T(2, 1, '黄色のセルを書き換えると推力が再計算されます。距離は 前の距離＋ピッチ の式で、直接書き換えると以降の距離と推力も変わります。', RS.NOTE);
+  T(3, 1, '区間条件の K は書き換えた値をそのまま使います（R や管長を変えても K は計算し直しません）。直線は K=1・n=1・R=0 です。', RS.NOTE);
+
+  const ns = secs.length, s0 = 9, s1 = s0 + ns - 1;
+  const ix = (col, i) => `INDEX($${col}$${s0}:$${col}$${s1},${i})`;
+  T(5, 1, '初期抵抗値 F0 (kN)');
+  const aF0 = '$B$5'; xlsxNum(sh, 5, 2, Fo, RS.INPUT3);
+  T(6, 1, '路線長 (m)');
+  const aTotal = '$B$6'; xlsxFormula(sh, 6, 2, `B${s1}+C${s1}`, lastPipeForceTrace.maxL, RS.NUM3);
+
+  ['区間', '起点距離(m)', '区間長L(m)', 'fo(kN/m)', 'K', 'n(本)', '管長(m)', '目地開口(mm)', 'R(m)', '管外径(m)', 'ピッチ(m)', '起点K累積', '起点S(kN)']
+    .forEach((h, i) => T(s0 - 1, i + 1, h, RS.HEAD));
+  secs.forEach((sec, i) => {
+    const r = s0 + i, seg = sec.seg, isCurve = seg.type === 'curve';
+    T(r, 1, seg.label);
+    if (i === 0) xlsxNum(sh, r, 2, 0, RS.NUM3); else xlsxFormula(sh, r, 2, `B${r - 1}+C${r - 1}`, sec.x0, RS.NUM3);
+    xlsxNum(sh, r, 3, seg.L, RS.INPUT3);
+    xlsxNum(sh, r, 4, seg.fo, RS.INPUT3);
+    xlsxNum(sh, r, 5, isCurve ? seg.K : 1, RS.INPUT4);
+    xlsxNum(sh, r, 6, isCurve ? seg.n : 1, RS.INPUT);
+    xlsxNum(sh, r, 7, seg.spec.lp || 2.43, RS.INPUT3);
+    xlsxNum(sh, r, 8, sec.openMm, RS.INPUT);
+    xlsxNum(sh, r, 9, isCurve ? seg.R : 0, RS.INPUT);
+    xlsxNum(sh, r, 10, seg.spec.D, RS.INPUT3);
+    xlsxFormula(sh, r, 11, `(G${r}+H${r}/1000)/IF(I${r}>0,1-J${r}/(2*I${r}),1)`, sec.pitch, RS.NUM4);
+    if (i === 0) {
+      xlsxNum(sh, r, 12, 1, RS.NUM4);
+      xlsxNum(sh, r, 13, 0, RS.NUM3);
+    } else {
+      const p = r - 1;
+      xlsxFormula(sh, r, 12, `L${p}*E${p}^F${p}`, sec.K0, RS.NUM4);
+      xlsxFormula(sh, r, 13, `M${p}+L${p}*D${p}*(C${p}/F${p})*IF(E${p}=1,F${p},(E${p}^(F${p}+1)-E${p})/(E${p}-1))`, sec.S0, RS.NUM3);
+    }
+  });
+
+  const h0 = s1 + 2, r0 = h0 + 1, rN = r0 + rows.length - 1;
+  ['本数', '区間', '距離(m)', 'F区間(kN)', 'F累計(kN)', '区間番号', '換算本数', 'K累積', 'S(kN)', 'l(m)', '計算式']
+    .forEach((h, i) => T(h0, i + 1, h, RS.HEAD));
+  T(7, 1, '到達坑口までの確認');
+  xlsxFormulaStr(sh, 7, 2, `IF(C${rN}<${aTotal}-0.0005,"管が足りません（表の最後の行を下へコピーしてください）","到達坑口まで届いています")`, '到達坑口まで届いています', RS.PLAIN);
+
+  const sum1 = secIdx => secs.reduce((n, s, i) => (s.x0 <= secIdx ? i : n), 0);
+  rows.forEach((row, k) => {
+    const r = r0 + k, prevC = k ? `C${r - 1}` : '0', prevI = k ? `F${r - 1}` : '1', prevF = k ? `E${r - 1}` : aF0;
+    const prevX = k ? rows[k - 1].x : 0, prevF0 = k ? rows[k - 1].F : Fo;
+    const idx = sum1(row.x), sec = secs[idx], seg = sec.seg, prevIdx = k ? sum1(prevX) : 0;
+    const d = row.x - sec.x0, ell = seg.L / (seg.type === 'curve' ? seg.n : 1), t = d / ell, st = stateAt(sec, d);
+    xlsxNum(sh, r, 1, row.no, RS.INT);
+    xlsxFormulaStr(sh, r, 2, ix('A', `$F${r}`), seg.label);
+    if (row.crossCount >= 2) {
+      // 1本で区間を2つ以上またぐ管（極端に短い区間）は式で追えないので、アプリの値を置く
+      xlsxNum(sh, r, 3, row.x, RS.INPUT3);
+    } else {
+      const P = ix('K', prevI), E = `(${ix('B', prevI)}+${ix('C', prevI)})`, nextP = ix('K', `MIN(${prevI}+1,${ns})`);
+      xlsxFormula(sh, r, 3, `MIN(${aTotal},IF(${prevC}+${P}<=${E},${prevC}+${P},${E}+(1-(${E}-${prevC})/${P})*${nextP}))`, row.x, RS.INPUT3);
+    }
+    xlsxFormula(sh, r, 4, `E${r}-${prevF}`, row.F - prevF0, RS.NUM1);
+    xlsxFormula(sh, r, 5, `I${r}+${aF0}*H${r}`, row.F, RS.NUM1);
+    xlsxFormula(sh, r, 6, `MATCH(C${r},$B$${s0}:$B$${s1},1)`, idx + 1, RS.INT);
+    const bI = ix('B', `$F${r}`), cI = ix('C', `$F${r}`), dI = ix('D', `$F${r}`), eI = ix('E', `$F${r}`), fI = ix('F', `$F${r}`), lI = ix('L', `$F${r}`), mI = ix('M', `$F${r}`);
+    xlsxFormula(sh, r, 7, `(C${r}-${bI})/(${cI}/${fI})`, t, RS.NUM3);
+    xlsxFormula(sh, r, 8, `${lI}*${eI}^G${r}`, st.K, RS.NUM4);
+    xlsxFormula(sh, r, 9, `${mI}+${lI}*${dI}*(${cI}/${fI})*IF(${eI}=1,G${r},(${eI}^(G${r}+1)-${eI})/(${eI}-1))`, st.S, RS.NUM3);
+    const len = row.x - prevX;
+    xlsxFormula(sh, r, 10, `C${r}-${prevC}`, len, RS.NUM3);
+    const cached = idx !== prevIdx ? `F=F前+ΔF（区間をまたぐ管・K累積=${st.K.toFixed(4)}）`
+      : seg.type === 'curve' ? `F=F前+ΔF（曲線内・K累積=${st.K.toFixed(4)}）`
+      : `F=F前+fo×l（${seg.fo.toFixed(2)}×${len.toFixed(3)}）`;
+    xlsxFormulaStr(sh, r, 11,
+      `IF(F${r}<>${prevI},"F=F前+ΔF（区間をまたぐ管・K累積="&TEXT(H${r},"0.0000")&"）",`
+      + `IF(${eI}=1,"F=F前+fo×l（"&TEXT(${dI},"0.00")&"×"&TEXT(J${r},"0.000")&"）",`
+      + `"F=F前+ΔF（曲線内・K累積="&TEXT(H${r},"0.0000")&"）"))`, cached, RS.PLAIN);
+  });
+
+  const enc = new TextEncoder();
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/>'
+    + '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+    + '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+    + '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+    + '</Types>';
+  const wbRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+    + '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+    + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+    + '</Relationships>';
+  return xlsxBuildZip([
+    { name: '[Content_Types].xml', data: enc.encode(contentTypes) },
+    { name: '_rels/.rels', data: enc.encode(XLSX_RELS_ROOT) },
+    { name: 'xl/workbook.xml', data: enc.encode(xlsxWorkbookXml([sh.name])) },
+    { name: 'xl/_rels/workbook.xml.rels', data: enc.encode(wbRels) },
+    { name: 'xl/styles.xml', data: enc.encode(REPORT_XLSX_STYLES) },
+    { name: 'xl/worksheets/sheet1.xml', data: enc.encode(reportSheetXml(sh, false)) },
+  ]);
+}
+
+function exportPipeForceXLSX() {
+  if (!lastPipeForceRows.length) { showToast('先に推進力計算を実行してください'); return; }
+  const blob = new Blob([buildPipeForceXlsxBytes()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const name = v('siteName') || 'project';
+  const span = v('siteSpan') || '';
+  a.href = url;
+  a.download = `MYcurve_${name}${span?'_'+span:''}_1本毎推進力_${new Date().toISOString().slice(0,10)}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('計算式入りのExcelファイルを保存しました');
 }
 
 // ══════════════════════════════════════
