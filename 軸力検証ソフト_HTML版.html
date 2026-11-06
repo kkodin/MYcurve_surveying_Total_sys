@@ -255,6 +255,29 @@
       <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
       <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過 or 1.5set未満</span>
   </div>
+
+  <!-- vr009: MYcurve の1本毎の推進力から、目地ごとに必要な FJリングを最小で割り付ける -->
+  <div class="panel propose" id="planpanel">
+    <h2>1本ごとの FJリング割付（MYcurve の1本毎推進力から）</h2>
+    <div class="ctrls">
+      <label>継手（カラー）<select id="planJoint">
+        <option value="JA" selected>JA（通過中40mm・完了後30mm）</option>
+        <option value="JB">JB（通過中50mm・完了後40mm）</option>
+        <option value="JC">JC（通過中70mm・完了後60mm）</option></select></label>
+      <label>目地にかかる力<select id="planForce">
+        <option value="jack" selected>ジャッキの力そのまま（安全側）</option>
+        <option value="trans">後ろの管の摩擦分を引いた力</option></select></label>
+      <label>最大層数<input type="number" id="planMaxL" value="4" min="2" max="6" step="1"></label>
+      <label>使う材種<select id="planMats">
+        <option value="11,12,13,14" selected>FJ 1.7〜3.0倍</option>
+        <option value="12,13,14">FJ 2.0〜3.0倍</option>
+        <option value="12,13">FJ 2.0・2.5倍</option></select></label>
+      <button class="propbtn" id="planbtn">割付を計算</button>
+    </div>
+    <div class="prog" id="planprog"><i></i></div>
+    <div class="note" id="planinfo">MYcurve の現場JSON（M_APP_044 以降で推進力を計算して保存したもの）を「📥 MYcurveのJSONを開く」で読むか、MYcurve から開くと使えます。</div>
+    <div id="planwrap" style="overflow-x:auto;margin-top:8px"></div>
+  </div>
 </div>
 
 <script>
@@ -1368,6 +1391,227 @@ function adoptProposal(k,i){
   $('propinfo').innerHTML = `<span class="v-ok">区間${k}に「上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm ／ 側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm」を採用しました。</span>`;
 }
 
+/* ===== 1本ごとの FJリング割付（vr009）=====
+   MYcurve の1本毎の推進力（calcResult.trace）を使い、目地ごとに「曲線の中にいる間の最大推進力」を求め、
+   その目地に必要な最小の FJリング構成を軸力検証の計算で選ぶ。
+   ・推進管は発進立坑で継ぎ足して押すので、最終位置 p の目地は、先端が X にあるとき p−(Xf−X) にいる
+     （Xf＝押し終わりの先端位置）。曲線 k の中（BC_k〜EC_k）にいるのは X∈[BC_k+Xf−p, EC_k+Xf−p] の間。
+   ・最後まで BC に届かない目地（p≦BC1）は曲線を通らない → FJリングは要らない（パルリングだけ）。
+   ・曲線を通る目地は、通過中の最大推進力で 応力≦25・内側≧5・外側≦継手の許容（通過中）を確かめ、
+     止まった位置での開口（曲線の先の直線なら残留開口、曲線の中ならその開口）≦継手の完了後の許容 を確かめる。
+   ・構成は 1.5set 以上（全周≧1枚・上下を覆う層≧2枚）で、枚数（set）が少ない順に試し、最初に通ったものを採る。
+     同じ枚数ならパルリングは標準どおり「あり」を先に試す（外さないと開口が収まらないときだけ外す）。 */
+const PLAN_LIMITS = { JA:{pass:40, done:30}, JB:{pass:50, done:40}, JC:{pass:70, done:60} };
+let myTrace = null;          // MYcurve の calcResult.trace
+let lastPlan = null;
+
+// 区間データから、[y, X] の管列を押すのに要る力（y＝最後尾の目地位置、X＝先端位置）。
+// MYcurve の computeProgressiveTrace と同じ式（直線 S+=K・fo・d、曲線は管1本分ごとに K を掛ける）。
+// y＝発進側の端なら、先端が X に来たときのジャッキの力（1本毎の推進力の表の値）になる。
+function trResist(tr, y, X){
+  let S=0, K=1, tip=1, tipSet=false, prevTip=null;
+  for(const s of tr.secs){
+    const a=Math.max(y,s.x0), b=Math.min(X,s.x0+s.L);
+    if(b>a){
+      const d=b-a;
+      if(s.type==='curve' && s.n){
+        const u=s.L/s.n, t=d/u;
+        const sum=Math.abs(s.K-1)<1e-12 ? t : (Math.pow(s.K,t+1)-s.K)/(s.K-1);
+        S+=K*s.fo*u*sum; K*=Math.pow(s.K,t);
+      } else S+=K*(s.fo||0)*d;
+    }
+    // 先端がいる区間の先端抵抗の有無。境目は先の区間に属する（発進坑口ちょうど＝地山に当たる）。
+    // ただし到達坑口ちょうどは手前（地山内）とみなす（MYcurve の表の「到達坑口」の行と同じ）。
+    if(!tipSet && X>=s.x0-1e-9 && X<s.x0+s.L-1e-9){ tip = (s.type==='pushout' && Math.abs(X-s.x0)<1e-9 && prevTip!=null) ? prevTip : s.tip; tipSet=true; }
+    prevTip=s.tip;
+  }
+  if(!tipSet && tr.secs.length) tip=tr.secs[tr.secs.length-1].tip;   // 押し終わり（最後の区間の端）
+  return S + (tr.Fo||0)*K*tip;
+}
+function trJack(tr, X){ return trResist(tr, 0, X); }
+function trCurves(tr){
+  return tr.secs.filter(s=>s.type==='curve').map(s=>({k:s.curveNo, BC:s.x0, EC:s.x0+s.L, SP:s.x0+s.L/2, R:s.R, label:s.label}));
+}
+// 目地（最終位置 p）が曲線 c の中にいる間の最大推進力と、そのときの先端位置
+function jointGov(tr, p, c, Xf, mode){
+  const lo=c.BC+Xf-p, hi=Math.min(c.EC+Xf-p, Xf);
+  if(hi<lo || p<=c.BC) return null;
+  let best=null;
+  const step=Math.max(0.05,(hi-lo)/80);
+  for(let X=lo; X<=hi+1e-9; X+=step){
+    const XX=Math.min(X,hi), y=p-(Xf-XX);
+    const F = mode==='trans' ? trResist(tr, y, XX) : trJack(tr, XX);
+    if(!best || F>best.F) best={F, X:XX, y};
+  }
+  return best;
+}
+// 候補の構成（1.5set 以上）。cost＝set数、同数ならパルリングありを先、次に厚みの薄い順
+function planCandidates(maxL, mats){
+  const out=[];
+  for(let ls=1; ls<=maxL; ls++) for(let lc=Math.max(ls,2); lc<=maxL; lc++)
+    for(const mc of mats) for(const ms of mats) for(const pul of [true,false])
+      out.push({ls, lc, mc, ms, pul, sets: ls+(lc-ls)/2});
+  out.sort((a,b)=> a.sets-b.sets || (b.pul-a.pul) || a.lc-b.lc || b.mc-a.mc || b.ms-a.ms);
+  return out;
+}
+// 構成 cfg・各曲線の推進力で照査（速い解法）。曲線 1..m を通し、止まった位置の開口も出す
+function planEval(cfg, base, p, govs, m, finalF, inCurve, pr, lim, exact){
+  const pitch=pitchOf(base.dia);
+  const eng=new Engine();
+  const curves=base.curves.map((c,i)=> i<m ? {rad:c.rad, drc:c.drc, pbc:govs[i]?govs[i].F:0} : {rad:0,drc:0,pbc:0});
+  eng.setup(Object.assign({},base,{varc:cfg.mc, thic:cfg.lc*pitch, vars:cfg.ms, this:cfg.ls*pitch, curves}));
+  const solve=(s,f)=> exact ? eng._solve(s,f) : eng._solveFast(s,f);
+  let sig=0, inn=Infinity, out=0, broken=false, bott=false, rows=[];
+  for(let k=1;k<=m;k++){
+    const f=eng.Cv[k].pbc;
+    const r1=solve(2*k-1,f), r2=solve(2*k,f);
+    const C=eng.Cv[k], mx=eng.mx;
+    const o=(mx-r2.pl+C.sd)+(C.sd0-C.sd)/2+pr, ii=(mx-r2.pl)-(C.sd0-C.sd)/2+pr;
+    sig=Math.max(sig,r1.sig,r2.sig); inn=Math.min(inn,ii); out=Math.max(out,o);
+    if(eng._verdict(r1.sig,r1.ms)==='破壊'||eng._verdict(r2.sig,r2.ms)==='破壊') broken=true;
+    if(r1.pl>=mx||r2.pl>=mx||r1.bottomed||r2.bottomed) bott=true;
+    rows.push({k, F:f, sig:Math.max(r1.sig,r2.sig), inner:ii, outer:o});
+  }
+  // 止まった位置の開口：曲線の先の直線なら残留開口（推進力は押し終わりの値）、曲線の中ならその曲線の外側の開口
+  let fin;
+  if(inCurve) fin=rows[m-1].outer;
+  else { const r=solve(2*m+1, finalF); fin=eng.mx-r.pl+pr; }
+  const ok = !broken && !bott && sig<=25 && inn>=5 && out<=lim.pass && fin<=lim.done;
+  return {ok, sig, inner:inn, outer:out, final:fin, rows, broken, bott};
+}
+function planCfgLabel(c){
+  const MS={11:'1.7倍',12:'2.0倍',13:'2.5倍',14:'3.0倍',15:'3.5倍'};
+  const full = c.mc===c.ms ? `全周 ${MS[c.mc]}×${c.ls}枚` : `全周 上下${MS[c.mc]}／左右${MS[c.ms]}×${c.ls}枚`;
+  const top = c.lc>c.ls ? `＋上下のみ ${MS[c.mc]}×${c.lc-c.ls}枚` : '';
+  return full+top;
+}
+function planCfgKey(c){ return c ? [c.ls,c.lc,c.mc,c.ms,c.pul].join('/') : 'none'; }
+
+async function runPlan(){
+  const tr=myTrace;
+  if(!tr || !tr.secs || !tr.pipes || !tr.pipes.length){
+    $('planinfo').innerHTML='<span class="v-bad">1本毎の推進力のデータがありません。</span>MYcurve（M_APP_044 以降）で推進力を計算・保存した現場JSONを読み込んでください。';
+    return;
+  }
+  const lim=PLAN_LIMITS[$('planJoint').value], mode=$('planForce').value;
+  const maxL=Math.max(2,Math.min(6,+$('planMaxL').value||4));
+  const mats=$('planMats').value.split(',').map(Number);
+  const inp=readInput(), base={dia:inp.dia, leng:inp.leng, sc:inp.sc, curves:inp.curves.map(c=>({rad:+c.rad, drc:+c.drc}))};
+  const curves=trCurves(tr);
+  const Xf=tr.pipes[tr.pipes.length-1].x;
+  const cand=planCandidates(maxL, mats);
+  // 目地＝No.i と No.i+1 の間（発進側を1本目。MYcurve の1本毎の表と同じ番号）。位置は No.i の先端
+  const joints=[];
+  for(let i=0;i<tr.pipes.length-1;i++) joints.push({a:tr.pipes[i].no, b:tr.pipes[i+1].no, p:tr.pipes[i].x});
+  const prog=$('planprog'), bar=prog.firstElementChild; prog.style.display='block'; bar.style.width='0';
+  $('planbtn').disabled=true;
+  const cache=new Map();
+  for(let ji=0; ji<joints.length; ji++){
+    const J=joints[ji];
+    const passed=curves.filter(c=>J.p>c.BC);
+    if(!passed.length){ J.kind='none'; continue; }          // 曲線に入らない → FJ なし
+    const m=passed.length, last=passed[m-1];
+    J.kind = J.p<last.EC ? 'in' : 'through';
+    J.govs=passed.map(c=>jointGov(tr, J.p, c, Xf, mode));
+    J.finalF = mode==='trans' ? trResist(tr, J.p, Xf) : trJack(tr, Xf);
+    const kSpec=cuSpecFor(last.k), pul=kSpec.pul;
+    const prOn = Math.max(0,(pul.thick||0)-(pul.crush||0));
+    const key=J.govs.map(g=>Math.round(g.F)).join(',')+'|'+Math.round(J.finalF)+'|'+J.kind+'|'+m;
+    let pick=cache.get(key);
+    if(pick===undefined){
+      pick=null;
+      for(const c of cand){
+        const r=planEval(c, base, J.p, J.govs, m, J.finalF, J.kind==='in', c.pul?prOn:0, lim, false);
+        if(r.ok){ pick=c; break; }
+      }
+      cache.set(key,pick);
+    }
+    J.cfg=pick; J.prOn=prOn;
+    if(ji%5===0){ bar.style.width=(ji/joints.length*100).toFixed(0)+'%'; await new Promise(r=>setTimeout(r)); }
+  }
+  // 採用した構成を正確な解法で照査し直す（表示用）
+  joints.forEach(J=>{
+    if(J.kind==='none' || !J.cfg) return;
+    J.res=planEval(J.cfg, base, J.p, J.govs, J.govs.length, J.finalF, J.kind==='in', J.cfg.pul?J.prOn:0, lim, true);
+  });
+  // 比較：曲線を通る全部の目地に、一番厳しい目地の構成を一律に貼った場合
+  const used=joints.filter(J=>J.kind!=='none');
+  const worst=used.reduce((w,J)=> (J.cfg && (!w || J.cfg.sets>w.sets || (J.cfg.sets===w.sets && J.cfg.lc>w.lc))) ? J.cfg : w, null);
+  lastPlan={joints, curves, Xf, lim, mode, worst, tr};
+  bar.style.width='100%'; prog.style.display='none'; $('planbtn').disabled=false;
+  renderPlan(lastPlan);
+}
+
+function renderPlan(P){
+  const {joints, curves, Xf, lim, mode, worst, tr}=P;
+  const f1=x=>fmt(x,1), f0=x=>fmt(x,0);
+  // 1) 先端が BC・SP・EC に来たときの推進力と、そのとき立坑で押し始める管の最終位置
+  const marks=[];
+  curves.forEach(c=>{ [['BC',c.BC],['SP',c.SP],['EC',c.EC]].forEach(([n,x])=>marks.push({lab:`${n}${curves.length>1?c.k:''}`, X:x})); });
+  marks.push({lab:'到達坑口', X:tr.groundEnd}); marks.push({lab:'押し終わり', X:Xf});
+  let h='<div style="margin:4px 0 6px;font-weight:600;color:var(--head)">先端の位置と推進力</div>'+
+    '<table class="ptable"><thead><tr><th>先端</th><th>距離(m)</th><th>ジャッキの力(kN)</th><th>そのとき曲線の中にいる目地（最終位置）</th></tr></thead><tbody>';
+  marks.forEach(mk=>{
+    const ins=curves.map(c=>{ const a=c.BC+Xf-mk.X, b=c.EC+Xf-mk.X;
+      const js=joints.filter(J=>J.p>=a && J.p<=b && J.p>c.BC); if(!js.length) return '';
+      return `${curves.length>1?'第'+c.k+'曲線：':''}No.${js[0].a}〜${js[js.length-1].b} の間（最終 ${f1(js[0].p)}〜${f1(js[js.length-1].p)}m）`; }).filter(Boolean).join('／')||'—';
+    h+=`<tr><td class="z">${mk.lab}</td><td>${fmt(mk.X,2)}</td><td>${f1(trJack(tr,mk.X))}</td><td class="z">${ins}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  // 2) 割付（同じ構成が続く目地をまとめる）
+  const groups=[];
+  joints.forEach(J=>{
+    const key=J.kind==='none'?'none':planCfgKey(J.cfg)+'|'+J.kind;
+    const g=groups[groups.length-1];
+    if(g && g.key===key) g.js.push(J); else groups.push({key, js:[J]});
+  });
+  const kindLab={none:'曲線に入らない', in:'曲線の中で止まる', through:'曲線を通って直線で止まる'};
+  h+='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">目地ごとの割付</div>'+
+    '<table class="ptable"><thead><tr><th>目地（管番号）</th><th>最終位置(m)</th><th>区分</th><th>最大推進力(kN)<br>（そのときの先端）</th>'+
+    '<th>パルリング</th><th>FJリング</th><th>set</th><th>最大応力</th><th>内側</th><th>外側（通過中）<br>≤'+lim.pass+'</th><th>止まった位置の開口<br>≤'+lim.done+'</th></tr></thead><tbody>';
+  let nJ=0, nFull=0, nTop=0, nPulOff=0, nFail=0;
+  groups.forEach(g=>{
+    const A=g.js[0], B=g.js[g.js.length-1], n=g.js.length;
+    const range=`No.${A.a}/${A.b}〜No.${B.a}/${B.b}（${n}か所）`;
+    const pos=`${f1(A.p)}〜${f1(B.p)}`;
+    if(A.kind==='none'){
+      h+=`<tr><td class="z">${range}</td><td>${pos}</td><td class="z">${kindLab.none}</td><td>—</td><td class="z">標準どおり</td><td class="z v-ok">不要</td><td>0</td><td colspan="4" class="z muted">曲線を通らないので FJリングは要らない</td></tr>`;
+      return;
+    }
+    const gmax=g.js.reduce((w,J)=>{ const f=Math.max(...J.govs.map(x=>x.F)); return (!w||f>w.f)?{f,J}:w; },null);
+    const gX=gmax.J.govs.reduce((w,x)=>(!w||x.F>w.F)?x:w,null);
+    if(!A.cfg){ nFail+=n;
+      h+=`<tr><td class="z">${range}</td><td>${pos}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${f1(gX.X)}m</span></td><td colspan="7" class="z v-bad">条件を満たす構成が見つかりません（最大層数・材種・継手を見直す）</td></tr>`;
+      return;
+    }
+    const c=A.cfg, rs=g.js.map(J=>J.res);
+    const sig=Math.max(...rs.map(r=>r.sig)), inn=Math.min(...rs.map(r=>r.inner)), out=Math.max(...rs.map(r=>r.outer)), fin=Math.max(...rs.map(r=>r.final));
+    nJ+=n; nFull+=c.ls*n; nTop+=(c.lc-c.ls)*n; if(!c.pul) nPulOff+=n;
+    h+=`<tr><td class="z">${range}</td><td>${pos}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${f1(gX.X)}m</span></td>`+
+       `<td class="z ${c.pul?'':'v-warn'}">${c.pul?'あり（標準）':'外す'}</td><td class="z">${planCfgLabel(c)}</td><td>${fmt(c.sets,1)}</td>`+
+       `<td class="${sig<=25?'v-ok':'v-bad'}">${fmt(sig,1)}</td><td class="${inn>=5?'v-ok':'v-bad'}">${fmt(inn,1)}</td>`+
+       `<td class="${out<=lim.pass?'v-ok':'v-bad'}">${fmt(out,1)}</td><td class="${fin<=lim.done?'v-ok':'v-bad'}">${fmt(fin,1)}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  // 3) 数量と比較
+  const nCurveJ=joints.filter(J=>J.kind!=='none').length, nNone=joints.length-nCurveJ;
+  const sumSets=nFull+nTop/2;
+  const wSets = worst ? worst.sets*nCurveJ : 0;
+  h+='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">数量</div>'+
+    `<table class="ptable"><tbody>`+
+    `<tr><td class="z">目地の数</td><td>${joints.length} か所（FJ不要 ${nNone}・FJあり ${nCurveJ}）</td></tr>`+
+    `<tr><td class="z">FJリング 全周の層</td><td>${nFull} 枚（90°×4切片で ${nFull*4} 切片）</td></tr>`+
+    `<tr><td class="z">FJリング 上下のみの層</td><td>${nTop} 枚（90°×2切片で ${nTop*2} 切片）</td></tr>`+
+    `<tr><td class="z">合計</td><td><b>${fmt(sumSets,1)} set</b></td></tr>`+
+    `<tr><td class="z">パルリングを外す目地</td><td>${nPulOff} か所</td></tr>`+
+    (worst?`<tr><td class="z">比較：曲線を通る目地すべてに一番厳しい構成（${planCfgLabel(worst)}）を貼った場合</td><td>${fmt(wSets,1)} set → <b class="v-ok">${fmt(wSets-sumSets,1)} set 少ない</b></td></tr>`:'')+
+    (nFail?`<tr><td class="z v-bad">構成が見つからない目地</td><td class="v-bad">${nFail} か所</td></tr>`:'')+
+    `</tbody></table>`;
+  $('planwrap').innerHTML=h;
+  $('planinfo').innerHTML=`継手 ${$('planJoint').value}（通過中の外側 ≤${lim.pass}mm・止まった位置 ≤${lim.done}mm）／目地にかかる力：${mode==='trans'?'後ろの管の摩擦分を引いた力':'ジャッキの力そのまま'}／`+
+    `推進力は MYcurve の1本毎の推進力（最大 ${f1(tr.F_total)}kN）。`;
+}
+
 /* ===== 入力履歴（保存・呼び出し）===== */
 const HIST_KEY = 'jikuryoku_history_v1';
 const HIST_FORMAT = 'JIKURYOKU_HISTORY_v1';
@@ -1553,6 +1797,11 @@ function curveCushionKey(c, pipe){
 
 function importMyCurve(d){
   if(!d || !d.alignment) throw new Error('MYcurveの現場JSONではないようです（alignment が見つかりません）');
+  // vr009: 1本毎の推進力（M_APP_044 以降の calcResult.trace）。割付の計算に使う
+  myTrace = (d.calcResult && d.calcResult.trace && d.calcResult.trace.secs) ? d.calcResult.trace : null;
+  if($('planinfo')) $('planinfo').innerHTML = myTrace
+    ? `MYcurve の1本毎の推進力を読み込みました（管 ${myTrace.pipes.length} 本・最大 ${fmt(myTrace.F_total,1)}kN）。「割付を計算」を押してください。`
+    : 'この現場JSONには1本毎の推進力が入っていません（MYcurve M_APP_044 以降で推進力を計算して保存すると入ります）。';
   const site=d.site||{}, pipe=d.pipe||{}, curvesIn=(d.alignment.curves||[]);
   const notes=[];
 
@@ -1679,7 +1928,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const MY_SOURCE = '軸力検証ソフト HTML版 vr008';
+const MY_SOURCE = '軸力検証ソフト HTML版 vr009';
 // MYcurveの継手種別は「許容目地開き」60=JC / 40=JB / 30=JA。
 // 軸力検証の継手タイプは「外側の開口長の基準」＝許容開口長 70=JC / 50=JB / 40=JA（vr008でJA追加）。
 // 同じ継手でも数値の意味が違う（あちらは抜出し長、こちらは施工中の許容開口長）。
@@ -1931,6 +2180,7 @@ $('dia').onchange=drawLayout;
 $('run').onclick=compute;
 $('loadex').onclick=loadExample;
 $('propbtn').onclick=propose;
+$('planbtn').onclick=runPlan;
 $('saveHist').onclick=saveHistory;
 $('openHist').onclick=()=>{
   const p=$('histpanel');
