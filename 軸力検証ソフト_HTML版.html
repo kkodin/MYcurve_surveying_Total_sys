@@ -34,11 +34,13 @@
   .sec{border-top:1px dashed var(--line);margin:9px 0 4px;padding-top:7px;font-weight:600;color:var(--head);font-size:12.5px}
   .curverow{display:grid;grid-template-columns:52px 1fr 1fr 1fr;gap:6px;align-items:center;margin-bottom:5px}
   .curverow .tag{color:var(--sub);font-size:12px}
-  .lyrhead,.lyrrow{display:grid;grid-template-columns:76px 1.4fr .85fr .85fr 1.2fr;gap:5px;align-items:center;margin-bottom:4px}
+  .lyrhead,.lyrrow{display:grid;grid-template-columns:70px 1.15fr 1.15fr .7fr .7fr 1.15fr;gap:5px;align-items:center;margin-bottom:4px}
   .lyrhead{font-size:11px;color:var(--sub)}
   .lyrrow .tag{color:var(--sub);font-size:12px;display:flex;align-items:center;gap:4px;white-space:nowrap}
   .lyrrow input[type=checkbox]{width:auto;flex:none}
   .lyrrow.off select,.lyrrow.off input:not([type=checkbox]){opacity:.35;pointer-events:none}
+  .lyrrow select,.lyrrow input:not([type=checkbox]){padding:3px 3px;font-size:12.5px}
+  #cuScope input[type=checkbox]{width:auto;vertical-align:-2px;margin-right:4px}
   .zonecalc{background:var(--head2);border:1px solid var(--line);border-radius:6px;
     padding:6px 8px;margin-top:7px;font-size:12px;line-height:1.6}
   .zonecalc b{color:var(--head)}
@@ -161,10 +163,11 @@
           <div id="cuCurveTabs" style="display:none;margin-top:6px;gap:4px;flex-wrap:wrap"></div>
           <div class="muted" id="cuScopeNote" style="font-size:11px;margin-top:4px"></div>
         </div>
-        <div class="lyrhead"><div></div><div>材種</div><div>厚み(mm)</div><div>角度(°)</div><div>割付(枚数)</div></div>
+        <div class="lyrhead"><div></div><div>材種（上下）</div><div>材種（左右）</div><div>厚み(mm)</div><div>角度(°)</div><div>割付(枚数)</div></div>
         <div class="lyrrow" id="pulrow">
           <div class="tag"><input type="checkbox" id="pulUse" checked>パルリング</div>
           <select id="pulMat" disabled><option>PB標準品</option></select>
+          <select id="pulMatS" disabled><option>（同じ）</option></select>
           <input type="number" id="pulThick" step="1" value="10">
           <select id="pulAngle" disabled><option>全周</option></select>
           <select id="pulCount" disabled><option>全面（固定）</option></select>
@@ -172,7 +175,7 @@
         <div class="lyrrow" id="pulcrushrow">
           <div class="tag" style="padding-left:20px">つぶれ代(mm)</div>
           <input type="number" id="pulCrush" step="0.1" value="8">
-          <div class="muted" style="grid-column:3/6;font-size:11px">パルリングはつぶれ計算をしないので手入力（MYcurve と同じ）。<br>応力計算からは外し、この値を開口長に加算します。</div>
+          <div class="muted" style="grid-column:3/7;font-size:11px">パルリングはつぶれ計算をしないので手入力（MYcurve と同じ）。<br>応力計算からは外し、この値を開口長に加算します。</div>
         </div>
         <div id="layers"></div>
         <div class="zonecalc" id="zonecalc"></div>
@@ -202,7 +205,6 @@
         <h2>計算結果</h2>
         <div id="crit" class="crit"></div>
         <div id="reswrap" style="overflow-x:auto"><div class="muted">「計算する」を押すと結果が表示されます。</div></div>
-        <div id="chartarea"></div>
         <div class="note" id="footnote"></div>
       </div>
 
@@ -216,6 +218,12 @@
     </div>
   </div>
 
+  <!-- vr008: グラフと計算経過は横幅いっぱいに出す（概要説明PDFの3ページ目の形） -->
+  <div class="panel" style="margin-top:16px">
+    <h2>変形量と応力分布（BC点ごと）・計算経過</h2>
+    <div id="chartarea"><div class="muted">「計算する」を押すと表示されます。</div></div>
+  </div>
+
   <div class="panel" id="histpanel" style="display:none;margin-top:12px">
     <h2>保存済みの履歴</h2>
     <div class="muted" style="margin-bottom:8px">このブラウザに保存された履歴です。「読込」で入力値を復元します。
@@ -224,7 +232,7 @@
   </div>
 
   <div class="toolbar" style="margin-top:10px">
-    <span class="muted">判定基準：最大応力度 ≤ 25 N/mm² ／ 内側の開口長 ≥ 5mm ／ 外側の開口長 ≤ 70mm(JC)・50mm(JB)</span>
+    <span class="muted">判定基準（概要説明PDF）：<b>BC点</b> 最大応力度 ≤ 25 N/mm²・内側の開口長 ≥ 5mm ／ <b>EP点</b> 外側の開口長 ≤ 70mm(JC)・50mm(JB)・40mm(JA) ／ <b>配置</b> FJリングは最小1.5set（全周1枚＋上下90°1枚。メーカー推奨）</span>
   </div>
 
   <div class="panel propose">
@@ -233,7 +241,7 @@
       材種（発泡倍率）×厚み（層数）を総当たりで計算し、成立する構成を一覧します。</div>
     <div class="ctrls">
       <label>最大層数<input type="number" id="maxLayers" value="5" min="1" max="10" step="1"></label>
-      <label>継手タイプ<select id="jointType"><option value="70">JC（外側の開口長≤70mm）</option><option value="50">JB（外側の開口長≤50mm）</option></select></label>
+      <label>継手タイプ<select id="jointType"><option value="70">JC（外側の開口長≤70mm）</option><option value="50">JB（外側の開口長≤50mm）</option><option value="40">JA（外側の開口長≤40mm）</option></select></label>
       <label>表示<select id="showTier"><option value="ok">推奨・要検討のみ</option><option value="all">不成立も含め全件</option></select></label>
       <button class="propbtn" id="propbtn">構成を提案</button>
     </div>
@@ -245,7 +253,7 @@
   <div class="toolbar" style="margin-top:10px">
     <span class="muted">区分：<span class="tier t-rec">推奨</span> 応力≤25 ／
       <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
-      <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過</span>
+      <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過 or 1.5set未満</span>
   </div>
 </div>
 
@@ -430,7 +438,9 @@ Engine.prototype.runUpTo=function(kmax){
     const inner=(mx-Cv[k].max_pl)-(Cv[k].sd0-Cv[k].sd)/2;
     // チャート用 分布
     const n=this.Cu.nsep, prof=[];
-    for(let i=1;i<=n;i++) prof.push({x:this.CU[i][9], comp:this.CD[i][3][2*k], sig:this.CD[i][11][2*k]});
+    // vr008: 直線（第k直線）の分布と、各分割のFJ厚み（CU col8）も持ち帰る（表示専用。計算には使わない）
+    for(let i=1;i<=n;i++) prof.push({x:this.CU[i][9], comp:this.CD[i][3][2*k], sig:this.CD[i][11][2*k],
+      compS:this.CD[i][3][2*k-1], sigS:this.CD[i][11][2*k-1], t:this.CU[i][8], zc:this.CU[i][2]!==0});
     out.curves.push({k,
       straight:{pp:St[k].pp,sigma:St[k].max_sigma,verdict:this._verdict(St[k].max_sigma,St[k].ms_p),gap:mx-St[k].max_pl,max_pl:St[k].max_pl,bottomed:St[k].max_pl>=mx},
       curve:{pp:Cv[k].pp,sigma:Cv[k].max_sigma,verdict:this._verdict(Cv[k].max_sigma,Cv[k].ms_p),
@@ -509,23 +519,33 @@ function countOptions(angle){
 function coversTopDeg(l){ return l.angle*l.count >= 180; }
 function coversSideDeg(l){ return l.angle*l.count >= 360; }
 
+/* vr008: 1つの層で上下(90°)と左右（側方面）の倍率を分けられるようにした。
+   matS が未設定（undefined/null）なら「上下と同じ」。旧版の履歴・MYcurve の層は matS を持たないので
+   そのまま上下と同じ材種として読める。左右の材種が効くのは側方面まで覆う全周(360°)の層だけ。 */
+function sideMat(l){ return (l.matS!=null && l.matS!=='') ? +l.matS : l.mat; }
 function renderLayers(){
   const box=$('layers'); box.innerHTML='';
   layerState.forEach((l,i)=>{
     const row=document.createElement('div');
     row.className='lyrrow'+(l.on?'':' off');
+    const full=coversSideDeg(l);
+    const ms=(l.matS!=null&&l.matS!=='')?+l.matS:'';
     row.innerHTML=`
       <div class="tag"><input type="checkbox" id="ly${i}on" ${l.on?'checked':''}>${i+1}層目</div>
       <select id="ly${i}mat">${CU_MAT.map(m=>`<option value="${m.v}" ${m.v===l.mat?'selected':''}>${m.label}</option>`).join('')}</select>
+      <select id="ly${i}matS" ${full?'':'disabled'} title="${full?'左右（側方面）だけ倍率を変えるときに選びます':'左右（側方面）まで覆う全周の層のときだけ選べます'}">`+
+        `<option value="" ${ms===''?'selected':''}>${full?'上下と同じ':'—（左右なし）'}</option>`+
+        CU_MAT.map(m=>`<option value="${m.v}" ${m.v===ms?'selected':''}>${m.label}</option>`).join('')+`</select>
       <select id="ly${i}thick">${CU_THICK.map(t=>`<option value="${t}" ${t===l.thick?'selected':''}>${t}</option>`).join('')}</select>
       <select id="ly${i}angle">${CU_ANGLE.map(a=>`<option value="${a}" ${a===l.angle?'selected':''}>${a}</option>`).join('')}</select>
       <select id="ly${i}count">${countOptions(l.angle).map(c=>`<option value="${c.v}" ${c.v===l.count?'selected':''}>${c.label}</option>`).join('')}</select>`;
     box.appendChild(row);
     $('ly'+i+'on').onchange=e=>{ l.on=e.target.checked; renderLayers(); recalcZones(); compute(); };
-    $('ly'+i+'mat').onchange=e=>{ l.mat=+e.target.value; recalcZones(); compute(); };
+    $('ly'+i+'mat').onchange=e=>{ l.mat=+e.target.value; if(sideMat(l)===l.mat) delete l.matS; renderLayers(); recalcZones(); compute(); };
+    $('ly'+i+'matS').onchange=e=>{ const v=e.target.value; if(v===''||+v===l.mat) delete l.matS; else l.matS=+v; renderLayers(); recalcZones(); compute(); };
     $('ly'+i+'thick').onchange=e=>{ l.thick=+e.target.value; recalcZones(); compute(); };
     $('ly'+i+'angle').onchange=e=>{ l.angle=+e.target.value; l.count=fullCount(l.angle); renderLayers(); recalcZones(); compute(); };
-    $('ly'+i+'count').onchange=e=>{ l.count=+e.target.value; recalcZones(); compute(); };
+    $('ly'+i+'count').onchange=e=>{ l.count=+e.target.value; renderLayers(); recalcZones(); compute(); };
   });
 }
 
@@ -581,17 +601,41 @@ function renderCuScope(){
 
 // 層構成 → 上下面(90°)／側方面 の厚み・材種を求め、隠しの varc/thic/vars/this に反映する
 function zonesFromLayers(layers){
-  const pick=sel=>{
+  // matOf: 上下面ゾーンは層の「上下」の材種、側方面ゾーンは層の「左右」の材種（vr008）
+  const pick=(sel,matOf)=>{
     const ls=layers.filter(l=>l.on&&l.thick&&sel(l));
     const thick=ls.reduce((s,l)=>s+l.thick,0);
-    const byMat={}; ls.forEach(l=>{ byMat[l.mat]=(byMat[l.mat]||0)+l.thick; });
+    const byMat={}; ls.forEach(l=>{ const m=matOf(l); byMat[m]=(byMat[m]||0)+l.thick; });
     // 1ゾーン1材種しか扱えないので最も厚い材種を代表にする。
     // 同厚で並んだときは材種コードの小さい方（＝硬い材料）＝応力が高く出る保守側を採る。
     const keys=Object.keys(byMat).map(Number).sort((a,b)=>byMat[b]-byMat[a]||a-b);
     return {thick, mat:keys.length?keys[0]:0, mixed:keys.length>1, n:ls.length};
   };
-  return {top:pick(coversTopDeg), side:pick(coversSideDeg)};
+  return {top:pick(coversTopDeg,l=>l.mat), side:pick(coversSideDeg,sideMat)};
 }
+
+/* ===== 1.5set の判定（vr008・概要説明PDF）=====
+   メーカー推奨の最小配置は 1.5set＝全周1枚＋上下90°1枚。
+   1.0set だと推進力の応力が曲線内側の端のごく狭い範囲に集中し、中大口径では
+   蛇行・推進力や側圧の異常増加・ばらつきの原因になる、というのが理由。
+   ここでは「全周（側方面まで覆う）の層が1枚以上」かつ「上下面を覆う層が2枚以上」を 1.5set 以上とする。
+   パルリングは応力計算から外している別物なので数えない。
+   直接指定モードは層が無いので、厚みをピッチ（呼び径で 5/8/10mm）で割った層数で数える。 */
+function pitchOf(dia){ dia=parseInt(dia); return dia<=500?5:(dia<=700?8:10); }
+function setCheckLayers(layers){
+  const ls=layers.filter(l=>l.on&&l.thick);
+  const nFull=ls.filter(coversSideDeg).length, nTop=ls.filter(coversTopDeg).length;
+  return {nFull, nTop, sets:nFull+(nTop-nFull)/2, ok:nFull>=1&&nTop>=2};
+}
+function setCheckZone(thic,thisv,p){
+  const nFull=Math.floor((+thisv+1e-9)/p), nTop=Math.floor((+thic+1e-9)/p);
+  return {nFull, nTop, sets:nFull+(nTop-nFull)/2, ok:nFull>=1&&nTop>=2};
+}
+function setCheckFor(k){
+  if($('cuMode').value==='layer') return setCheckLayers(cuSpecFor(k).layers);
+  return setCheckZone($('thic').value,$('this').value,pitchOf($('dia').value));
+}
+function setLabel(c){ return `${fmt(c.sets,1)}set（全周${c.nFull}枚＋上下のみ${Math.max(0,c.nTop-c.nFull)}枚）`; }
 
 function recalcZones(){
   PUL.on=$('pulUse').checked;
@@ -613,9 +657,12 @@ function recalcZones(){
   if(z.top.mixed||z.side.mixed) warn.push('層で材種が混在しています。軸力検証は1ゾーン1材種のみのため、各ゾーンで最も厚い材種を代表にしています（応力は保守側に出ます）');
   if(z.top.thick===0) warn.push('<span class="v-bad">上下面(90°)を覆う層がありません</span>（角度×枚数が180°以上の層が必要）');
   if(PUL.on && PUL.crush>PUL.thick) warn.push('<span class="v-bad">つぶれ代がパルリング厚みを超えています</span>（開口長への加算は0として扱います）');
+  const sc=setCheckLayers(layerState);
+  if(!sc.ok) warn.push(`<span class="v-bad">FJリングが 1.5set 未満です</span>（${setLabel(sc)}）。メーカー推奨の最小配置は 全周1枚＋上下90°1枚`);
   $('zonecalc').innerHTML =
     `→ 計算に使う値： <b>上下面(90°)</b> ${MN[z.top.mat]||'—'} <b>${z.top.thick}mm</b>`+
     `　／　<b>側方面</b> ${z.side.thick?(MN[z.side.mat]||'—'):'無し'} <b>${z.side.thick}mm</b>`+
+    `　／　配置 <b class="${sc.ok?'v-ok':'v-bad'}">${setLabel(sc)}</b>`+
     (PUL.on?`<br>パルリング PB ${PUL.thick}mm（つぶれ代 ${PUL.crush}mm）は応力計算から除外し、`+
             `残り <b>${fmt(PUL.residual,1)}mm</b> を開口長に加算します。`:'<br>パルリング なし。')+
     (warn.length?'<br>'+warn.map(w=>'※ '+w).join('<br>'):'');
@@ -657,8 +704,8 @@ function ringSVG(pieces, color, ratio, pratio){
   const full1=pieces.length===1 && pieces[0][1]-pieces[0][0]>=359.9;
   const seg=full1
     ? `<path d="${donutPath(c,c,Rin,R)}" fill-rule="evenodd" fill="${color}"/>`
-    : pieces.map(p=>`<path d="${bandPath(c,c,Rin,R,p[0],p[1])}" fill="${color}"
-      stroke="var(--panel)" stroke-width="1.1"/>`).join('');
+    : pieces.map(p=>`<path d="${bandPath(c,c,Rin,R,p[0],p[1])}" fill="${p[2]||color}"
+      stroke="var(--panel)" stroke-width="1.1"/>`).join('');   // p[2]: 上下／左右で倍率が違う層の色（vr008）
   // 上下面(90°)ゾーンの境界（鉛直から±45°）
   const zl=[45,135,225,315].map(a=>{ const [x1,y1]=ptOn(c,c,Rin-3,a), [x2,y2]=ptOn(c,c,Rp+4,a);
     return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"
@@ -695,10 +742,16 @@ function drawLayout(){
       mats[l.mat]=1;
       const per=Math.round(l.count/2), full=l.count>=fullCount(l.angle);
       const badge = coversSideDeg(l)?'上下面＋側方面（全周）':(coversTopDeg(l)?'上下面(90°)を被覆':'上下面に届かない');
+      const ms=sideMat(l), split=coversSideDeg(l)&&ms!==l.mat;
+      if(split) mats[ms]=1;
+      // 上下と左右で倍率が違う全周の層は、上下(90°)ゾーンと左右ゾーンを色分けして描く
+      const cT=MAT_COLOR[l.mat]||MAT_COLOR[0], cS=MAT_COLOR[ms]||MAT_COLOR[0];
+      const pcs = split ? [[-45,45,cT],[45,135,cS],[135,225,cT],[225,315,cS]] : piecesOf(l.angle,l.count);
       boxes.push(ringBox(`${i+1}層目`,
-        `${MAT_SHORT[l.mat]||l.mat} ${l.thick}mm<br>${l.angle}°×${l.count}枚`+
+        (split ? `上下 ${MAT_SHORT[l.mat]||l.mat}／左右 ${MAT_SHORT[ms]||ms}`
+               : `${MAT_SHORT[l.mat]||l.mat}`)+` ${l.thick}mm<br>${l.angle}°×${l.count}枚`+
         (full?'（全面）':`（上下${per}枚ずつ＝片側${l.angle*per}°）`),
-        badge, piecesOf(l.angle,l.count), MAT_COLOR[l.mat]||MAT_COLOR[0], ratio, pratio));
+        badge, pcs, cT, ratio, pratio));
     });
     if(!boxes.length) wrap.innerHTML='<div class="muted">有効な層がありません。</div>';
   }else{
@@ -826,60 +879,98 @@ function runPerCurve(){
                     sd0:got.curve.sd0, outer:got.curve.outer_gap+pr,
                     inner:got.curve.inner_gap+pr, rad:got.curve.rad,
                     bottomed:got.curve.bottomed} : null,
-      gov, passes, prof: got ? got.prof : []
+      gov, passes, prof: got ? got.prof : [],
+      // vr008: グラフ・計算経過表・1.5set 判定用
+      drc: eng.Cv[k].drc, jc: eng.P.jc, xEnd: eng.CU[eng.Cu.nsep+1][9],
+      set: setCheckFor(k), table: captureTable(eng, res.curves.length, pr)
     });
   }
   return out;
+}
+/* 計算経過表（vr008）：Excel「印刷」シートの計算経過と同じ並び。
+   各分割の 開口長＝最大厚−圧縮量（CD col3）＝ VBA の col2、最大応力度＝ CD col11。
+   外端部(i=0)・end(i=n+1) はエンジンが値を持たないので、col1 の式で両端の開口長だけ求める。
+   開口長にはパルリング残り厚み pr を足して、結果表と同じ基準にそろえる。 */
+function col1At(eng,s,x){
+  if(s%2===1) return 0;
+  const k=s>>1, jc=eng.P.jc;
+  if(k===1) return eng.Cv[1].sd/jc*x;
+  const c=eng.Cv[k]; if(c.drc===1) return c.sd/jc*x; if(c.drc===2) return c.sd-c.sd/jc*x; return 0;
+}
+function captureTable(eng,nCurves,pr){
+  const n=eng.Cu.nsep, CU=eng.CU, CD=eng.CD, mx=eng.mx, slots=[];
+  for(let s=1;s<=2*nCurves;s++) slots.push(s);
+  const rows=[];
+  for(let i=0;i<=n+1;i++){
+    const end=(i===0||i===n+1), x=(i===n+1)?CU[n+1][9]:CU[i][9];
+    rows.push({i, label:i===0?'外端部':(i===n+1?'end':String(i)), area:end?0:CU[i][7], x,
+      v:slots.map(s=>({gap: end ? mx-(eng.Inpt[s]-col1At(eng,s,x))+pr : mx-CD[i][3][s]+pr,
+                       sig: end ? 0 : CD[i][11][s]}))});
+  }
+  return {slots, rows, n};
 }
 function fmt(x,d=1){return (Math.round(x*10**d)/10**d).toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d});}
 function sigCell(sigma,verdict){
   const v=verdict; const cls=v==="破壊"?"v-bad":v==="範囲外"?"v-warn":( sigma<=25?"v-ok":"v-warn");
   const tag=v?`&lt;${v}&gt; `:""; return `<span class="${cls}">${tag}${fmt(sigma,2)}</span>`;
 }
+const JOINT_NAME={70:'JC',50:'JB',40:'JA'};
 function render(secs){
-  const outLim=+$('jointType').value||70;
+  const outLim=+$('jointType').value||70, jn=JOINT_NAME[outLim]||'';
   const MN=Object.fromEntries(CU_MAT.map(m=>[m.v,m.label]));
-  // 判定サマリ ── 全区間・全通過曲線を通した最悪値で見る
+  /* 判定サマリ（vr008：概要説明PDFの考え方で BC点／EP点 を分ける）
+     ・BC点（曲線に入るところ）…… 最大応力度 ≤ 25、内側の開口長 ≥ 5mm
+     ・EP点（曲線を出るところ）…… 外側の開口長 ≤ 継手の許容開口長（JC70/JB50/JA40）
+     ・配置 …………………………… FJリングは最小 1.5set（メーカー推奨）
+     数値は区間ごと・通過する全曲線の最悪値。 */
   let allMaxSig=0, minInner=Infinity, maxOuter=0;
+  const setNG=[];
   secs.forEach(s=>{
     if(s.straight) allMaxSig=Math.max(allMaxSig, s.straight.sigma);
     s.passes.forEach(p=>{ allMaxSig=Math.max(allMaxSig,p.sigma);
       minInner=Math.min(minInner,p.inner); maxOuter=Math.max(maxOuter,p.outer); });
+    if(s.set && !s.set.ok) setNG.push(s.k);
   });
   if(minInner===Infinity) minInner=0;
-  const mk=(label,ok,val)=>`<div class="item">${label}：<span class="${ok?'v-ok':'v-bad'}">${val}</span> ${ok?'✓':'✕'}</div>`;
+  const mk=(pt,label,ok,val)=>`<div class="item"><b>${pt}</b> ${label}：<span class="${ok?'v-ok':'v-bad'}">${val}</span> ${ok?'✓':'✕'}</div>`;
+  const s0=secs[0]&&secs[0].set;
   $('crit').innerHTML =
-    mk('最大応力度 ≤ 25', allMaxSig<=25, fmt(allMaxSig,2)+' N/mm²') +
-    mk('内側の開口長 ≥ 5mm', minInner>=5, fmt(minInner,2)+' mm') +
-    mk(`外側の開口長 ≤ ${outLim}mm`, maxOuter<=outLim, fmt(maxOuter,2)+' mm');
+    mk('BC点','最大応力度 ≤ 25', allMaxSig<=25, fmt(allMaxSig,2)+' N/mm²') +
+    mk('BC点','内側の開口長 ≥ 5mm', minInner>=5, fmt(minInner,2)+' mm') +
+    mk('EP点',`外側の開口長 ≤ ${outLim}mm（${jn}）`, maxOuter<=outLim, fmt(maxOuter,2)+' mm') +
+    mk('配置','FJリング ≥ 1.5set', !setNG.length,
+       setNG.length ? (cuPerCurve?`区間${setNG.join('・')}が1.5set未満`:setLabel(s0)) : (s0?setLabel(s0):'—'));
 
-  // 結果表
-  let h='<table><thead><tr><th>区間</th><th>推進力(kN)</th><th>最大応力度(N/mm²)</th>'+
-        '<th>開口長(直線)<br>開口差(曲線)(mm)</th><th>外側の開口長(mm)</th><th>内側の開口長(mm)</th></tr></thead><tbody>';
+  // 結果表（BC点で見る項目／EP点で見る項目を分けて並べる）
+  let h='<table><thead><tr><th rowspan="2">区間</th><th rowspan="2">推進力(kN)</th>'+
+        '<th colspan="2">BC点で確認</th><th>EP点で確認</th><th rowspan="2">開口長(直線)<br>開口差(曲線)(mm)</th></tr>'+
+        '<tr><th>最大応力度(N/mm²)<br>≤25</th><th>内側の開口長(mm)<br>≥5</th><th>外側の開口長(mm)<br>≤'+outLim+'</th></tr></thead><tbody>';
   secs.forEach(s=>{
     if(cuPerCurve){
       const zt=`上下面 ${MN[s.zone.varc]||'—'} ${s.zone.thic}mm ／ 側方面 ${s.zone.this?(MN[s.zone.vars]||'—'):'無し'} ${s.zone.this}mm`
-        + (s.pr?`　＋パルリング残り ${fmt(s.pr,1)}mm`:'');
+        + (s.pr?`　＋パルリング残り ${fmt(s.pr,1)}mm`:'')
+        + (s.set?`　<span class="${s.set.ok?'v-ok':'v-bad'}">${setLabel(s.set)}</span>`:'');
       h+=`<tr><td class="lab" colspan="6" style="background:var(--chip);font-size:11.5px">`+
          `<b>区間${s.k}</b>（第${'一二三四五'[s.k-1]}曲線〜。ここに静止する管の構成）： ${zt}</td></tr>`;
     }
     if(s.straight){
       h+=`<tr><td class="lab">第${s.k}直線</td><td>${fmt(s.straight.pp)}</td>`+
          `<td>${sigCell(s.straight.sigma,s.straight.verdict)}</td>`+
-         `<td>${fmt(s.straight.gap,2)}</td><td>—</td><td>—</td></tr>`;
+         `<td>—</td><td>—</td><td>${fmt(s.straight.gap,2)}</td></tr>`;
     }
     s.passes.forEach(p=>{
       const inOK=p.inner>=5, outOK=p.outer<=outLim, own=(p.j===s.k);
       const lab = own ? `第${p.j}曲線` : `　└ 通過：第${p.j}曲線`;
       h+=`<tr${own?'':' style="opacity:.85"'}><td class="lab">${lab}<span class="muted" style="font-size:10.5px"> R=${p.rad}m</span></td>`+
-         `<td>${fmt(p.pp)}</td><td>${sigCell(p.sigma,p.verdict)}</td><td>${fmt(p.sd0,2)}</td>`+
+         `<td>${fmt(p.pp)}</td><td>${sigCell(p.sigma,p.verdict)}</td>`+
+         `<td class="${inOK?'v-ok':'v-bad'}">${fmt(p.inner,2)}</td>`+
          `<td class="${outOK?'v-ok':'v-bad'}">${fmt(p.outer,2)}</td>`+
-         `<td class="${inOK?'v-ok':'v-bad'}">${fmt(p.inner,2)}</td></tr>`;
+         `<td>${fmt(p.sd0,2)}</td></tr>`;
     });
     if(s.straightAfter){
       h+=`<tr style="opacity:.85"><td class="lab">　└ 通過後の直線（静止位置）</td><td>${fmt(s.straightAfter.pp)}</td>`+
          `<td>${sigCell(s.straightAfter.sigma,s.straightAfter.verdict)}</td>`+
-         `<td>${fmt(s.straightAfter.gap,2)}</td><td>—</td><td>—</td></tr>`;
+         `<td>—</td><td>—</td><td>${fmt(s.straightAfter.gap,2)}</td></tr>`;
     }
     if(!s.straight && !s.passes.length)
       h+=`<tr><td class="lab">区間${s.k}</td><td colspan="5" class="v-bad">材料が最大圧縮に到達し、この区間は解けませんでした（構成を厚くしてください）。</td></tr>`;
@@ -888,9 +979,13 @@ function render(secs){
   $('reswrap').innerHTML=h;
 
   const exited=secs.filter(s=>s.exit).map(s=>s.k);
+  const last=secs.length?secs[secs.length-1].k:1;
   $('footnote').innerHTML =
     (exited.length?`※ 区間 ${exited.join('・')} は途中で計算終了（曲線なし、または材料が最大圧縮に到達）。`:'')+
-    ' 第3列は、直線部が<b>開口長</b>、曲線部が<b>開口差</b>（＝外側の開口長−内側の開口長。'+
+    ` 検討の考え方（概要説明PDF）：完工時に <b>BC.${last}</b> に到達する管は第一〜第${'一二三四五'[last-1]}曲線を<b>すべて通過</b>し、`+
+    `その中で最大の推力を受ける。この管で <b>BC点は許容応力と内側の開口長</b>、<b>EP点は外側の開口長</b> を確認する。`+
+    `各BC点の推進力を同じ値にしているのは簡略化で、正確には発進側の曲線ほど＋α、到達側ほど−α になる。`+
+    '<br>※ 最後の列は、直線部が<b>開口長</b>、曲線部が<b>開口差</b>（＝外側の開口長−内側の開口長。'+
     'エンジン内部の sd0）。〈範囲外〉〈破壊〉は材料の適応限界超過を示す。'+
     (cuPerCurve
       ? '<br>※ 「└ 通過：第j曲線」は、その区間に静止する管が<b>そこへ至るまでに通ってくる</b>曲線での値。'+
@@ -900,31 +995,207 @@ function render(secs){
       : '<br>※ 全区間に同じ構成を貼る前提の照査。曲線ごとに貼り分けるなら「曲線ごとに構成を変える」をON。')+
     (secs.some(s=>s.pr)?`<br>※ 開口長・外側/内側の開口長には、各区間のパルリング残り厚み（厚み−つぶれ代）を加算している。`:'');
 
-  // チャート（各区間の自分の曲線での分布）
+  // グラフ（PDFと同じく BC点ごとに「変形量」と「応力分布」を左右に並べる）＋計算経過表
   const ca=$('chartarea'); ca.innerHTML='';
+  const layerMode=$('cuMode').value==='layer';
   secs.forEach(s=>{
     if(!s.prof || !s.prof.length) return;
-    const box=document.createElement('div'); box.className='charts';
-    const t=cuPerCurve?`区間${s.k}／第${s.k}曲線`:`第${s.k}曲線`;
-    box.innerHTML=`<div class="chartbox"><div class="ct">${t} 圧縮量分布 (mm)</div>${lineSVG(s.prof,'comp','#1f6feb')}</div>`+
-                  `<div class="chartbox"><div class="ct">${t} 圧縮応力度分布 (N/mm²)</div>${lineSVG(s.prof,'sig','#c0392b',25)}</div>`;
+    const t=`BC.${s.k}（第${s.k}直線→第${s.k}曲線 R=${s.curve?s.curve.rad:'—'}m）`+(cuPerCurve?`　区間${s.k}の構成`:'');
+    const head=document.createElement('div'); head.className='ct';
+    head.style.cssText='margin-top:14px;font-weight:600;color:var(--head);font-size:12.5px';
+    head.textContent=t; ca.appendChild(head);
+    const box=document.createElement('div'); box.className='charts'; box.style.marginTop='4px';
+    box.innerHTML=`<div class="chartbox"><div class="ct">変形量（累計圧縮量 mm）と目地の開口</div>${jointSVG(s,layerMode)}</div>`+
+                  `<div class="chartbox"><div class="ct">応力分布（圧縮応力度 N/mm²）</div>${stressSVG(s)}</div>`;
     ca.appendChild(box);
   });
+  if(secs.some(s=>s.prof&&s.prof.length)){
+    const lg=document.createElement('div'); lg.className='note';
+    lg.innerHTML='※ 左の図は目地を真横から見た断面（横軸＝FJリングの算定位置。曲線の内側→外側）。'+
+      '<b>下のH.P.</b>の端面にFJリングが付き、<b>上のH.P.</b>の端面（<span style="color:#d62728;font-weight:600">赤線＝曲線部</span>、'+
+      '<span style="color:#1f6feb;font-weight:600">青線＝直線部</span>）が押し込んでくる。'+
+      '<b>黒い点線がFJリングの形</b>（全周の層は側方面まで、上下のみの層は中央の上下面(90°)ゾーンだけ厚くなる）。'+
+      '縦軸の目盛りは厚みの面からの深さ(mm)で、FJリングの層の境目に細線を引いている（例：1cmのFJリング2枚なら 10mm・20mm が1枚目・2枚目の境）。'+
+      '上下の端面どうしの距離が<b>開口</b>で、内側の端が内側の開口、外側の端が外側の開口。'+
+      '図中の数値は結果表と同じ値（管の外径位置へ換算・パルリング残り厚み込み）なので、図の寸法と少し違うことがある。'+
+      '<br>※ 右の図は各分割の最大圧縮応力度。<span style="color:#2e9d5b;font-weight:600">緑＝曲線部で発生する応力</span>、'+
+      '<span style="color:#7b5cc4;font-weight:600">紫＝直線部で発生する応力</span>、橙の破線が許容 25N/mm²。';
+    ca.appendChild(lg);
+    ca.appendChild(calcTableEl(secs));
+  }
 }
-function lineSVG(prof,key,color,refLine){
-  const W=360,H=150,pad=30;
-  const xs=prof.map(p=>p.x), ys=prof.map(p=>p[key]);
-  const xmax=Math.max(...xs)||1, ymax=Math.max(Math.max(...ys), refLine||0)*1.15||1;
-  const X=x=>pad+(x/xmax)*(W-pad-8), Y=y=>H-pad-(y/ymax)*(H-pad-10);
-  let d=''; prof.forEach((p,i)=>{ d+=(i?'L':'M')+X(p.x).toFixed(1)+','+Y(p[key]).toFixed(1)+' '; });
-  let ref=''; if(refLine){ ref=`<line x1="${pad}" y1="${Y(refLine)}" x2="${W-8}" y2="${Y(refLine)}" stroke="#b26a00" stroke-dasharray="4 3" stroke-width="1"/><text x="${W-10}" y="${Y(refLine)-3}" font-size="9" fill="#b26a00" text-anchor="end">許容 ${refLine}</text>`; }
-  return `<svg viewBox="0 0 ${W} ${H}">
-    <line x1="${pad}" y1="${H-pad}" x2="${W-8}" y2="${H-pad}" stroke="var(--line)"/>
-    <line x1="${pad}" y1="10" x2="${pad}" y2="${H-pad}" stroke="var(--line)"/>
-    <text x="${pad}" y="${H-pad+14}" font-size="9" fill="var(--sub)">0</text>
-    <text x="${W-8}" y="${H-pad+14}" font-size="9" fill="var(--sub)" text-anchor="end">${Math.round(xmax)}mm</text>
-    <text x="4" y="14" font-size="9" fill="var(--sub)">${fmt(ymax,1)}</text>
-    ${ref}<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"/></svg>`;
+
+/* ===== 目地の断面図（変形量グラフ＋推進管の絵）vr008 =====
+   Excel原本「計算」シートのグラフ列の作りに合わせた（VBA Sheet10）：
+     ・EW列＝最大厚 − 各分割のFJ厚（＝FJリングの表面。黒い点線）
+     ・EX列＝最大厚（＝FJリングが付く側の管端面）
+     ・各段の CalData col3（＝押し込んでくる管端面の位置。0 が最大厚の面）
+   縦軸は下向きが正（Excelと同じく0が上）。 */
+function jointSVG(s,layerMode){
+  const W=440,H=250,L=38,R=12,T=14,B=26;
+  const prof=s.prof, mx=s.mx, xEnd=s.xEnd||Math.max(...prof.map(p=>p.x));
+  const tb=s.table, sc=2*s.k-1, ss=2*s.k-2;     // table.rows[].v の添字（スロット-1）
+  const yComp=prof.map(p=>p.comp), yS=prof.map(p=>p.compS);
+  // 両端（外端部・end）の管端面位置。計算経過表の両端の開口長から戻す
+  const first=tb.rows[0], lastR=tb.rows[tb.rows.length-1];
+  const c0=mx+s.pr-first.v[sc].gap, c1=mx+s.pr-lastR.v[sc].gap;
+  const s0=mx+s.pr-first.v[ss].gap, s1=mx+s.pr-lastR.v[ss].gap;
+  let ymin=Math.min(0,c0,c1,...yComp,...yS)-3, ymax=mx+Math.max(8,mx*0.45);
+  ymin=Math.floor(ymin/5)*5; ymax=Math.ceil(ymax/5)*5;
+  const X=x=>L+(x/xEnd)*(W-L-R), Y=y=>T+(y-ymin)/(ymax-ymin)*(H-T-B);
+  const f=v=>v.toFixed(1);
+  const uid='j'+s.k+'_'+Math.random().toString(36).slice(2,7);
+  const edgeL=i=>i===0?0:(prof[i-1].x+prof[i].x)/2;
+  const edgeR=i=>i===prof.length-1?xEnd:(prof[i].x+prof[i+1].x)/2;
+  // FJリングの表面（段々の点線）
+  const surf=[]; let prevT=null;
+  prof.forEach((p,i)=>{ if(prevT===null||p.t!==prevT) surf.push([edgeL(i),mx-p.t]); prevT=p.t; });
+  let sp='';
+  surf.forEach((q,i)=>{ sp += i===0 ? `M${f(X(q[0]))},${f(Y(q[1]))}`
+                                     : ` L${f(X(q[0]))},${f(Y(surf[i-1][1]))} L${f(X(q[0]))},${f(Y(q[1]))}`; });
+  sp+=` L${f(X(xEnd))},${f(Y(surf[surf.length-1][1]))}`;
+  const fjPoly=sp+` L${f(X(xEnd))},${f(Y(mx))} L${f(X(0))},${f(Y(mx))} Z`;
+  // 層の境目（全周の層が下＝管端面側、上下のみの層がその上）
+  const bounds=[];
+  if(layerMode){
+    const ls=(s.layers||[]).filter(l=>l.on&&l.thick&&coversTopDeg(l));
+    const full=ls.filter(coversSideDeg), top=ls.filter(l=>!coversSideDeg(l));
+    let c=0; [...full,...top].forEach(l=>{ c+=l.thick; bounds.push(c); });
+  }else{
+    const p=pitchOf($('dia').value); for(let c=p;c<mx-1e-9;c+=p) bounds.push(c);
+  }
+  let lines='';
+  const hl=(a,b,c)=>`<line x1="${f(X(a))}" y1="${f(Y(mx-c))}" x2="${f(X(b))}" y2="${f(Y(mx-c))}" stroke="#555" stroke-width=".7" opacity=".7"/>`;
+  bounds.filter(c=>c<mx-1e-9).forEach(c=>{
+    let seg=null;   // その厚みがある所（t>c）だけに引く
+    prof.forEach((p,i)=>{
+      if(p.t>c+1e-9){ if(!seg) seg=[edgeL(i),edgeR(i)]; else seg[1]=edgeR(i); }
+      else if(seg){ lines+=hl(seg[0],seg[1],c); seg=null; }
+    });
+    if(seg) lines+=hl(seg[0],seg[1],c);
+  });
+  // 管端面の線
+  const lineOf=(arr,e0,e1)=>{ let d=`M${f(X(0))},${f(Y(e0))}`; prof.forEach((p,i)=>{ d+=` L${f(X(p.x))},${f(Y(arr[i]))}`; }); return d+` L${f(X(xEnd))},${f(Y(e1))}`; };
+  const dC=lineOf(yComp,c0,c1), dS=lineOf(yS,s0,s1);
+  const upperHP=dC+` L${f(X(xEnd))},${f(T)} L${f(X(0))},${f(T)} Z`;
+  // 縦軸の目盛り（5mmごと、10mmごとに数字）
+  let ax='';
+  for(let y=ymin;y<=ymax+1e-9;y+=5){
+    const lab=(y%10===0);
+    ax+=`<line x1="${L-(lab?5:3)}" y1="${f(Y(y))}" x2="${L}" y2="${f(Y(y))}" stroke="var(--sub)" stroke-width=".7"/>`+
+        (lab?`<text x="${L-7}" y="${f(Y(y)+3)}" font-size="9" fill="var(--sub)" text-anchor="end">${y}</text>`:'')+
+        `<line x1="${L}" y1="${f(Y(y))}" x2="${W-R}" y2="${f(Y(y))}" stroke="var(--line)" stroke-width=".5" opacity="${lab?.9:.45}"/>`;
+  }
+  const step=xEnd>1500?500:(xEnd>600?200:100);
+  let xa='';
+  for(let x=0;x<=xEnd;x+=step) xa+=`<text x="${f(X(x))}" y="${H-B+12}" font-size="8.5" fill="var(--sub)" text-anchor="middle">${x}</text>`;
+  // 開口の寸法（内側／外側）。drc=2（第一曲線と逆向き）の曲線は内側が右端
+  const innerAtLeft = s.drc!==2;
+  const cv=s.curve, outLim=+$('jointType').value||70;
+  const dim=(x,yTop,label,val,ok,anchor)=>{
+    const sg=anchor==='start'?1:-1, xx=X(x)+6*sg, y1=Y(yTop), y2=Y(mx), col=ok?'#137a3f':'#c0392b';
+    const ym=(y1+y2)/2;
+    return `<line x1="${f(xx)}" y1="${f(y1)}" x2="${f(xx)}" y2="${f(y2)}" stroke="${col}" stroke-width="1.4" marker-start="url(#a${uid})" marker-end="url(#a${uid})"/>`+
+      `<text x="${f(xx+4*sg)}" y="${f(ym-2)}" font-size="9.5" font-weight="700" fill="${col}" text-anchor="${anchor}" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${label}</text>`+
+      `<text x="${f(xx+4*sg)}" y="${f(ym+10)}" font-size="9.5" font-weight="700" fill="${col}" text-anchor="${anchor}" paint-order="stroke" stroke="var(--panel)" stroke-width="3">${val}</text>`;
+  };
+  let dims='';
+  if(cv){
+    dims+=dim(innerAtLeft?0:xEnd, innerAtLeft?c0:c1, '内側の開口', fmt(cv.inner,1)+'mm', cv.inner>=5, innerAtLeft?'start':'end');
+    dims+=dim(innerAtLeft?xEnd:0, innerAtLeft?c1:c0, '外側の開口', fmt(cv.outer,1)+'mm', cv.outer<=outLim, innerAtLeft?'end':'start');
+  }
+  const hpX=X(xEnd*0.5);
+  return `<svg viewBox="0 0 ${W} ${H}" role="img">
+    <defs>
+      <pattern id="h${uid}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="6" height="6" fill="#f3dfa0"/><line x1="0" y1="0" x2="0" y2="6" stroke="#b8963a" stroke-width="1.2"/></pattern>
+      <marker id="a${uid}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker>
+      <clipPath id="c${uid}"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath>
+    </defs>
+    ${ax}
+    <g clip-path="url(#c${uid})">
+      <rect x="${L}" y="${f(Y(mx))}" width="${W-L-R}" height="${f(H-B-Y(mx))}" fill="#b9c0c7" opacity=".85"/>
+      <path d="${fjPoly}" fill="url(#h${uid})" opacity=".9"/>
+      ${lines}
+      <path d="${upperHP}" fill="#b9c0c7" opacity=".6"/>
+      <line x1="${L}" y1="${f(Y(mx))}" x2="${W-R}" y2="${f(Y(mx))}" stroke="#333" stroke-width="1.4"/>
+      <path d="${sp}" fill="none" stroke="#111" stroke-width="1.3" stroke-dasharray="5 3"/>
+      <path d="${dS}" fill="none" stroke="#1f6feb" stroke-width="1.3"/>
+      <path d="${dC}" fill="none" stroke="#d62728" stroke-width="2"/>
+      <text x="${f(hpX)}" y="${f(Math.min(H-B-4,Y(mx)+15))}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text>
+      <text x="${f(hpX)}" y="${f(T+13)}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text>
+    </g>
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="none" stroke="var(--line)"/>
+    ${dims}
+    ${xa}
+    <text x="${L}" y="${H-3}" font-size="8.5" fill="var(--sub)">${innerAtLeft?'← 曲線の内側':'← 曲線の外側'}</text>
+    <text x="${W-R}" y="${H-3}" font-size="8.5" fill="var(--sub)" text-anchor="end">${innerAtLeft?'曲線の外側 →':'曲線の内側 →'}</text>
+    <text x="${(L+W-R)/2}" y="${H-3}" font-size="8.5" fill="var(--sub)" text-anchor="middle">算定位置(mm)</text>
+    <text x="2" y="${T-4}" font-size="8.5" fill="var(--sub)">深さ(mm)</text>
+  </svg>`;
+}
+/* 応力分布（vr008）：曲線部で発生する応力を緑、直線部を紫で塗り分ける（概要説明PDFの図と同じ）。
+   縦軸は下向きが正（Excelと同じく0が上）。 */
+function stressSVG(s){
+  const W=440,H=250,L=38,R=12,T=14,B=26;
+  const prof=s.prof, xEnd=s.xEnd||Math.max(...prof.map(p=>p.x));
+  const mxs=Math.max(...prof.map(p=>Math.max(p.sig,p.sigS)));
+  const ymax=Math.max(50,Math.ceil(mxs*1.1/10)*10);
+  const X=x=>L+(x/xEnd)*(W-L-R), Y=y=>T+(y/ymax)*(H-T-B), f=v=>v.toFixed(1);
+  const edgeL=i=>i===0?0:(prof[i-1].x+prof[i].x)/2;
+  const edgeR=i=>i===prof.length-1?xEnd:(prof[i].x+prof[i+1].x)/2;
+  const steps=key=>prof.map((p,i)=>`${f(X(edgeL(i)))},${f(Y(p[key]))} L${f(X(edgeR(i)))},${f(Y(p[key]))}`).join(' L');
+  const area=key=>`M${f(X(0))},${f(Y(0))} L${steps(key)} L${f(X(xEnd))},${f(Y(0))} Z`;
+  const outline=key=>`M${steps(key)}`;
+  let ax='';
+  for(let y=0;y<=ymax;y+=5){ const lab=y%10===0;
+    ax+=`<line x1="${L-(lab?5:3)}" y1="${f(Y(y))}" x2="${L}" y2="${f(Y(y))}" stroke="var(--sub)" stroke-width=".7"/>`+
+        (lab?`<text x="${L-7}" y="${f(Y(y)+3)}" font-size="9" fill="var(--sub)" text-anchor="end">${y}</text>`:'')+
+        `<line x1="${L}" y1="${f(Y(y))}" x2="${W-R}" y2="${f(Y(y))}" stroke="var(--line)" stroke-width=".5" opacity="${lab?.9:.45}"/>`; }
+  const step=xEnd>1500?500:(xEnd>600?200:100);
+  let xa=''; for(let x=0;x<=xEnd;x+=step)
+    xa+=`<text x="${f(X(x))}" y="${H-B+12}" font-size="8.5" fill="var(--sub)" text-anchor="middle">${x}</text>`;
+  const cv=s.curve, st=s.straight;
+  return `<svg viewBox="0 0 ${W} ${H}" role="img">
+    ${ax}
+    <path d="${area('sigS')}" fill="#7b5cc4" opacity=".28"/>
+    <path d="${outline('sigS')}" fill="none" stroke="#7b5cc4" stroke-width="1.2"/>
+    <path d="${area('sig')}" fill="#2e9d5b" opacity=".45"/>
+    <path d="${outline('sig')}" fill="none" stroke="#d62728" stroke-width="1.6"/>
+    <line x1="${L}" y1="${f(Y(25))}" x2="${W-R}" y2="${f(Y(25))}" stroke="#b26a00" stroke-width="1.2" stroke-dasharray="6 3"/>
+    <text x="${W-R-3}" y="${f(Y(25)-3)}" font-size="9" fill="#b26a00" text-anchor="end">許容 25</text>
+    <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="none" stroke="var(--line)"/>
+    <text x="${L+6}" y="${H-B-20}" font-size="9.5" font-weight="700" fill="#2e9d5b">曲線部 最大 ${cv?fmt(cv.sigma,1):'—'}</text>
+    <text x="${L+6}" y="${H-B-8}" font-size="9.5" font-weight="700" fill="#7b5cc4">直線部 最大 ${st?fmt(st.sigma,1):'—'}</text>
+    ${xa}
+    <text x="${(L+W-R)/2}" y="${H-3}" font-size="8.5" fill="var(--sub)" text-anchor="middle">算定位置(mm)</text>
+    <text x="2" y="${T-4}" font-size="8.5" fill="var(--sub)">N/mm²</text>
+  </svg>`;
+}
+/* 計算経過表（全分割）vr008。Excel帳票は30か所の抜粋だが、画面では全部出す。 */
+function calcTableEl(secs){
+  const wrap=document.createElement('details'); wrap.style.marginTop='12px';
+  const usable=secs.filter(s=>s.table&&s.table.slots.length);
+  const pick=cuPerCurve?usable:usable.slice(-1);   // 全区間共通なら、いちばん奥の区間に全段が入っている
+  const n=usable.length?usable[0].table.n:0;
+  wrap.innerHTML=`<summary style="cursor:pointer;font-weight:600;color:var(--head);font-size:13px">計算経過（${n}分割・全分割）を表示</summary>`;
+  const NM='一二三四五';
+  pick.forEach(s=>{
+    const tb=s.table;
+    let h=`<div class="muted" style="margin:8px 0 4px">${cuPerCurve?`<b>区間${s.k}</b>の構成で第一〜第${NM[s.k-1]}曲線を通した経過。`:''}`+
+      `開口長＝最大厚−その分割の圧縮量${s.pr?'（パルリング残り '+fmt(s.pr,1)+'mm を加算）':''}、最大応力度＝その分割の圧縮応力度。</div>`;
+    h+='<div style="overflow:auto;max-height:420px"><table class="ptable" style="font-size:11.5px"><thead><tr><th rowspan="2">分割番号</th><th rowspan="2">分割面積</th><th rowspan="2">算定位置</th>';
+    tb.slots.forEach(sl=>{ const k=(sl+1)>>1; h+=`<th colspan="2"${sl%2?'':' style="background:#2e9d5b22"'}>第${NM[k-1]}${sl%2?'直線':'曲線'}</th>`; });
+    h+='</tr><tr>'+tb.slots.map(()=>'<th>開口長</th><th>最大応力度</th>').join('')+'</tr></thead><tbody>';
+    tb.rows.forEach(r=>{
+      h+=`<tr><td>${r.label}</td><td>${fmt(r.area,1)}</td><td>${fmt(r.x,1)}</td>`+
+        r.v.map(v=>`<td>${fmt(v.gap,1)}</td><td${v.sig>25?' class="v-bad"':''}>${fmt(v.sig,1)}</td>`).join('')+'</tr>';
+    });
+    h+='</tbody></table></div>';
+    const d=document.createElement('div'); d.innerHTML=h; wrap.appendChild(d);
+  });
+  return wrap;
 }
 let lastSections=null;   // 直近の照査結果（区間ごと）。履歴保存・MYcurveへの返却で使う
 function compute(){
@@ -987,14 +1258,18 @@ function aggregateThrough(per,k,pr){
 }
 function tierOf(r,outlim){
   if(r.broken||r.bott||r.inn<5||r.out>outlim) return "不成立";
+  // vr008: メーカー推奨の最小配置 1.5set（全周1枚＋上下90°1枚）に届かない構成は採らない
+  if(r.ls!=null && !(r.ls>=1 && r.lc>=2)) return "不成立";
   if(r.sig<=25) return "推奨";
   return "要検討";
 }
 /* 層（同心のリング）で作れる組合せか。
    全周360°の層は側方面も上下面も覆い、180°の層は上下面だけを覆う。だから層で組む限り
-   「上下面の厚み ≥ 側方面の厚み」で、両ゾーンが同じ材種の重なりになる組合せしか作れない。
+   「上下面の厚み ≥ 側方面の厚み」の組合せしか作れない。
+   vr008 で1つの層に上下・左右別々の倍率を付けられるようにしたので、材種が違っても作れる
+   （全周の層を「上下=mc／左右=ms」にし、上下のみの層を mc にする）。
    （上下面／側方面を直接指定するモードでは、この制約は無い） */
-function canBeLayers(r){ return r.mc===r.ms && r.lc>=r.ls && r.lc<=LAYER_N; }
+function canBeLayers(r){ return r.lc>=r.ls && r.lc<=LAYER_N; }
 let lastProposal=null;   // 区間ごとの提案（採用ボタンで使う）
 async function propose(){
   const base=readInput(), dia=parseInt(base.dia);
@@ -1020,7 +1295,7 @@ async function propose(){
     const pr=pulResidualFor(k);
     const list=raw.map(r=>{
       const a=aggregateThrough(r.per,k,pr);
-      return {t:tierOf(a,outlim),mc:r.mc,lc:r.lc,ms:r.ms,ls:r.ls,thick:r.thick,
+      return {t:tierOf(Object.assign({lc:r.lc,ls:r.ls},a),outlim),mc:r.mc,lc:r.lc,ms:r.ms,ls:r.ls,thick:r.thick,
               sig:a.sig,inn:a.inn,out:a.out};
     });
     let show=list.filter(r=> showAll || r.t!=="不成立");
@@ -1040,7 +1315,8 @@ function renderProposal(prop){
   const rec=first.list.filter(r=>r.t==="推奨").length, warn=first.list.filter(r=>r.t==="要検討").length;
   $('propinfo').innerHTML=`探索 ${first.list.length} 通り（ピッチ ${p}mm・外側の開口長の基準 ${outlim}mm）を、`+
     `区間ごとに「そこへ至るまでに通過する全曲線」で判定しました。`+
-    (prop.layerMode?'　<span class="muted">※層構成で実際に作れる組合せ（上下面≧側方面・同材種・4層以内）だけを表示。</span>':'')+
+    '　<span class="muted">※1.5set（全周1枚＋上下90°1枚）に届かない構成は不成立。</span>'+
+    (prop.layerMode?'<span class="muted">層構成で実際に作れる組合せ（上下面≧側方面・4層以内）だけを表示。上下と左右で材種が違う構成は、全周の層を上下・左右別の倍率にして作ります。</span>':'')+
     (sections.length>1?'':` <span class="v-ok">推奨 ${rec}</span> ／ <span class="v-warn">要検討 ${warn}</span>`);
   let h='';
   sections.forEach(sec=>{
@@ -1077,13 +1353,14 @@ function adoptProposal(k,i){
   const r=sec.show[i]; if(!r) return;
   const p=sec.pitch;
   if(!canBeLayers(r)){
-    $('propinfo').innerHTML='<span class="v-warn">この組合せは層構成では作れません（上下面＜側方面、材種違い、または層数超過）。'+
+    $('propinfo').innerHTML='<span class="v-warn">この組合せは層構成では作れません（上下面＜側方面、または層数超過）。'+
       '「上下面／側方面を直接指定」モードで使ってください。</span>';
     return;
   }
   if(!cuPerCurve && lastProposal.sections.length>1) setCuPerCurve(true);
   const idx=cuIndexFor(k), out=[];
-  for(let n=0;n<r.ls;n++)       out.push({on:true, mat:r.ms, thick:p, angle:90, count:4}); // 全周
+  // 全周の層は上下=mc／左右=ms（vr008。同じなら matS を持たない＝上下と同じ）
+  for(let n=0;n<r.ls;n++)       out.push(Object.assign({on:true, mat:r.mc, thick:p, angle:90, count:4}, r.ms!==r.mc?{matS:r.ms}:{}));
   for(let n=0;n<r.lc-r.ls;n++)  out.push({on:true, mat:r.mc, thick:p, angle:90, count:2}); // 上下面のみ
   while(out.length<LAYER_N) out.push({on:false, mat:12, thick:10, angle:90, count:4});
   curveCu[idx].layers=out.slice(0,LAYER_N);
@@ -1311,6 +1588,23 @@ function importMyCurve(d){
     curveCu = Array.from({length:CURVE_N},(_,k)=> curvesIn[k] ? cuOf(curvesIn[k])
                 : {pul:{...last.pul}, layers:last.layers.map(l=>({...l}))});
 
+    /* vr008: MYcurve の層は材種を1つしか持たないので、層の「左右の倍率」（matS）は向こうに保存されない。
+       現場JSONに前回の軸力検証（jikuryoku.input.curveCu）が入っていて、同じ位置の層の
+       材種（上下）・厚み・角度・枚数が一致していれば、そこから左右の倍率を戻す。 */
+    const prevCu = d.jikuryoku && d.jikuryoku.input && d.jikuryoku.input.curveCu;
+    let restored = 0;
+    if(Array.isArray(prevCu)){
+      curveCu.forEach((cu,k)=>{
+        const pc = prevCu[k] && prevCu[k].layers; if(!Array.isArray(pc)) return;
+        cu.layers.forEach((l,i)=>{
+          const q=pc[i];
+          if(l.on && q && q.on && q.matS!=null && q.mat===l.mat && q.thick===l.thick &&
+             q.angle===l.angle && q.count===l.count && coversSideDeg(l)){ l.matS=q.matS; restored++; }
+        });
+      });
+    }
+    if(restored) notes.push(`MYcurve には層の「左右の倍率」が保存されないため、現場JSONに入っていた前回の軸力検証から `+
+      `<b>${restored}層</b>ぶんの左右の倍率を戻しました。MYcurve 側で層を変えた曲線は戻していません`);
     const k0=curveCushionKey(curvesIn[0],pipe);
     const diff=curvesIn.slice(1,CURVE_N).map((c,i)=>({i:i+2,same:curveCushionKey(c,pipe)===k0})).filter(o=>!o.same);
     cuPerCurve = diff.length>0;
@@ -1363,10 +1657,7 @@ function importMyCurve(d){
   const jt = MY_JOINT[Math.round(pipe.jointType)];
   if(jt){
     $('jointType').value = jt;
-    if(Math.round(pipe.jointType)===30) notes.push(
-      'MYcurveの継手種別が <b>JA型</b> ですが、軸力検証の外側の開口長の基準は JC(70mm)／JB(50mm) しか'+
-      '持っていないため、厳しい側の <b>JB(50mm)</b> で読み込みました。提案（逆算）の判定に使う値なので、'+
-      '必要なら「継手タイプ」を確認してください');
+    // vr008: JA型に対応（許容開口長40mm。MYcurve の JOINT_SPEC・継手性能表と同じ値）
   }
   // 現場JSONに前回の軸力検証データが同梱されていれば、MYcurve側では決まらない項目を引き継ぐ（vr006）
   overlayEmbedded(d, notes);
@@ -1388,10 +1679,11 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const MY_SOURCE = '軸力検証ソフト HTML版 vr007';
+const MY_SOURCE = '軸力検証ソフト HTML版 vr008';
 // MYcurveの継手種別は「許容目地開き」60=JC / 40=JB / 30=JA。
-// 軸力検証の継手タイプは「外側の開口長の基準」70=JC / 50=JB。同じJC/JBでも数値の意味が違う。
-const MY_JOINT = {60:70, 40:50, 30:50};
+// 軸力検証の継手タイプは「外側の開口長の基準」＝許容開口長 70=JC / 50=JB / 40=JA（vr008でJA追加）。
+// 同じ継手でも数値の意味が違う（あちらは抜出し長、こちらは施工中の許容開口長）。
+const MY_JOINT = {60:70, 40:50, 30:40};
 
 let fromMyCurve = false;
 
