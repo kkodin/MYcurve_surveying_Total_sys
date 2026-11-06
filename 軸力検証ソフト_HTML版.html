@@ -268,6 +268,8 @@
         <option value="jack" selected>ジャッキの力そのまま（安全側）</option>
         <option value="trans">後ろの管の摩擦分を引いた力</option></select></label>
       <label>最大層数<input type="number" id="planMaxL" value="4" min="2" max="6" step="1"></label>
+      <label>パルリング 厚み(mm)<input type="number" id="planPulThick" value="10" min="0" step="1"></label>
+      <label>パルリング つぶれ代(mm)<input type="number" id="planPulCrush" value="8" min="0" step="0.1"></label>
       <label>使う材種<select id="planMats">
         <option value="11,12,13,14" selected>FJ 1.7〜3.0倍</option>
         <option value="12,13,14">FJ 2.0〜3.0倍</option>
@@ -904,7 +906,7 @@ function runPerCurve(){
                     bottomed:got.curve.bottomed} : null,
       gov, passes, prof: got ? got.prof : [],
       // vr008: グラフ・計算経過表・1.5set 判定用
-      drc: eng.Cv[k].drc, jc: eng.P.jc, xEnd: eng.CU[eng.Cu.nsep+1][9],
+      drc: eng.Cv[k].drc, jc: eng.P.jc, cir: eng.P.cir, xEnd: eng.CU[eng.Cu.nsep+1][9],
       set: setCheckFor(k), table: captureTable(eng, res.curves.length, pr)
     });
   }
@@ -1038,6 +1040,7 @@ function render(secs){
       '<b>下のH.P.</b>の端面にFJリングが付き、<b>上のH.P.</b>の端面（<span style="color:#d62728;font-weight:600">赤線＝曲線部</span>、'+
       '<span style="color:#1f6feb;font-weight:600">青線＝直線部</span>）が押し込んでくる。'+
       '<b>黒い点線がFJリングの形</b>（全周の層は側方面まで、上下のみの層は中央の上下面(90°)ゾーンだけ厚くなる）。'+
+      '<b>色の四角がFJリング1枚ずつ</b>（色は配置図と同じ材種の色、左端の数字は管端面側から何枚目か）。管の壁は斜線。'+
       '縦軸の目盛りは厚みの面からの深さ(mm)で、FJリングの層の境目に細線を引いている（例：1cmのFJリング2枚なら 10mm・20mm が1枚目・2枚目の境）。'+
       '上下の端面どうしの距離が<b>開口</b>で、内側の端が内側の開口、外側の端が外側の開口。'+
       '図中の数値は結果表と同じ値（管の外径位置へ換算・パルリング残り厚み込み）なので、図の寸法と少し違うことがある。'+
@@ -1055,7 +1058,9 @@ function render(secs){
      ・各段の CalData col3（＝押し込んでくる管端面の位置。0 が最大厚の面）
    縦軸は下向きが正（Excelと同じく0が上）。 */
 function jointSVG(s,layerMode){
-  const W=440,H=250,L=38,R=12,T=14,B=26;
+  // vr009: 上下に推進管（縦断面）を描くので、グラフ枠の上と下に管の分の余白をとる
+  const PU=74, PD=58;                       // 上の管・下の管を描く高さ(px)
+  const W=440,H=250+PU+PD,L=38,R=12,T=14+PU,B=26+PD;
   const prof=s.prof, mx=s.mx, xEnd=s.xEnd||Math.max(...prof.map(p=>p.x));
   const tb=s.table, sc=2*s.k-1, ss=2*s.k-2;     // table.rows[].v の添字（スロット-1）
   const yComp=prof.map(p=>p.comp), yS=prof.map(p=>p.compS);
@@ -1078,29 +1083,40 @@ function jointSVG(s,layerMode){
                                      : ` L${f(X(q[0]))},${f(Y(surf[i-1][1]))} L${f(X(q[0]))},${f(Y(q[1]))}`; });
   sp+=` L${f(X(xEnd))},${f(Y(surf[surf.length-1][1]))}`;
   const fjPoly=sp+` L${f(X(xEnd))},${f(Y(mx))} L${f(X(0))},${f(Y(mx))} Z`;
-  // 層の境目（全周の層が下＝管端面側、上下のみの層がその上）
-  const bounds=[];
+  /* FJリングの層を1枚ずつ、色を付けた四角で描く（vr009）。全周の層が下（FJが付く管端面の側）、
+     上下のみの層がその上。色は配置図と同じ材種の色で、中央（上下面）と両端（側方面）で材種が違えば色も変わる。 */
+  const stack=[];
   if(layerMode){
     const ls=(s.layers||[]).filter(l=>l.on&&l.thick&&coversTopDeg(l));
-    const full=ls.filter(coversSideDeg), top=ls.filter(l=>!coversSideDeg(l));
-    let c=0; [...full,...top].forEach(l=>{ c+=l.thick; bounds.push(c); });
+    ls.filter(coversSideDeg).forEach(l=>stack.push({t:l.thick, mc:l.mat, ms:sideMat(l), full:true}));
+    ls.filter(l=>!coversSideDeg(l)).forEach(l=>stack.push({t:l.thick, mc:l.mat, ms:null, full:false}));
   }else{
-    const p=pitchOf($('dia').value); for(let c=p;c<mx-1e-9;c+=p) bounds.push(c);
+    const pz=pitchOf($('dia').value), z=s.zone||{};
+    const nAll=Math.round((z.thic||mx)/pz), nFull=Math.round((z.this||0)/pz);
+    for(let j=0;j<nAll;j++) stack.push({t:pz, mc:z.varc, ms:j<nFull?z.vars:null, full:j<nFull});
   }
-  let lines='';
-  const hl=(a,b,c)=>`<line x1="${f(X(a))}" y1="${f(Y(mx-c))}" x2="${f(X(b))}" y2="${f(Y(mx-c))}" stroke="#555" stroke-width=".7" opacity=".7"/>`;
-  bounds.filter(c=>c<mx-1e-9).forEach(c=>{
-    let seg=null;   // その厚みがある所（t>c）だけに引く
+  let lines='', c=0;
+  stack.forEach((ly,j)=>{
+    const c1=c+ly.t, yTop=Y(mx-c1), yBot=Y(mx-c);
+    let seg=null;
+    const flush=()=>{ if(!seg) return;
+      const col=MAT_COLOR[seg.m]||MAT_COLOR[0];
+      lines+=`<rect x="${f(X(seg.a))}" y="${f(yTop)}" width="${f(X(seg.b)-X(seg.a))}" height="${f(yBot-yTop)}" fill="${col}" fill-opacity=".55" stroke="#7a6a3a" stroke-width=".7"/>`;
+      seg=null; };
     prof.forEach((p,i)=>{
-      if(p.t>c+1e-9){ if(!seg) seg=[edgeL(i),edgeR(i)]; else seg[1]=edgeR(i); }
-      else if(seg){ lines+=hl(seg[0],seg[1],c); seg=null; }
+      const m = p.zc ? ly.mc : (ly.full ? ly.ms : null);
+      const present = p.t>c+1e-9 && m!=null;
+      if(present && seg && seg.m===m) seg.b=edgeR(i);
+      else { flush(); if(present) seg={a:edgeL(i), b:edgeR(i), m}; }
     });
-    if(seg) lines+=hl(seg[0],seg[1],c);
+    flush();
+    // 左端に何枚目かを書く
+    lines+=`<text x="${f(X(0)+3)}" y="${f((yTop+yBot)/2+3)}" font-size="8" fill="#5a4a1a">${j+1}</text>`;
+    c=c1;
   });
   // 管端面の線
   const lineOf=(arr,e0,e1)=>{ let d=`M${f(X(0))},${f(Y(e0))}`; prof.forEach((p,i)=>{ d+=` L${f(X(p.x))},${f(Y(arr[i]))}`; }); return d+` L${f(X(xEnd))},${f(Y(e1))}`; };
   const dC=lineOf(yComp,c0,c1), dS=lineOf(yS,s0,s1);
-  const upperHP=dC+` L${f(X(xEnd))},${f(T)} L${f(X(0))},${f(T)} Z`;
   // 縦軸の目盛り（5mmごと、10mmごとに数字）
   let ax='';
   for(let y=ymin;y<=ymax+1e-9;y+=5){
@@ -1127,6 +1143,33 @@ function jointSVG(s,layerMode){
     dims+=dim(innerAtLeft?0:xEnd, innerAtLeft?c0:c1, '内側の開口', fmt(cv.inner,1)+'mm', cv.inner>=5, innerAtLeft?'start':'end');
     dims+=dim(innerAtLeft?xEnd:0, innerAtLeft?c1:c0, '外側の開口', fmt(cv.outer,1)+'mm', cv.outer<=outLim, innerAtLeft?'end':'start');
   }
+  /* 推進管（H.P.）の縦断面の絵（vr009）。管の壁（FJリングが当たる幅＝(伝達面の外径−内径)/2）を斜線で、
+     下の管は FJリングが付く端面（深さ＝最大厚）から下へ、上の管は押し込んでくる端面（赤線）から
+     その面に直角に上へ描く。縦は mm、横は算定位置の縮尺なので、傾きは誇張して見える。 */
+  const wMm = (s.jc && s.cir) ? (s.jc-s.cir)/2 : xEnd*0.09;
+  const HP='#2e7d32';
+  const quad=(a,b,c,d)=>`M${f(a[0])},${f(a[1])} L${f(b[0])},${f(b[1])} L${f(c[0])},${f(c[1])} L${f(d[0])},${f(d[1])} Z`;
+  // 下の管
+  const yb=Y(mx), xl=X(0), xr=X(xEnd), ww=X(wMm)-X(0), yb2=H-B+PD-6;
+  let pipes=`<g>
+      <rect x="${f(xl)}" y="${f(yb)}" width="${f(xr-xl)}" height="${f(yb2-yb)}" fill="var(--panel)" fill-opacity=".9" stroke="${HP}" stroke-width="1.3"/>
+      <rect x="${f(xl)}" y="${f(yb)}" width="${f(ww)}" height="${f(yb2-yb)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
+      <rect x="${f(xr-ww)}" y="${f(yb)}" width="${f(ww)}" height="${f(yb2-yb)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
+      <text x="${f((xl+xr)/2)}" y="${f(Math.max(yb+16,(yb+yb2)/2+4))}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text></g>`;
+  // 上の管：端面＝赤線の両端（外端部・end）を結ぶ線。そこから面に直角に上へ
+  const P0=[X(0),Y(c0)], P1=[X(xEnd),Y(c1)];
+  const dx=P1[0]-P0[0], dy=P1[1]-P0[1], len=Math.hypot(dx,dy)||1;
+  const ux=dx/len, uy=dy/len;
+  let nx=uy, ny=-ux; if(ny>0){ nx=-nx; ny=-ny; }            // 上向きの法線
+  const Lp=(P0[1]+P1[1])/2-6;                                  // 上端が図の上端あたりまで
+  const up=(p,k)=>[p[0]+nx*k, p[1]+ny*k], along=(p,k)=>[p[0]+ux*k, p[1]+uy*k];
+  const wpx=len*(wMm/xEnd);
+  const Q0=up(P0,Lp), Q1=up(P1,Lp);
+  pipes+=`<g>
+      <path d="${quad(P0,P1,Q1,Q0)}" fill="var(--panel)" fill-opacity=".9" stroke="${HP}" stroke-width="1.3"/>
+      <path d="${quad(P0,along(P0,wpx),along(Q0,wpx),Q0)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
+      <path d="${quad(along(P1,-wpx),P1,Q1,along(Q1,-wpx))}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
+      <text x="${f((P0[0]+P1[0]+Q0[0]+Q1[0])/4)}" y="${f((P0[1]+P1[1]+Q0[1]+Q1[1])/4+4)}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text></g>`;
   const hpX=X(xEnd*0.5);
   return `<svg viewBox="0 0 ${W} ${H}" role="img">
     <defs>
@@ -1134,21 +1177,19 @@ function jointSVG(s,layerMode){
         <rect width="6" height="6" fill="#f3dfa0"/><line x1="0" y1="0" x2="0" y2="6" stroke="#b8963a" stroke-width="1.2"/></pattern>
       <marker id="a${uid}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
         <path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker>
+      <pattern id="p${uid}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+        <rect width="5" height="5" fill="var(--panel)"/><line x1="0" y1="0" x2="0" y2="5" stroke="#333" stroke-width="1"/></pattern>
       <clipPath id="c${uid}"><rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}"/></clipPath>
     </defs>
     ${ax}
     <g clip-path="url(#c${uid})">
-      <rect x="${L}" y="${f(Y(mx))}" width="${W-L-R}" height="${f(H-B-Y(mx))}" fill="#b9c0c7" opacity=".85"/>
-      <path d="${fjPoly}" fill="url(#h${uid})" opacity=".9"/>
       ${lines}
-      <path d="${upperHP}" fill="#b9c0c7" opacity=".6"/>
       <line x1="${L}" y1="${f(Y(mx))}" x2="${W-R}" y2="${f(Y(mx))}" stroke="#333" stroke-width="1.4"/>
       <path d="${sp}" fill="none" stroke="#111" stroke-width="1.3" stroke-dasharray="5 3"/>
       <path d="${dS}" fill="none" stroke="#1f6feb" stroke-width="1.3"/>
       <path d="${dC}" fill="none" stroke="#d62728" stroke-width="2"/>
-      <text x="${f(hpX)}" y="${f(Math.min(H-B-4,Y(mx)+15))}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text>
-      <text x="${f(hpX)}" y="${f(T+13)}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（推進管）</text>
     </g>
+    ${pipes}
     <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="none" stroke="var(--line)"/>
     ${dims}
     ${xa}
@@ -1514,8 +1555,8 @@ async function runPlan(){
     J.kind = J.p<last.EC ? 'in' : 'through';
     J.govs=passed.map(c=>jointGov(tr, J.p, c, Xf, mode));
     J.finalF = mode==='trans' ? trResist(tr, J.p, Xf) : trJack(tr, Xf);
-    const kSpec=cuSpecFor(last.k), pul=kSpec.pul;
-    const prOn = Math.max(0,(pul.thick||0)-(pul.crush||0));
+    // パルリングを付けたときに開口長へ加わる残り厚み＝厚み−つぶれ代（割付の画面で指定）
+    const prOn = Math.max(0, (+$('planPulThick').value||0) - (+$('planPulCrush').value||0));
     const key=J.govs.map(g=>Math.round(g.F)).join(',')+'|'+Math.round(J.finalF)+'|'+J.kind+'|'+m;
     let pick=cache.get(key);
     if(pick===undefined){
@@ -1609,6 +1650,7 @@ function renderPlan(P){
     `</tbody></table>`;
   $('planwrap').innerHTML=h;
   $('planinfo').innerHTML=`継手 ${$('planJoint').value}（通過中の外側 ≤${lim.pass}mm・止まった位置 ≤${lim.done}mm）／目地にかかる力：${mode==='trans'?'後ろの管の摩擦分を引いた力':'ジャッキの力そのまま'}／`+
+    `パルリング ${$('planPulThick').value}mm・つぶれ代 ${$('planPulCrush').value}mm（残り ${fmt(Math.max(0,(+$('planPulThick').value||0)-(+$('planPulCrush').value||0)),1)}mm を開口に加算）／`+
     `推進力は MYcurve の1本毎の推進力（最大 ${f1(tr.F_total)}kN）。`;
 }
 
@@ -1799,6 +1841,10 @@ function importMyCurve(d){
   if(!d || !d.alignment) throw new Error('MYcurveの現場JSONではないようです（alignment が見つかりません）');
   // vr009: 1本毎の推進力（M_APP_044 以降の calcResult.trace）。割付の計算に使う
   myTrace = (d.calcResult && d.calcResult.trace && d.calcResult.trace.secs) ? d.calcResult.trace : null;
+  if($('planPulThick') && d.pipe){
+    if(d.pipe.pulRingThickness!=null) $('planPulThick').value=d.pipe.pulRingThickness;
+    if(d.pipe.crush!=null) $('planPulCrush').value=d.pipe.crush;   // MYcurve の管仕様タブのつぶれ代（画面で変えられる）
+  }
   if($('planinfo')) $('planinfo').innerHTML = myTrace
     ? `MYcurve の1本毎の推進力を読み込みました（管 ${myTrace.pipes.length} 本・最大 ${fmt(myTrace.F_total,1)}kN）。「割付を計算」を押してください。`
     : 'この現場JSONには1本毎の推進力が入っていません（MYcurve M_APP_044 以降で推進力を計算して保存すると入ります）。';
