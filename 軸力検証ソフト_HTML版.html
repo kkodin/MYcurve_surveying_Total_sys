@@ -218,6 +218,15 @@
     </div>
   </div>
 
+  <!-- vr009: 貼付け指示図（管端に貼る順に、上から見た図と正面から見た図） -->
+  <div class="panel" style="margin-top:16px">
+    <h2>貼付け指示図（貼る順）</h2>
+    <div id="instwrap"></div>
+    <div class="ringlegend" id="instlegend"></div>
+    <div class="note">左から貼る順。上の図は管の端を上から見たもので、それまでに貼った層を薄く、今回貼る層（赤い矢印）を濃く描く。
+      下の図は管口から見た今回の層の切片の位置。厚みは誇張して描いている。</div>
+  </div>
+
   <!-- vr008: グラフと計算経過は横幅いっぱいに出す（概要説明PDFの3ページ目の形） -->
   <div class="panel" style="margin-top:16px">
     <h2>変形量と応力分布（BC点ごと）・計算経過</h2>
@@ -801,6 +810,103 @@ function drawLayout(){
     '破線は上下面(90°)ゾーンの境界（鉛直から±45°）で、その外側が側方面ゾーン。'+
     '左右（水平方向）が曲線の内側／外側で、内側ほど強く圧縮される。'+
     (pt?`　呼び径${$('dia').value}：伝達面 外径${pt.jc}／内径${pt.cir}mm。`:'');
+  drawInstall();
+}
+
+/* ===== 貼付け指示図（vr009）=====
+   管端に貼る順に、パルリング → 1層目 → 2層目 … を左から右へ並べ、各手順で
+   「上から見た図」（管の端と、そこまでに貼った層の重なり。今回貼る層を濃く）と
+   「正面（管口）から見た図」（今回貼る層の切片の位置）を描く。FJは倍率で色分け、パルリングはコルク調。 */
+const CORK='#c9a36b';
+function installSteps(){
+  const steps=[];
+  if($('cuMode').value==='layer'){
+    if(PUL.on && PUL.thick>0) steps.push({pul:true, thick:+PUL.thick, crush:+PUL.crush||0});
+    layerState.forEach((l,i)=>{ if(l.on&&l.thick) steps.push({no:i+1, mc:l.mat, ms:sideMat(l), thick:l.thick, angle:l.angle, count:l.count}); });
+  }else{
+    const pz=pitchOf($('dia').value), thic=+$('thic').value, thisv=+$('this').value;
+    const nAll=Math.round(thic/pz), nFull=Math.round(thisv/pz);
+    for(let j=0;j<nAll;j++) steps.push(j<nFull ? {no:j+1, mc:+$('varc').value, ms:+$('vars').value, thick:pz, angle:90, count:4}
+                                                : {no:j+1, mc:+$('varc').value, ms:+$('varc').value, thick:pz, angle:90, count:2});
+  }
+  return steps;
+}
+// 上から見た図：管（外径）を下に、端面の上へ貼った層を積む。層の横の広がり＝切片が覆う角度の投影
+function installTopSVG(steps, cur, uid, ratio){
+  const W=170, H=150, cx=W/2, Rp=62, Rj=Rp*Math.min(1,ratio.jcd0), yEnd=104, sc=1.0;   // 10mm を 10px
+  const f=v=>v.toFixed(1);
+  let g='', y=yEnd;
+  steps.slice(0,cur+1).forEach((st,i)=>{
+    const t=st.thick*sc, now=i===cur, op=now?1:.45, sw=now?1.3:.6;
+    y-=t;
+    if(st.pul){
+      g+=`<rect x="${f(cx-Rj)}" y="${f(y)}" width="${f(2*Rj)}" height="${f(t)}" fill="url(#k${uid})" opacity="${op}" stroke="#6b4e1e" stroke-width="${sw}"/>`;
+    }else{
+      const half=Math.min(180, st.angle*st.count/2)/2;            // 片側の被覆角の半分（鉛直から）
+      const full=st.angle*st.count>=360;
+      const wTop=Rj*Math.sin(Math.min(45,half)*Math.PI/180);      // 上下面ゾーン（±45°）の投影の半幅
+      const wAll=full?Rj:Rj*Math.sin(Math.min(90,half)*Math.PI/180);
+      const cT=MAT_COLOR[st.mc]||MAT_COLOR[0], cS=MAT_COLOR[st.ms]||cT;
+      if(wAll>wTop+0.1){   // 側方面まで出る部分（左右）
+        g+=`<rect x="${f(cx-wAll)}" y="${f(y)}" width="${f(wAll-wTop)}" height="${f(t)}" fill="${cS}" opacity="${op}" stroke="#555" stroke-width="${sw}"/>`;
+        g+=`<rect x="${f(cx+wTop)}" y="${f(y)}" width="${f(wAll-wTop)}" height="${f(t)}" fill="${cS}" opacity="${op}" stroke="#555" stroke-width="${sw}"/>`;
+      }
+      g+=`<rect x="${f(cx-wTop)}" y="${f(y)}" width="${f(2*wTop)}" height="${f(t)}" fill="${cT}" opacity="${op}" stroke="#555" stroke-width="${sw}"/>`;
+    }
+    if(now) g+=`<path d="M${f(cx+Rp+14)},${f(y+t/2)} L${f(cx+Rp+3)},${f(y+t/2)}" stroke="#c0392b" stroke-width="1.4" marker-end="url(#m${uid})"/>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img">
+    <defs>
+      <pattern id="k${uid}" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${CORK}"/>
+        <circle cx="1.5" cy="1.5" r=".7" fill="#7a5626"/><circle cx="4.5" cy="4" r=".6" fill="#8d6630"/><circle cx="3" cy="5.4" r=".4" fill="#6b4a1e"/></pattern>
+      <pattern id="w${uid}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="var(--panel)"/><line x1="0" y1="0" x2="0" y2="5" stroke="#555" stroke-width=".8"/></pattern>
+      <marker id="m${uid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c0392b"/></marker>
+    </defs>
+    <rect x="${f(cx-Rp)}" y="${yEnd}" width="${2*Rp}" height="${H-yEnd-4}" fill="var(--chip)" stroke="#2e7d32" stroke-width="1.2"/>
+    <text x="${cx}" y="${f(yEnd+(H-yEnd)/2+3)}" font-size="9" fill="var(--sub)" text-anchor="middle">推進管（上から）</text>
+    ${g}
+    <text x="${f(cx-Rp)}" y="10" font-size="8.5" fill="var(--sub)">左</text>
+    <text x="${f(cx+Rp)}" y="10" font-size="8.5" fill="var(--sub)" text-anchor="end">右</text>
+  </svg>`;
+}
+function drawInstall(){
+  const wrap=$('instwrap'); if(!wrap) return;
+  const pt=DATA.pipe[String($('dia').value)];
+  const ratio={jcd0: pt?pt.jc/pt.d0:0.97, cir: pt?pt.cir/pt.jc:0.87, d0: pt?pt.d0/pt.jc:1.02};
+  const steps=installSteps();
+  if(!steps.length){ wrap.innerHTML='<div class="muted">貼る層がありません。</div>'; return; }
+  const MS={10:'PB',11:'FJ 1.7倍',12:'FJ 2.0倍',13:'FJ 2.5倍',14:'FJ 3.0倍',15:'PS 3.5倍'};
+  const uid0=Math.random().toString(36).slice(2,7);
+  let h='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">';
+  steps.forEach((st,i)=>{
+    const uid=uid0+'_'+i;
+    let title, sub, front;
+    if(st.pul){
+      title=`手順${i+1}　パルリング`;
+      sub=`全周（固定）　厚み ${fmt(st.thick,0)}mm<br>つぶれ代 ${fmt(st.crush,1)}mm`;
+      front=ringSVG([[0,360,`url(#k${uid}f)`]], CORK, ratio.cir, ratio.d0)
+        .replace('<svg viewBox="0 0 140 140" role="img">',`<svg viewBox="0 0 140 140" role="img"><defs><pattern id="k${uid}f" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${CORK}"/><circle cx="1.5" cy="1.5" r=".7" fill="#7a5626"/><circle cx="4.5" cy="4" r=".6" fill="#8d6630"/></pattern></defs>`);
+      // 全周1枚は donut で描かれるので色を差し替える
+      front=front.replace(`fill="${CORK}"/>`,`fill="url(#k${uid}f)"/>`);
+    }else{
+      const full=st.angle*st.count>=360, split=full&&st.ms!==st.mc;
+      const cT=MAT_COLOR[st.mc]||MAT_COLOR[0], cS=MAT_COLOR[st.ms]||cT;
+      const pcs = split ? [[-45,45,cT],[45,135,cS],[135,225,cT],[225,315,cS]] : piecesOf(st.angle,st.count);
+      title=`手順${i+1}　${st.no}層目`;
+      sub=(split?`上下 ${MS[st.mc]}／左右 ${MS[st.ms]}`:`${MS[st.mc]||st.mc}`)+`　${fmt(st.thick,0)}mm<br>${st.angle}°×${st.count}枚`+(full?'（全周）':`（上下 ${st.count/2}枚ずつ）`);
+      front=ringSVG(pcs, cT, ratio.cir, ratio.d0);
+    }
+    h+=`<div class="ringbox" style="width:190px;flex:0 0 190px">
+      <div class="rt">${title}</div>
+      <div class="rs" style="margin:2px 0">上から見た図</div>${installTopSVG(steps,i,uid,ratio)}
+      <div class="rs" style="margin:2px 0">正面（管口）から見た図</div>${front}
+      <div class="rs">${sub}</div></div>`;
+  });
+  h+='</div>';
+  wrap.innerHTML=h;
+  const used={}; steps.forEach(st=>{ if(!st.pul){ used[st.mc]=1; used[st.ms]=1; } });
+  $('instlegend').innerHTML=(steps.some(s=>s.pul)?`<span><i style="background:${CORK}"></i>パルリング（コルク調）</span>`:'')+
+    Object.keys(used).map(Number).sort((a,b)=>a-b).map(m=>`<span><i style="background:${MAT_COLOR[m]||MAT_COLOR[0]}"></i>${MS[m]||m}</span>`).join('');
 }
 
 function setCuMode(){
