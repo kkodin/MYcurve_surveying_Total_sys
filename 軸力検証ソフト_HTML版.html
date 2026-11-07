@@ -407,6 +407,8 @@
       <div id="planpatviz"></div>
       <div style="margin:12px 0 6px;font-weight:600;color:var(--head)">区間ごとの割付と伸び <span class="muted" style="font-weight:400">（パルリングは区間ごとに選べます。選ぶと割付をやり直します）</span></div>
       <div id="planspan" style="overflow-x:auto"></div>
+      <div style="margin:12px 0 6px;font-weight:600;color:var(--head)">推進管の本数と FJリングの数量（目地の開きを反映）</div>
+      <div id="planpipes" style="overflow-x:auto"></div>
       <div class="ctrls" style="margin-top:8px">
         <button class="propbtn" id="mergebtn">選んだ区間をまとめる（厳しい側に合わせる）</button>
         <button class="ghostbtn" id="mergeclr">まとめを全部解除</button>
@@ -2308,6 +2310,40 @@ function spanChartsHTML(P, sp){
   return h+'</div>';
 }
 
+/* vr010: 目地の開きを反映した管の本数。
+   切羽（押し終わりの先端 Xf）から発進人孔芯（0）へ向けて、管長＋その目地の開き（割付で求めた管の中心の値）を積んでいき、
+   0 に届くまでの本数を出す。最後の1本は端数管（長さ＝残り）。MYcurve の並び（目地の開きを一律に見たもの）と比べる。
+   目地の開きは切羽側から数えた目地の順に割付の値を使う（本数が変わると発進側の数本の位置が少しずれるが、
+   発進側は曲線を通らない直線の目地なので開きは同じ）。 */
+function planPipeCount(P){
+  const Lp=+P.leng||0, L=P.Xf, gaps=P.joints.map(J=>J.gap!=null?J.gap:(J.prOn||0));
+  if(!(Lp>0) || !(L>0)) return null;
+  let pos=0, n=0, k=0, sumGap=0, last=Lp;
+  for(;;){
+    n++;
+    if(pos+Lp>=L-1e-6){ last=L-pos; break; }          // この管で発進人孔芯に届く → 端数管（長さ＝残り）
+    pos+=Lp;
+    const g=(k<gaps.length?gaps[k]:(gaps[gaps.length-1]||0))/1000; pos+=g; sumGap+=g; k++;
+    if(pos>=L-1e-6){ last=Lp; break; }                 // 目地の開きの中で届いた（もう1本は要らない）
+    if(n>100000) break;
+  }
+  const tr=P.tr, n0=tr.pipes.length;
+  const myOpen=[...new Set(tr.secs.filter(sc=>sc.openMm!=null).map(sc=>fmt(sc.openMm,1)))].join('・');
+  return {n, full: last>=Lp-1e-3 ? n : n-1, last, sumGap, n0, myOpen, L, Lp};
+}
+function pipeCountHTML(P){
+  const c=planPipeCount(P); if(!c) return '';
+  const cut = c.last<c.Lp-1e-3;
+  const fjSets=setsTotalOf(P.joints);
+  return `<table class="ptable pp-t"><tbody>
+    <tr><td class="z">押す延長（発進人孔芯〜押し終わりの先端）</td><td>${fmt(c.L,3)} m</td></tr>
+    <tr><td class="z">目地の開きの合計（割付の値・管の中心）</td><td>${fmt(c.sumGap*1000,0)} mm</td></tr>
+    <tr><td class="z"><b>推進管の本数（目地の開きを反映）</b></td><td><b>${c.n} 本</b>（管長 ${fmt(c.Lp,2)}m × ${c.full} 本${cut?` ＋ 端数管 ${fmt(c.last,3)}m × 1 本`:''}）</td></tr>
+    <tr><td class="z">参考：MYcurve の並び（目地の開き ${c.myOpen}mm 一律）</td><td>${c.n0} 本（差 ${c.n-c.n0>0?'+':''}${c.n-c.n0} 本）</td></tr>
+    <tr><td class="z"><b>FJリング</b></td><td><b>${fmt(fjSets,0)} set</b>（パターンごとに切り上げ）</td></tr>
+  </tbody></table>`+
+  (c.n!==c.n0?`<div class="note"><span class="v-warn">本数が MYcurve の並びと違います。</span>割付は MYcurve の並び（${c.n0}本）で求めているので、発進側の目地の位置が少しずれます（発進側は曲線を通らない目地なので、貼る物は変わりません）。</div>`:'');
+}
 function renderPlanMap(P){
   const pats=planPatterns(P), spans=planSpans(P,pats);
   P.pats=pats; P.spans=spans;
@@ -2316,6 +2352,7 @@ function renderPlanMap(P){
   $('planpat').innerHTML=patTableHTML(P,pats);
   $('planpatviz').innerHTML=patVizHTML(P,pats);
   $('planspan').innerHTML=spanTableHTML(P,spans,true);
+  $('planpipes').innerHTML=pipeCountHTML(P);
   $('plancond').textContent=planCondLine(P);
   if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
   if(P.mapNote) $('planinfo').innerHTML += '<br>'+P.mapNote;
@@ -2633,7 +2670,7 @@ function buildPrintout(sel){
   if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>${patTableHTML(P,P.pats)}`);
   if(hasPlan && on('map')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A4'?1:2;
     for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
-  if(hasPlan && on('span')) h+=page('区間ごとの割付と伸び', spanTableHTML(P,P.spans,false));
+  if(hasPlan && on('span')) h+=page('区間ごとの割付と伸び・管の本数', spanTableHTML(P,P.spans,false)+'<div style="height:10px"></div>'+pipeCountHTML(P));
   if(hasPlan && on('spanchart')){
     const blocks=P.spans.map(sp=>spanChartsHTML(P,sp)).filter(Boolean);
     const per = paper==='A4' ? 1 : 2;
