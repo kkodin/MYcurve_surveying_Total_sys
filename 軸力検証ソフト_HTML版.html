@@ -115,6 +115,25 @@
   .gc{border:3px solid;border-radius:14px;padding:10px 12px;font-size:14px;background:#fff;line-height:1.6}
   .gc b{display:block;font-size:16px;margin-bottom:2px}
   .nofj{margin-top:12px;padding:10px 12px;border:2px solid var(--bad);border-radius:8px;color:var(--bad);background:#c0392b10}
+  .ghostbtn{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px 14px;cursor:pointer}
+  .mtag{font-size:10.5px;padding:0 6px;border-radius:8px;background:#e67e22;color:#fff;font-weight:700}
+  .mergeprop{margin-top:8px;padding:10px 12px;border:2px solid var(--accent);border-radius:10px;background:var(--chip)}
+  .patviz{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:12px;margin-top:10px}
+  .patcard{border:2px solid;border-radius:12px;padding:10px 12px;background:#fff;color:#1d2a36}
+  .patcard .muted{color:#5b6b7a}
+  .pc-t{font-weight:700;font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .pc-badge{display:inline-flex;width:26px;height:26px;border-radius:50%;color:#fff;align-items:center;justify-content:center;font-weight:800}
+  .pc-b{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .pc-fig{flex:1 1 300px;min-width:0}
+  .pc-cap{font-size:13px;font-weight:700;margin-top:2px}
+  .pc-leg{flex:0 0 300px;background:#f2f5f8;border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.9}
+  .pc-h{font-weight:700;font-size:15px;margin-bottom:2px}
+  .pc-s{border-top:1px solid #d5dee6;margin-top:4px;padding-top:4px;font-weight:600}
+  .inststrip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+  .instbox{width:190px;flex:0 0 190px}
+  .pc-steps{margin-top:8px;border-top:1px dashed #c5d0da;padding-top:6px}
+  .pc-sh{font-weight:700;font-size:13.5px;margin-bottom:4px}
+  .pmsw{display:inline-block;width:13px;height:13px;margin-right:6px;vertical-align:-2px;border-radius:2px}
   .sw{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   /* vr010: PDF出力（管割付図）。画面の入力・ボタンは出さず #printout だけを印刷する */
   #printout{display:none}
@@ -161,6 +180,17 @@
   #printout.a4 .guide svg.gchart{max-height:120mm}
   #printout .gcards{break-inside:avoid}
   #printout .rings{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  #printout .patviz{grid-template-columns:1fr 1fr;gap:8px}
+  #printout .patcard{break-inside:avoid;padding:6px 8px}
+  #printout .pc-fig svg{max-height:52mm}
+  #printout.a4 .pc-fig svg{max-height:34mm}
+  #printout .pc-leg{font-size:10.5pt;line-height:1.7}
+  #printout .inststrip{overflow:visible;flex-wrap:wrap}
+  #printout .instbox{width:150px;flex:0 0 150px}
+  #printout.a4 .instbox{width:118px;flex:0 0 118px}
+  #printout.a4 .patviz{grid-template-columns:1fr}
+  #printout.a4 .pc-fig svg{max-height:40mm}
+  #printout .pmsw,#printout .pc-badge{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #printout .sw,#printout svg,#printout th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 </style>
 
@@ -290,7 +320,7 @@
     <h2>貼付け指示図（貼る順）</h2>
     <div id="instwrap"></div>
     <div class="ringlegend" id="instlegend"></div>
-    <div class="note">左から貼る順。上の図は管の端を上から見たもので、それまでに貼った層を薄く、今回貼る層（赤い矢印）を濃く描く。
+    <div class="note">パルリングは工場で貼付け済みなので、手順は FJリングだけ。左から貼る順。上の図は管の端を上から見たもので、それまでに貼った層を薄く、今回貼る層（赤い矢印）を濃く描く。
       下の図は管口から見た今回の層の切片の位置。厚みは誇張して描いている。</div>
   </div>
 
@@ -372,10 +402,16 @@
       </div>
       <div class="muted" id="plancond"></div>
       <div id="planmap" style="border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:6px"></div>
-      <div style="margin:10px 0 6px;font-weight:600;color:var(--head)">パターン</div>
+      <div style="margin:10px 0 6px;font-weight:600;color:var(--head)">パターンと貼付け指示 <span class="muted" style="font-weight:400">（パルリングは工場貼付け。現場で貼るのは FJリングだけ）</span></div>
       <div id="planpat" style="overflow-x:auto"></div>
+      <div id="planpatviz"></div>
       <div style="margin:12px 0 6px;font-weight:600;color:var(--head)">区間ごとの割付と伸び <span class="muted" style="font-weight:400">（パルリングは区間ごとに選べます。選ぶと割付をやり直します）</span></div>
       <div id="planspan" style="overflow-x:auto"></div>
+      <div class="ctrls" style="margin-top:8px">
+        <button class="propbtn" id="mergebtn">選んだ区間をまとめる（厳しい側に合わせる）</button>
+        <button class="ghostbtn" id="mergeclr">まとめを全部解除</button>
+      </div>
+      <div id="mergebox"></div>
       <div style="margin:14px 0 6px;font-weight:600;color:var(--head)">区間ごとの変形量と応力分布</div>
       <div id="plancharts"></div>
       <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600;color:var(--head)">📖 読み方（吹き出し付き）</summary><div id="guidewrap"></div></details>
@@ -798,7 +834,8 @@ function recalcZones(){
 
 /* ===== 層ごとの配置図（管口から見た模式図）===== */
 // 色はFJリングの製品色に寄せた（W=白／G=緑／Y=黄）。PBは木質色。
-const MAT_COLOR={0:'#9aa7b2',10:'#a9835a',11:'#6aa9e0',12:'#ccd4dd',13:'#3aa06a',14:'#e0b32a',15:'#b39ddb'};
+// vr010: 倍率の色をはっきりした色にそろえた（2.0倍＝青・2.5倍＝緑・3.0倍＝橙・1.7倍＝紫）。パターンの絵と同じ
+const MAT_COLOR={0:'#9aa7b2',10:'#a9835a',11:'#7e57c2',12:'#2f6fe0',13:'#1e9e4a',14:'#f0a500',15:'#d6336c'};
 const MAT_SHORT={0:'無し',10:'PB標準品',11:'FJ 1.7倍',12:'FJ 2.0倍W',13:'FJ 2.5倍G',14:'FJ 3.0倍Y',15:'発泡PS3.5倍'};
 
 // 角度は鉛直上向きを0°、時計回りを正とする。上下面(90°)ゾーン＝上下それぞれ±45°。
@@ -914,7 +951,7 @@ const CORK='#c9a36b';
 function installSteps(){
   const steps=[];
   if($('cuMode').value==='layer'){
-    if(PUL.on && PUL.thick>0) steps.push({pul:true, thick:+PUL.thick, crush:+PUL.crush||0});
+    // vr010: パルリングは工場で貼付け済み（現場で貼らない）ので手順に入れない
     layerState.forEach((l,i)=>{ if(l.on&&l.thick) steps.push({no:i+1, mc:l.mat, ms:sideMat(l), thick:l.thick, angle:l.angle, count:l.count}); });
   }else{
     const pz=pitchOf($('dia').value), thic=+$('thic').value, thisv=+$('this').value;
@@ -962,44 +999,39 @@ function installTopSVG(steps, cur, uid, ratio){
     <text x="${f(cx+Rp)}" y="10" font-size="8.5" fill="var(--sub)" text-anchor="end">右</text>
   </svg>`;
 }
-function drawInstall(){
-  const wrap=$('instwrap'); if(!wrap) return;
-  const pt=DATA.pipe[String($('dia').value)];
-  const ratio={jcd0: pt?pt.jc/pt.d0:0.97, cir: pt?pt.cir/pt.jc:0.87, d0: pt?pt.d0/pt.jc:1.02};
-  const steps=installSteps();
-  if(!steps.length){ wrap.innerHTML='<div class="muted">貼る層がありません。</div>'; return; }
-  const MS={10:'PB',11:'FJ 1.7倍',12:'FJ 2.0倍',13:'FJ 2.5倍',14:'FJ 3.0倍',15:'PS 3.5倍'};
+function installRatio(dia){
+  const pt=DATA.pipe[String(dia)];
+  return {jcd0: pt?pt.jc/pt.d0:0.97, cir: pt?pt.cir/pt.jc:0.87, d0: pt?pt.d0/pt.jc:1.02};
+}
+const INST_MS={10:'PB',11:'FJ 1.7倍',12:'FJ 2.0倍',13:'FJ 2.5倍',14:'FJ 3.0倍',15:'PS 3.5倍'};
+// 貼る順の手順の絵（上から見た図＋正面図）。steps は FJ の層だけ（パルリングは工場貼付け）
+function installStripHTML(steps, ratio){
   const uid0=Math.random().toString(36).slice(2,7);
-  let h='<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px">';
+  let h='<div class="inststrip">';
   steps.forEach((st,i)=>{
     const uid=uid0+'_'+i;
-    let title, sub, front;
-    if(st.pul){
-      title=`手順${i+1}　パルリング`;
-      sub=`全周（固定）　厚み ${fmt(st.thick,0)}mm<br>つぶれ代 ${fmt(st.crush,1)}mm`;
-      front=ringSVG([[0,360,`url(#k${uid}f)`]], CORK, ratio.cir, ratio.d0)
-        .replace('<svg viewBox="0 0 140 140" role="img">',`<svg viewBox="0 0 140 140" role="img"><defs><pattern id="k${uid}f" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="${CORK}"/><circle cx="1.5" cy="1.5" r=".7" fill="#7a5626"/><circle cx="4.5" cy="4" r=".6" fill="#8d6630"/></pattern></defs>`);
-      // 全周1枚は donut で描かれるので色を差し替える
-      front=front.replace(`fill="${CORK}"/>`,`fill="url(#k${uid}f)"/>`);
-    }else{
-      const full=st.angle*st.count>=360, split=full&&st.ms!==st.mc;
-      const cT=MAT_COLOR[st.mc]||MAT_COLOR[0], cS=MAT_COLOR[st.ms]||cT;
-      const pcs = split ? [[-45,45,cT],[45,135,cS],[135,225,cT],[225,315,cS]] : piecesOf(st.angle,st.count);
-      title=`手順${i+1}　${st.no}層目`;
-      sub=(split?`上下 ${MS[st.mc]}／左右 ${MS[st.ms]}`:`${MS[st.mc]||st.mc}`)+`　${fmt(st.thick,0)}mm<br>${st.angle}°×${st.count}枚`+(full?'（全周）':`（上下 ${st.count/2}枚ずつ）`);
-      front=ringSVG(pcs, cT, ratio.cir, ratio.d0);
-    }
-    h+=`<div class="ringbox" style="width:190px;flex:0 0 190px">
-      <div class="rt">${title}</div>
+    const full=st.angle*st.count>=360, split=full&&st.ms!==st.mc;
+    const cT=MAT_COLOR[st.mc]||MAT_COLOR[0], cS=MAT_COLOR[st.ms]||cT;
+    const pcs = split ? [[-45,45,cT],[45,135,cS],[135,225,cT],[225,315,cS]] : piecesOf(st.angle,st.count);
+    const sub=(split?`上下 ${INST_MS[st.mc]}／左右 ${INST_MS[st.ms]}`:`${INST_MS[st.mc]||st.mc}`)+`　${fmt(st.thick,0)}mm<br>${st.angle}°×${st.count}枚`+(full?'（全周）':`（上下 ${st.count/2}枚ずつ）`);
+    h+=`<div class="ringbox instbox">
+      <div class="rt">手順${i+1}　${st.no}層目</div>
       <div class="rs" style="margin:2px 0">上から見た図</div>${installTopSVG(steps,i,uid,ratio)}
-      <div class="rs" style="margin:2px 0">正面（管口）から見た図</div>${front}
+      <div class="rs" style="margin:2px 0">正面（管口）から見た図</div>${ringSVG(pcs, cT, ratio.cir, ratio.d0)}
       <div class="rs">${sub}</div></div>`;
   });
-  h+='</div>';
-  wrap.innerHTML=h;
-  const used={}; steps.forEach(st=>{ if(!st.pul){ used[st.mc]=1; used[st.ms]=1; } });
-  $('instlegend').innerHTML=(steps.some(s=>s.pul)?`<span><i style="background:${CORK}"></i>パルリング（コルク調）</span>`:'')+
-    Object.keys(used).map(Number).sort((a,b)=>a-b).map(m=>`<span><i style="background:${MAT_COLOR[m]||MAT_COLOR[0]}"></i>${MS[m]||m}</span>`).join('');
+  return h+'</div>';
+}
+function installLegendHTML(steps){
+  const used={}; steps.forEach(st=>{ used[st.mc]=1; used[st.ms]=1; });
+  return Object.keys(used).map(Number).sort((a,b)=>a-b).map(m=>`<span><i style="background:${MAT_COLOR[m]||MAT_COLOR[0]}"></i>${INST_MS[m]||m}</span>`).join('');
+}
+function drawInstall(){
+  const wrap=$('instwrap'); if(!wrap) return;
+  const steps=installSteps();
+  if(!steps.length){ wrap.innerHTML='<div class="muted">貼る FJリングの層がありません。</div>'; $('instlegend').innerHTML=''; return; }
+  wrap.innerHTML=installStripHTML(steps, installRatio($('dia').value));
+  $('instlegend').innerHTML=installLegendHTML(steps);
 }
 
 function setCuMode(){
@@ -1777,7 +1809,11 @@ async function runPlan(){
   if(sig!==planPassSig){ planPassCache=new Map(); planPassSig=sig; }
   // 目地＝No.i と No.i+1 の間（発進側を1本目。MYcurve の1本毎の表と同じ番号）。位置は No.i の先端
   const joints=[];
-  for(let i=0;i<tr.pipes.length-1;i++) joints.push({i, a:tr.pipes[i].no, b:tr.pipes[i+1].no, p:tr.pipes[i].x});
+  // vr010: 管番号は切羽側（到達側）を1本目にする（管を押すときの番号と同じ）。目地も切羽側から並べる。
+  //   a＝切羽側の管・b＝発進側の管（b＝a＋1）。i は発進側から数えた目地の番号（指定を覚えるのに使う）。
+  const NP=tr.pipes.length, dn=no=>NP-no+1;
+  for(let i=0;i<NP-1;i++) joints.push({i, a:dn(tr.pipes[i+1].no), b:dn(tr.pipes[i].no), p:tr.pipes[i].x});
+  joints.reverse();
   const prog=$('planprog'), bar=prog.firstElementChild; prog.style.display='block'; bar.style.width='0';
   $('planbtn').disabled=true;
   $('planinfo').textContent='計算中…'+(policy==='group'?'（まとめるは、初回は全部の構成を調べるので 20〜30 秒かかります。2回目からは早い）':'');
@@ -1802,6 +1838,8 @@ async function runPlan(){
     J.finalF = mode==='trans' ? trResist(tr, J.p, Xf) : trJack(tr, Xf);
     J.key=J.govs.map(g=>Math.round(g.F)).join(',')+'|'+Math.round(J.finalF)+'|'+J.kind+'|'+m;
     const okPul=ci=> J.pulReq==null || cand[ci].pul===J.pulReq;
+    const fk=planCfgForce.get(J.i), fci = fk ? cand.findIndex(c=>planCfgKey(c)===fk) : -1;
+    J.forcedCi = fci>=0 ? fci : null;
     if(policy==='min'){
       J.pass=null; J.cfg=null;
       for(let ci=0; ci<cand.length; ci++){ if(okPul(ci) && passOf(J,ci)){ J.cfg=cand[ci]; J.minSets=cand[ci].sets; break; } }
@@ -1814,7 +1852,7 @@ async function runPlan(){
   // 2) まとめる：パターン K 個・倍率 M 種類までの組で、set の合計が最小のもの
   let groupNote='';
   if(policy==='group'){
-    const fj=joints.filter(J=>J.kind!=='none' && J.pass.length);
+    const fj=joints.filter(J=>J.kind!=='none' && J.pass.length && J.forcedCi==null);
     const nJ=fj.length;
     const U=[...new Set(fj.flatMap(J=>J.pass))];
     const bits=new Map(U.map(ci=>[ci,new Uint8Array(nJ)]));
@@ -1864,6 +1902,8 @@ async function runPlan(){
       groupNote=`<span class="v-bad">パターン ${K} 個・倍率 ${M>=9?'制限なし':M+'種類'} では、すべての目地を満たす組がありません。数を増やしてください。</span>`;
     }
   }
+  // まとめた目地は利用者が採った構成にする
+  joints.forEach(J=>{ if(J.kind!=='none' && J.forcedCi!=null) J.cfg=cand[J.forcedCi]; });
   // 採用した構成を正確な解法で照査し直す（表示用）
   joints.forEach(J=>{
     if(J.kind==='none' || !J.cfg) return;
@@ -1901,7 +1941,7 @@ function renderPlan(P){
   marks.forEach(mk=>{
     const ins=curves.map(c=>{ const a=c.BC+Xf-mk.X, b=c.EC+Xf-mk.X;
       const js=joints.filter(J=>J.p>=a && J.p<=b && J.p>c.BC); if(!js.length) return '';
-      return `${curves.length>1?'第'+c.k+'曲線：':''}No.${js[0].a}〜${js[js.length-1].b} の間（最終 ${f1(js[0].p)}〜${f1(js[js.length-1].p)}m）`; }).filter(Boolean).join('／')||'—';
+      return `${curves.length>1?'第'+c.k+'曲線：':''}No.${js[0].a}〜${js[js.length-1].b} の間（最終 ${f1(Math.min(js[0].p,js[js.length-1].p))}〜${f1(Math.max(js[0].p,js[js.length-1].p))}m）`; }).filter(Boolean).join('／')||'—';
     h+=`<tr><td class="z">${mk.lab}</td><td>${fmt(mk.X,2)}</td><td>${f1(trJack(tr,mk.X))}</td><td class="z">${ins}</td></tr>`;
   });
   h+='</tbody></table>';
@@ -1920,7 +1960,7 @@ function renderPlan(P){
   groups.forEach(g=>{
     const A=g.js[0], B=g.js[g.js.length-1], n=g.js.length;
     const range=`No.${A.a}/${A.b}〜No.${B.a}/${B.b}（${n}か所）`;
-    const pos=`${f1(A.p)}〜${f1(B.p)}`;
+    const pos=`${f1(Math.min(A.p,B.p))}〜${f1(Math.max(A.p,B.p))}`;
     if(A.kind==='none'){
       h+=`<tr><td class="z">${range}</td><td>${pos}</td><td class="z">${kindLab.none}</td><td>—</td><td class="z">${A.pulOn?'あり（標準）':'貼らない'}</td><td class="z v-ok">不要</td><td>0</td><td colspan="4" class="z muted">曲線を通らないので FJリングは要らない</td></tr>`;
       return;
@@ -1962,7 +2002,7 @@ function renderPlan(P){
 
 /* ===== 管割付図・区間ごとの伸び・PDF出力（vr010）=====
    押し終わった時点の管の並びを線形図（上から見た図）に描き、目地ごとに貼るパターンを色で示す。
-   パターンは割付で採った構成（FJリングの層・倍率・パルリングの有無）ごとに A, B, C …（発進側から出てくる順）。
+   パターンは割付で採った構成（FJリングの層・倍率・パルリングの有無）ごとに A, B, C …（切羽側から出てくる順）。
    区間＝パターンと止まる所（直線／曲線の中）が同じ目地の続き。区間ごとに、押し終わったときの
    目地の開き（管の中心）と、その合計＝伸び を出す。 */
 
@@ -1992,7 +2032,7 @@ function planPatterns(P){
     if(!map.has(key)) map.set(key,{key, cfg:J.kind==='none'?null:J.cfg, n:0});
     map.get(key).n++;
   });
-  // 英字は発進側から出てくる順（パルリングのみ＝発進側の直線が先に来る）
+  // 英字は切羽側から出てくる順
   const list=[...map.values()];
   let ci=0;
   list.forEach((p,i)=>{
@@ -2034,7 +2074,7 @@ function changePoint(P, J){
     const nm=c=>'BC'+(cs.length>1?c.k:'');
     bc = k<0 ? `${nm(cs[0])}の手前 ${fmt(cs[0].BC-J.p,2)}m` : `${nm(cs[k])}から ${fmt(J.p-cs[k].BC,2)}m`;
   }
-  return {bc, face:`切羽から ${N-J.b+1} 本目の後ろ`};
+  return {bc, face:`切羽から ${fmt(P.Xf-J.p,2)}m`};
 }
 // 線形（上から見た図）：距離 s[m]（発進人孔芯から）→ 平面座標。曲線の向きは MYcurve の alignment.curves[].dir
 function planGeom(P){
@@ -2087,7 +2127,7 @@ function planMapSVG(P, pats, spans){
   h+=`<polyline points="${line}" fill="none" stroke="#eef1f4" stroke-width="10" stroke-linejoin="round"/>`;
   // 区間の帯（パルリングを貼らない区間は点線）
   spans.forEach(sp=>{
-    let a=sp.A.p, b=sp.B.p; if(b-a<0.6){ a-=0.3; b+=0.3; }
+    let a=Math.min(sp.A.p,sp.B.p), b=Math.max(sp.A.p,sp.B.p); if(b-a<0.6){ a-=0.3; b+=0.3; }
     const seg=[]; for(let s=a; s<=b+1e-9; s+=Math.max(0.1,(b-a)/60)) seg.push(nrm(P2(s),17)); seg.push(nrm(P2(b),17));
     const dash = sp.pat.pul==='貼らない' ? ' stroke-dasharray="8 5"' : '';
     h+=`<polyline points="${seg.map(q=>f(q.x)+','+f(q.y)).join(' ')}" fill="none" stroke="${sp.pat.color}" stroke-width="7"${dash}/>`;
@@ -2114,9 +2154,10 @@ function planMapSVG(P, pats, spans){
   });
   // 管番号（10本ごと＋最初と最後）
   tr.pipes.forEach((pp,i)=>{
-    if(!(pp.no===1 || pp.no%10===0 || i===tr.pipes.length-1)) return;
+    const no=tr.pipes.length-pp.no+1;   // 切羽側から数えた番号
+    if(!(no===1 || no%10===0 || no===tr.pipes.length)) return;
     const a=i?tr.pipes[i-1].x:0, q=P2((a+pp.x)/2), L=inn(q,24);
-    h+=`<text x="${f(L.x)}" y="${f(L.y+5)}" text-anchor="middle" font-size="15" fill="#333">${pp.no}</text>`;
+    h+=`<text x="${f(L.x)}" y="${f(L.y+5)}" text-anchor="middle" font-size="15" fill="#333">${no}</text>`;
   });
   // 発進人孔芯・坑口・BC・EC・先端
   const mk=[{lab:'発進人孔芯', x:0}];
@@ -2140,7 +2181,7 @@ function planMapSVG(P, pats, spans){
   h+=`<line x1="${sx}" y1="${sy}" x2="${f(sx+tenM)}" y2="${sy}" stroke="#222" stroke-width="3"/>`+
      `<line x1="${sx}" y1="${sy-6}" x2="${sx}" y2="${sy+2}" stroke="#222" stroke-width="2"/><line x1="${f(sx+tenM)}" y1="${sy-6}" x2="${f(sx+tenM)}" y2="${sy+2}" stroke="#222" stroke-width="2"/>`+
      `<text x="${f(sx+tenM+8)}" y="${sy+5}" font-size="13" fill="#333">10m</text>`+
-     `<text x="${W-mR}" y="${sy+5}" text-anchor="end" font-size="13" fill="#333">数字＝管番号（発進側から）　丸数字＝区間・英字＝パターン　点線の帯＝パルリングを貼らない</text>`;
+     `<text x="${W-mR}" y="${sy+5}" text-anchor="end" font-size="13" fill="#333">数字＝管番号（切羽側から）　丸数字＝区間・英字＝パターン　点線の帯＝パルリングを貼らない</text>`;
   return h+'</svg>';
 }
 
@@ -2158,8 +2199,8 @@ function patTableHTML(P, pats){
 }
 // 区間の表。edit＝画面用（パルリングを区間ごとに選ぶ欄を出す）
 function spanTableHTML(P, spans, edit){
-  let h='<table class="ptable pp-t"><thead><tr><th>区間</th><th>目地の範囲（管番号）</th><th>変化点（区間の始まり）</th><th>パターン</th><th>パルリング</th><th>止まる所</th><th>目地数</th>'+
-    '<th>目地の開き<br>1か所(mm)</th><th>伸び(mm)</th><th>伸びの累計(mm)<br>発進側から</th></tr></thead><tbody>';
+  let h='<table class="ptable pp-t"><thead><tr>'+(edit?'<th>まとめる</th>':'')+'<th>区間</th><th>目地の範囲（管番号）</th><th>変化点（区間の始まり）</th><th>パターン</th><th>パルリング</th><th>止まる所</th><th>目地数</th>'+
+    '<th>目地の開き<br>1か所(mm)</th><th>伸び(mm)</th><th>伸びの累計(mm)<br>切羽側から</th></tr></thead><tbody>';
   spans.forEach((s,si)=>{
     const g = s.gmin==null ? '—' : (Math.abs(s.gmax-s.gmin)<0.05 ? fmt(s.gmin,1) : `${fmt(s.gmin,1)}〜${fmt(s.gmax,1)}`);
     const cp=changePoint(P, s.A);
@@ -2172,13 +2213,15 @@ function spanTableHTML(P, spans, edit){
         `<option value="on"${cur==='on'?' selected':''}>貼る</option>`+
         `<option value="off"${cur==='off'?' selected':''}>貼らない</option></select>`;
     }
-    h+=`<tr><td class="z"><b>${spanNo(s.no)}</b></td><td class="z">No.${s.A.a}〜No.${s.B.b} の間</td>`+
+    const forced=s.js.some(J=>planCfgForce.has(J.i));
+    h+=`<tr>`+(edit?`<td>${s.pat.cfg?`<input type="checkbox" class="spanmerge" data-span="${si}" style="width:auto">`:''}</td>`:'')+
+       `<td class="z"><b>${spanNo(s.no)}</b>${forced?' <span class="mtag">まとめ</span>':''}</td><td class="z">No.${s.A.a}〜No.${s.B.b} の間</td>`+
        `<td class="z">${cp.bc}<br><span class="muted">${cp.face}</span></td>`+
        `<td class="z"><span class="sw" style="background:${s.pat.color}"></span><b>${s.pat.letter}</b> ${s.pat.kind}</td><td class="z">${pul}</td><td class="z">${s.stopAt}</td><td>${s.js.length}</td>`+
        `<td>${g}</td><td><b>${fmt(s.sum,0)}</b></td><td>${fmt(s.cum,0)}</td></tr>`;
   });
   const tot=spans.length?spans[spans.length-1].cum:0;
-  h+=`<tr><td class="z" colspan="8"><b>伸びの合計（目地 ${P.joints.length} か所）</b></td><td><b>${fmt(tot,0)}</b></td><td>${fmt(tot/1000,3)} m</td></tr></tbody></table>`;
+  h+=`<tr><td class="z" colspan="${edit?9:8}"><b>伸びの合計（目地 ${P.joints.length} か所）</b></td><td><b>${fmt(tot,0)}</b></td><td>${fmt(tot/1000,3)} m</td></tr></tbody></table>`;
   return h;
 }
 function planCondLine(P){
@@ -2232,6 +2275,7 @@ function renderPlanMap(P){
   $('planmapbox').style.display='';
   $('planmap').innerHTML=planMapSVG(P,pats,spans);
   $('planpat').innerHTML=patTableHTML(P,pats);
+  $('planpatviz').innerHTML=patVizHTML(P,pats);
   $('planspan').innerHTML=spanTableHTML(P,spans,true);
   $('plancond').textContent=planCondLine(P);
   if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
@@ -2243,11 +2287,134 @@ function renderPlanMap(P){
   $('plancharts').innerHTML=spans.map(sp=>spanChartsHTML(P,sp)).join('');
   $('planspan').querySelectorAll('select.spanpul').forEach(sel=>sel.onchange=()=>{
     const sp=spans[+sel.dataset.span];
-    sp.js.forEach(J=>{ if(sel.value==='auto') planPulForce.delete(J.i); else planPulForce.set(J.i, sel.value==='on'); });
+    sp.js.forEach(J=>{ planCfgForce.delete(J.i); if(sel.value==='auto') planPulForce.delete(J.i); else planPulForce.set(J.i, sel.value==='on'); });
     runPlan();
   });
   if(!$('guidewrap').dataset.done){ $('guidewrap').innerHTML=guideHTML(); $('guidewrap').dataset.done='1'; }
 }
+
+/* ===== パターンの貼り方の絵（vr010）=====
+   層ごとのリングを少し重ねて横に並べる（左から貼る順：1層目 → 2層目 …）。パルリングは工場貼付けなので描かない。
+   上下面（鉛直±45°）と側方面を倍率の色で塗る。上下のみの層は側方面を点線の枠だけにする。 */
+const PAT_MAT_COLOR=MAT_COLOR;
+const PAT_MAT_NAME={11:'1.7倍',12:'2.0倍',13:'2.5倍',14:'3.0倍',15:'3.5倍'};
+function patRingsSVG(pat, P){
+  const t=pitchOf(P.dia), rings=[];
+  if(pat.cfg){
+    for(let i=0;i<pat.cfg.ls;i++) rings.push({kind:'full', mc:pat.cfg.mc, ms:pat.cfg.ms});
+    for(let i=pat.cfg.ls;i<pat.cfg.lc;i++) rings.push({kind:'top', mc:pat.cfg.mc});
+  }
+  let n=0; rings.forEach(r=>{ if(r.kind!=='pul'){ n++; r.lab=`第${n}層 ${t}mm`; } });
+  if(!rings.length) return '<div class="muted" style="padding:14px 0;font-size:14px">現場で貼る FJリングはありません</div>';
+  const R=62, w=15, dx=100, W=40+R*2+dx*(rings.length-1)+40, H=200, cy=118;
+  let h=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" font-family="Yu Gothic UI,Meiryo,sans-serif" style="max-width:${Math.min(W*1.25,640)}px">`;
+  rings.forEach((r,i)=>{
+    const cx=40+R+dx*i, r1=R-w, r2=R;
+    // 下に白い縁取り（重なりが見分けやすいように）
+    h+=`<path d="${donutPath(cx,cy,r1-2,r2+2)}" fill="#fff" fill-rule="evenodd"/>`;
+    if(r.kind==='pul'){
+      h+=`<path d="${donutPath(cx,cy,r1,r2)}" fill="${CORK}" fill-rule="evenodd" stroke="#6b4f2a" stroke-width="1.2"/>`;
+    }else{
+      const ct=PAT_MAT_COLOR[r.mc]||'#888', cs=PAT_MAT_COLOR[r.ms]||'#888';
+      [[-45,45],[135,225]].forEach(([a1,a2])=>{ h+=`<path d="${bandPath(cx,cy,r1,r2,a1,a2)}" fill="${ct}" stroke="#1d2a36" stroke-width="1.2"/>`; });
+      [[45,135],[225,315]].forEach(([a1,a2])=>{
+        h+= r.kind==='full' ? `<path d="${bandPath(cx,cy,r1,r2,a1,a2)}" fill="${cs}" stroke="#1d2a36" stroke-width="1.2"/>`
+                            : `<path d="${bandPath(cx,cy,r1,r2,a1,a2)}" fill="none" stroke="#9aa5b1" stroke-width="1.2" stroke-dasharray="4 3"/>`;
+      });
+    }
+    h+=`<line x1="${cx}" y1="${cy-R-2}" x2="${cx}" y2="${cy-R-14}" stroke="#666" stroke-width="1"/>`+
+       `<text x="${cx}" y="${cy-R-20}" text-anchor="middle" font-size="15" font-weight="700" fill="#222">${r.lab}</text>`;
+  });
+  return h+'</svg>';
+}
+function patCardHTML(pat, P){
+  const t=pitchOf(P.dia);
+  let legend='';
+  if(pat.cfg){
+    const c=pat.cfg, nF=c.ls, nT=c.lc-c.ls;
+    const sw=m=>`<i class="pmsw" style="background:${PAT_MAT_COLOR[m]}"></i>`;
+    const same = nT===0;
+    legend+=`<div class="pc-h">${same?`${c.lc}層とも同じ配置`:`全周 ${nF}層 ＋ 上下のみ ${nT}層`}</div>`;
+    legend+=`<div class="pc-l">${sw(c.mc)}上下面：${PAT_MAT_NAME[c.mc]} × ${c.lc}層（各${t}mm）</div>`;
+    legend+=`<div class="pc-l">${sw(c.ms)}側方面：${PAT_MAT_NAME[c.ms]} × ${nF}層（各${t}mm）</div>`;
+    legend+=`<div class="pc-l"><i class="pmsw" style="background:${c.pul?CORK:'#fff'};border:1px ${c.pul?'solid':'dashed'} #888"></i>パルリング：${c.pul?'工場貼付けの管を使う':'<b style="color:var(--bad)">工場で貼っていない管を使う</b>'}</div>`;
+    legend+=`<div class="pc-s">合計：上下 ${c.lc*t}mm ／ 側面 ${nF*t}mm　・　${fmt(c.sets,1)} set／か所</div>`;
+  }else if(pat.key==='none'){
+    legend=`<div class="pc-h">パルリングのみ</div><div class="pc-l"><i class="pmsw" style="background:${CORK}"></i>パルリング：工場貼付けの管を使う</div><div class="pc-s">FJリングは貼らない（曲線を通らない目地）</div>`;
+  }else{
+    legend=`<div class="pc-h">${pat.kind}</div><div class="pc-s">${pat.fj}</div>`;
+  }
+  let cap='';
+  if(pat.cfg){
+    const c=pat.cfg;
+    cap = c.mc===c.ms ? `<span style="color:${PAT_MAT_COLOR[c.mc]}">全周：${PAT_MAT_NAME[c.mc]}</span>`
+      : `<span style="color:${PAT_MAT_COLOR[c.mc]}">上・下の部分：${PAT_MAT_NAME[c.mc]}</span>　<span style="color:${PAT_MAT_COLOR[c.ms]}">左・右の部分：${PAT_MAT_NAME[c.ms]}</span>`;
+    if(c.lc>c.ls) cap+='　<span class="muted">点線＝上下のみの層（左右は貼らない）</span>';
+  }
+  return `<div class="patcard" style="border-color:${pat.color}">
+    <div class="pc-t"><span class="pc-badge" style="background:${pat.color}">${pat.letter}</span>パターン${pat.letter}　${pat.kind}　<span class="muted">目地 ${pat.n} か所</span></div>
+    <div class="pc-b"><div class="pc-fig">${patRingsSVG(pat,P)}<div class="pc-cap">${cap}</div></div><div class="pc-leg">${legend}</div></div>${patStepsHTML(pat,P)}</div>`;
+}
+function patStepsHTML(pat, P){
+  if(!pat.cfg) return '';
+  const t=pitchOf(P.dia), c=pat.cfg, steps=[];
+  for(let i=0;i<c.ls;i++) steps.push({no:steps.length+1, mc:c.mc, ms:c.ms, thick:t, angle:90, count:4});
+  for(let i=c.ls;i<c.lc;i++) steps.push({no:steps.length+1, mc:c.mc, ms:c.mc, thick:t, angle:90, count:2});
+  return `<div class="pc-steps"><div class="pc-sh">貼付け指示（左から貼る順）</div>${installStripHTML(steps, installRatio(P.dia))}<div class="ringlegend">${installLegendHTML(steps)}</div></div>`;
+}
+function patVizHTML(P, pats){ return `<div class="patviz">${pats.list.map(p=>patCardHTML(p,P)).join('')}</div>`; }
+
+/* ===== 区間をまとめる（vr010）=====
+   選んだ区間の目地を同じ構成にする。FJリングが緩い側には合わせず、厳しい側（set が多い→層が多い）に合わせる。
+   厳しい側の構成で通らない目地がある（例：厚すぎて外側の開口が許容を超える）ときは、それ以上の set で
+   全部の目地が通る構成を探して提案する。採用すると目地ごとに覚え（planCfgForce）、割付をやり直す。 */
+let planCfgForce = new Map();   // 目地の番号 → 構成のキー（planCfgKey）
+let mergeProposal = null;
+function cfgStrict(a,b){ return (b.sets-a.sets) || (b.lc-a.lc) || (b.ls-a.ls); }   // 厳しい順
+function proposeMerge(){
+  const P=lastPlan; if(!P||!P.spans) return;
+  const picked=[...document.querySelectorAll('input.spanmerge:checked')].map(x=>P.spans[+x.dataset.span]).filter(s=>s&&s.pat.cfg);
+  const box=$('mergebox');
+  if(picked.length<2){ box.innerHTML='<span class="v-warn">FJ を貼る区間を2つ以上選んでください。</span>'; return; }
+  const js=picked.flatMap(s=>s.js);
+  // 厳しい側＝選んだ目地のうち、通過中の推進力がいちばん大きい目地の構成（set が多い構成があればそちらを優先）
+  const gF=J=>Math.max(...J.govs.map(g=>g.F));
+  const hard=js.reduce((w,J)=>(!w||gF(J)>gF(w))?J:w,null);
+  const maxSets=Math.max(...js.map(J=>J.cfg.sets));
+  const top = hard.cfg.sets>=maxSets ? hard.cfg : js.filter(J=>J.cfg.sets===maxSets).reduce((w,J)=>(!w||gF(J)>gF(w))?J:w,null).cfg;
+  const evalJ=(c,J)=>planEval(c, P.base, J.p, J.govs, J.govs.length, J.finalF, J.kind==='in', c.pul?P.prOn:0, P.lim, false);
+  const failOf=c=>{ for(const J of js){ const r=evalJ(c,J); if(!r.ok) return {J,r}; } return null; };
+  const reqs=new Set(js.map(J=>planPulReq(J.i)).filter(v=>v!=null));
+  const pulOk=c=> !reqs.size || (reqs.size===1 && reqs.has(c.pul));
+  const reason=f=>{ const r=f.r, L=P.lim, a=[];
+    if(r.sig>25) a.push(`最大応力 ${fmt(r.sig,1)}＞25`); if(r.inner<5) a.push(`内側の開口 ${fmt(r.inner,1)}mm＜5`);
+    if(r.outer>L.pass) a.push(`外側の開口 ${fmt(r.outer,1)}mm＞${L.pass}`); if(r.final>L.done) a.push(`止まった位置の開口 ${fmt(r.final,1)}mm＞${L.done}`);
+    if(r.broken) a.push('材料の破壊'); if(r.bott) a.push('FJリングがつぶれきる');
+    return `No.${f.J.a}/${f.J.b} の目地で ${a.join('・')||'条件を満たさない'}`; };
+  let pick=null, why='';
+  const f0 = pulOk(top) ? failOf(top) : {J:js[0], r:{}};
+  if(pulOk(top) && !f0) pick=top;
+  else {
+    why = pulOk(top) ? `厳しい側の構成（${planCfgLabel(top)}）では ${reason(f0)} のため、それに近い構成を探しました。`
+                     : 'パルリングの指定が区間で違うため、そろえられる構成を探しました。';
+    const maxL=Math.max(2,Math.min(6,+$('planMaxL').value||4)), mats=$('planMats').value.split(',').map(Number);
+    const near=c=>Math.abs(c.mc-top.mc)+Math.abs(c.ms-top.ms);
+    const cand=planCandidates(maxL, mats).filter(c=>c.sets>=top.sets && pulOk(c))
+      .sort((a,b)=>a.sets-b.sets || near(a)-near(b) || (b.pul-a.pul) || cfgStrict(a,b));
+    for(const c of cand){ if(!failOf(c)){ pick=c; break; } }
+  }
+  const lab=picked.map(s=>spanNo(s.no)).join('');
+  const now=js.reduce((a,J)=>a+(J.cfg?J.cfg.sets:0),0);
+  if(!pick){ box.innerHTML=`<span class="v-bad">区間${lab}をまとめられる構成が見つかりませんでした。</span>${why}`; mergeProposal=null; return; }
+  const after=pick.sets*js.length, d=after-now;
+  mergeProposal={js, cfg:pick};
+  box.innerHTML=`<div class="mergeprop"><b>提案：区間${lab}（目地 ${js.length} か所）を「${planCfgLabel(pick)}・パルリング${pick.pul?'貼る':'貼らない'}」にまとめる</b>`+
+    `<div class="muted">${why||`選んだ区間でいちばん推進力が大きい目地（No.${hard.a}/${hard.b}・${fmt(gF(hard),0)}kN）の構成に合わせます（緩い側には合わせない）。全部の目地で照査を満たします。`}　set：${fmt(now,1)} → ${fmt(after,1)}（${d>=0?'+':''}${fmt(d,1)}）</div>`+
+    `<div style="margin-top:6px;display:flex;gap:8px"><button class="propbtn" id="mergeok">この構成でまとめる</button><button id="mergeno" class="ghostbtn">やめる</button></div></div>`;
+  $('mergeok').onclick=()=>{ const k=planCfgKey(mergeProposal.cfg); mergeProposal.js.forEach(J=>planCfgForce.set(J.i,k)); mergeProposal=null; box.innerHTML=''; runPlan(); };
+  $('mergeno').onclick=()=>{ mergeProposal=null; box.innerHTML=''; };
+}
+function clearMerge(){ planCfgForce.clear(); $('mergebox').innerHTML=''; runPlan(); }
 
 /* ===== 読み方（吹き出し付き）===== */
 // 吹き出し：左上 (x,y)・幅 w、title＋本文の行。尾は (tx,ty) へ
@@ -2302,7 +2469,7 @@ function guideMapSVG(){
   h+=bubble(430,14,350,'🔢 丸数字と英字',['丸数字＝区間（ここからここまで）','英字＝パターン（表で中身を見る）'],circ[1][0]-24,circ[1][1]-20,...GC.purple);
   h+=bubble(870,10,400,'✂️ 点線の帯',['パルリングを貼らない区間','（FJリングだけを貼る）'],dashC[0],dashC[1]-8,...GC.pink);
   h+=bubble(40,420,330,'📍 BC・EC',['曲線の始まり・終わり。','距離は発進人孔芯から'],bc[0],bc[1]+76,...GC.orange);
-  h+=bubble(430,420,350,'🔤 小さな数字',['管番号（発進側から数える）。','10本ごとに書いてある'],n10[0]+12,n10[1]+36,...GC.green);
+  h+=bubble(430,420,350,'🔤 小さな数字',['管番号（切羽側から数える）。','10本ごとに書いてある'],n10[0]+12,n10[1]+36,...GC.green);
   h+=bubble(870,420,400,'🎨 目地の色の線',['その目地に貼るパターン。','色ごとに貼る物が違う'],tickC[0],tickC[1]+4,...GC.blue);
   return h+'</svg>';
 }
@@ -2350,7 +2517,7 @@ function guideTableSVG(){
     h+=`<rect x="${x}" y="${y+46}" width="${w}" height="42" fill="#fff" stroke="#bbb"/>`; cx[t]=x+w/2; x+=w; });
   const v=['②','No.14〜41','BCから 1.06m','B FJ＋パルリング','貼る','20.5','555'];
   x=40; cols.forEach(([t,w],i)=>{ h+=`<text x="${x+w/2}" y="${y+74}" text-anchor="middle" font-size="17">${v[i]}</text>`; x+=w; });
-  h+=bubble(40,170,280,'📏 変化点',['BC から何 m・切羽から','何本目の後ろで変わるか'],cx['変化点'],y+86,...GC.purple);
+  h+=bubble(40,170,280,'📏 変化点',['BC から何 m・切羽から','何 m で変わるか'],cx['変化点'],y+86,...GC.purple);
   h+=bubble(340,170,290,'🧷 パルリング',['区間ごとに 貼る／貼らない','を選べる（画面の表）'],cx['パルリング'],y+86,...GC.pink);
   h+=bubble(650,170,310,'📐 目地の開き',['つぶれた後に目地に残る','厚み（管の中心・1か所）'],cx['目地の開き'],y+86,...GC.teal);
   h+=bubble(980,170,290,'➕ 伸び',['区間の目地の開きの合計','この分だけ管列が長くなる'],cx['伸び'],y+86,...GC.blue);
@@ -2424,6 +2591,8 @@ function buildPrintout(sel){
   const page=(t,body)=>`<section class="pp-page">${head(t)}${body}</section>`;
   let h='';
   if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>${patTableHTML(P,P.pats)}`);
+  if(hasPlan && on('map')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A4'?1:2;
+    for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
   if(hasPlan && on('span')) h+=page('区間ごとの割付と伸び', spanTableHTML(P,P.spans,false));
   if(hasPlan && on('spanchart')){
     const blocks=P.spans.map(sp=>spanChartsHTML(P,sp)).filter(Boolean);
@@ -3047,6 +3216,8 @@ $('propbtn').onclick=propose;
 $('planbtn').onclick=runPlan;
 $('ppbtn').onclick=openPrintDialog;
 $('ppbtn2').onclick=openPrintDialog;
+$('mergebtn').onclick=proposeMerge;
+$('mergeclr').onclick=clearMerge;
 $('saveHist').onclick=saveHistory;
 $('openHist').onclick=()=>{
   const p=$('histpanel');
