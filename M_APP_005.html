@@ -1039,7 +1039,7 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>基礎砕石 厚さ [m]</label><input id="wallFdnGravelT" class="mono" type="number" step="0.01" min="0" value="0.20" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row" id="wallHwMinRow" style="display:none"><label>支圧壁 最小高さ [m]（任意）</label><input id="wallHwMin" class="mono" type="number" step="0.5" min="0" value="0" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
         <div class="field-row wallResultantOnly" style="display:none"><label>壁下 CO 厚 [m]</label><input id="wallUnderCoT" class="mono" type="number" step="0.01" min="0" value="0.10" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
-        <div class="field-row wallResultantOnly" style="display:none"><label>支圧壁 前面の施工余裕 [m]</label><input id="wallFrontMargin" class="mono" type="number" step="0.01" min="0" value="0.10" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
+        <div class="field-row wallResultantOnly" style="display:none"><label>支圧壁 天端高 [m]（必要なら指定・空欄＝自動）</label><input id="wallElTopOverride" class="mono" type="number" step="0.001" placeholder="自動" oninput="updateWallLevelDerived()"><span class="unit">m</span></div>
       </div>
       <div id="wallElevResult" style="margin-top:6px"></div>
       <p class="report-note" style="margin:4px 2px 0">立坑地盤高は縦断面図・標高一覧表への表示のみに使用します（H_w・h_cの計算には影響しません）。未入力（0）の場合は地盤高の行を表示しません。</p>
@@ -1053,6 +1053,11 @@ tr.row-selected{background:#eff6ff}
       <span class="unit">m</span>
     </div>
     <p class="report-note" id="wallThicknessNote" style="margin:2px 2px 0"></p>
+    <div class="field-row" style="margin-top:6px">
+      <label>バックロック据付けの前面余裕 [m]</label>
+      <input id="wallFrontMargin" class="mono" type="number" step="0.01" min="0" value="0.10" oninput="if (wallLevelMode === 'direct') { calcBacklock(); autoSave(); } else updateWallLevelDerived();">
+      <span class="unit">m</span>
+    </div>
 
     <div class="field-row full" style="margin-top:8px">
       <label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="wallSpaceCheckOn" checked onchange="onWallSpaceCheckToggle()" style="width:auto">⑤推進作業スペース照査を行う（円形立坑）</label>
@@ -8851,10 +8856,12 @@ function wallWorkSpaceInfo(info) {
   if (x >= R) return null;
   const half = Math.sqrt(R * R - x * x);
   const Lout = 2 * half;
-  const tD = Math.max(0, half - info.hCenter);
+  const wf = wallFrontMargin();
+  const tW = Math.max(0, half - info.hCenter); // 支圧壁本体（管外径部）
+  const tD = tW + wf;                          // 117章: 据付けの前面余裕を含めた支圧壁の厚さ
   const Leff = Lout - tD;
   const parts = wallWorkSpaceParts();
-  return { R, Do, x, half, Lout, tD, Leff, parts, req: parts.total, ok: Leff >= parts.total - 1e-9 };
+  return { R, Do, x, half, Lout, tW, wf, tD, Leff, parts, req: parts.total, ok: Leff >= parts.total - 1e-9 };
 }
 
 // ジャッキの合力点（管中心を0とした高さ[m]）。刃口推進はジャッキ配置の各段（各段2基・同じ能力）の
@@ -8898,6 +8905,11 @@ function segmentArea(R, t) {
   const tri = W * (R - t) / 2;
   return { thetaDeg, W, sector, tri, A: sector - tri };
 }
+function wallTopOverride() {
+  const el = document.getElementById('wallElTopOverride');
+  if (!el || el.value === '' || isNaN(parseFloat(el.value))) return null;
+  return parseFloat(el.value);
+}
 function wallElevationInfo() {
   const elBase = n('wallElBase');
   const elInv = n('wallElPipeInvert');
@@ -8911,25 +8923,29 @@ function wallElevationInfo() {
   const Hcover = 2 * Math.max(elJt - elR, elR - elJb);
   const HwMin = n('wallHwMin') || 0;
   const H0 = ceilTo(Math.max(Hcover, HwMin, pieceH));
-  let bottom, Hw, dig;
-  const bottomC = elR - H0 / 2;
-  if (bottomC < elBase - 1e-6) {
-    bottom = bottomC; Hw = H0; dig = elBase - bottomC;
+  const topSet = wallTopOverride();
+  let bottom, Hw, bottomC = elR - H0 / 2;
+  if (topSet != null) {
+    // 117章: 壁天端高を指定したとき。天端を固定し、ジャッキ下端まで覆う高さ（H0 以上）を段単位で取る
+    Hw = ceilTo(Math.max(H0, topSet - elJb));
+    bottom = topSet - Hw;
+    if (bottom > elBase + 1e-6) { bottom = elBase; Hw = ceilTo(Math.max(H0, topSet - elBase)); }
+  } else if (bottomC < elBase - 1e-6) {
+    bottom = bottomC; Hw = H0;
   } else {
-    bottom = elBase; dig = 0;
+    bottom = elBase;
     Hw = ceilTo(Math.max(H0, 2 * (elR - elBase)));
   }
   const top = bottom + Hw;
+  const emb = Math.max(0, elBase - bottom); // 根入れ（基礎天端から壁底まで）
+  const dig = emb;
   const gi = wallGapInfo();
   const tw = wallUnderCoT(), wf = wallFrontMargin();
   const fdnLen = (gi.T || 0) + (gi.gap || 0) + wf; // 控除範囲の奥行 T2＝空隙＋BR厚＋前面余裕
-  const designFloor = elBase - tc - ts;             // 設計の床付
-  const needFloor = dig > 0 ? bottom - tw : null;   // 支圧壁に要る床付
-  const floor = needFloor != null ? Math.min(designFloor, needFloor) : designFloor; // 全床付（壁側・一般側とも同じ）
-  const dh = Math.max(0, designFloor - floor);      // 全面の切下げ量
-  const gravelT = elBase - tc - floor;              // 一般側の砕石厚（ts＋Δh）
-  const underRc = needFloor != null ? Math.max(0, needFloor - floor) : 0; // 壁下の砕石（設計床付が低いとき）
-  // 控除面積（一般基礎を施工しない範囲）と数量
+  const designFloor = elBase - tc - ts;             // 一般基礎の床付（設計のまま）
+  const wallFloor = dig > 0 ? bottom - tw : null;   // 支圧壁床付（壁底−壁下CO）
+  const underRc = wallFloor != null ? Math.max(0, wallFloor - designFloor) : 0; // 壁下の砕石（壁床付が一般床付より高いとき）
+  const extraDepth = wallFloor != null ? Math.max(0, designFloor - wallFloor) : 0; // 一般床付より深く掘る分
   const info = computeWallBeff();
   const isCircle = wallShaftType === 'circle' || wallShaftType === 'casing';
   let ded = null;
@@ -8943,16 +8959,17 @@ function wallElevationInfo() {
       const W = n('wallPitW') || 0, L = n('wallPitL') || 0;
       ded = { circle: false, W, A: W * fdnLen, Atot: W * L, Ag: W * L - W * fdnLen };
     }
-    ded.Vco = ded.A * tw;           // 壁下CO
-    ded.Vrc = ded.A * underRc;      // 壁下砕石（ある場合）
-    ded.Vexc = ded.Atot * dh;       // 全面切下げの追加掘削
-    ded.Vgr = ded.Ag * dh;          // 一般側 RC-40 増量
+    ded.Vco = ded.A * tw;            // 壁下CO
+    ded.Vrc = ded.A * underRc;       // 壁下RC-40（ある場合）
+    ded.Vexc = ded.A * extraDepth;   // 一般床付より深い掘削
+    ded.VdedCo = ded.A * tc;         // 一般基礎 CO の控除
+    ded.VdedRc = ded.A * ts;         // 一般基礎 RC-40 の控除
   }
   return {
-    elBase, elInv, Di, tc, ts, elC, elR, elJt, elJb, jr, pieceH, Hcover, HwMin, H0, bottomC, bottom, top, Hw, dig,
+    elBase, elInv, Di, tc, ts, elC, elR, elJt, elJb, jr, pieceH, Hcover, HwMin, H0, bottomC, bottom, top, Hw, dig, emb, topSet,
     hc: elC - bottom, hR: elR - bottom, tw, wf,
-    fdnLen, designFloor, needFloor, floor, dh, gravelT, underRc, ded,
-    excBottom: dig > 0 ? floor : null, digTotal: dig > 0 ? elBase - floor : 0, gap: gi,
+    fdnLen, designFloor, wallFloor, floor: designFloor, underRc, extraDepth, ded,
+    topBelowJack: top < elJt - 1e-6, gap: gi,
   };
 }
 let lastWallElev = null;
@@ -8973,9 +8990,10 @@ function renderWallElevResult(ei) {
         <tr><td>支圧壁 天端高</td><td class="mono"><b>${f3(ei.top)}</b></td></tr>
       </tbody>
     </table></div>
+    ${ei.topBelowJack ? `<div class="ng-box" style="font-size:12px;margin-top:6px">指定の天端高 ${f3(ei.topSet)} がジャッキ上端 ${f3(ei.elJt)} より低い。</div>` : ''}
     ${ei.dig > 0
-      ? `<div class="ng-box" style="font-size:12px;margin-top:6px">支圧壁の部分は一般基礎を施工せず、立坑基礎天端から支圧壁底面を <b>${ei.dig.toFixed(3)} m</b> 下げる（支圧壁の高さ <b>${ei.Hw.toFixed(2)} m</b>）。壁下 CO ${ei.tw.toFixed(2)} m、全床付 ${f3(ei.floor)}（壁側・一般側とも同じ）${ei.dh > 0 ? `。設計床付 ${f3(ei.designFloor)} から全面 ${ei.dh.toFixed(3)} m 切下げ、一般側の砕石を ${ei.ts.toFixed(3)}→${ei.gravelT.toFixed(3)} m に増厚（基礎天端 ${f3(ei.elBase)} は変えない）` : ''}。控除範囲の奥行（空隙＋BR厚＋前面余裕）${ei.fdnLen.toFixed(3)} m${ei.ded ? `、控除面積 ${ei.ded.A.toFixed(3)} m²` : ''}。その位置に型枠を置き、一般基礎と縁を切る。</div>`
-      : `<div class="ok-box" style="font-size:12px;margin-top:6px">掘り下げは不要（支圧壁は基礎面に据える）。合力点を中央にする支圧壁の高さ <b>${ei.Hw.toFixed(2)} m</b>。</div>`}
+      ? `<div class="ng-box" style="font-size:12px;margin-top:6px">支圧壁の根入れ <b>${ei.emb.toFixed(3)} m</b>（基礎天端 ${f3(ei.elBase)} → 壁底 ${f3(ei.bottom)}）、支圧壁の高さ <b>${ei.Hw.toFixed(2)} m</b>。壁下 CO ${ei.tw.toFixed(2)} m、支圧壁床付 <b>${f3(ei.wallFloor)}</b>${ei.extraDepth > 0 ? `（一般の床付 ${f3(ei.designFloor)} より ${ei.extraDepth.toFixed(3)} m 深い）` : ''}${ei.underRc > 0 ? `（一般の床付 ${f3(ei.designFloor)} との間は RC-40 ${ei.underRc.toFixed(3)} m）` : ''}。一般基礎（基礎天端・厚さは設計のまま）は支圧壁＋空隙＋前面余裕 ${ei.wf.toFixed(2)} m の範囲（奥行 ${ei.fdnLen.toFixed(3)} m${ei.ded ? `、控除面積 ${ei.ded.A.toFixed(3)} m²` : ''}）を施工せず、型枠で縁を切る。</div>`
+      : `<div class="ok-box" style="font-size:12px;margin-top:6px">根入れなし（支圧壁は基礎天端に据える）。支圧壁の高さ <b>${ei.Hw.toFixed(2)} m</b>。</div>`}
   `;
 }
 
@@ -9013,7 +9031,8 @@ function wallLayoutData() {
       elBase: base, bottom: base, top: base + Hw, Hw, dig: 0, elC, elInv: elC - Di / 2,
       elR: elC + jr.yR, tc: Math.max(0, n('wallFdnConcT') || 0), ts: Math.max(0, n('wallFdnGravelT') || 0),
       fdnLen: (gi.T || 0) + (gi.gap || 0) + wallFrontMargin(), excBottom: null, relative: wallLevelMode === 'direct',
-      floor: base - Math.max(0, n('wallFdnConcT') || 0) - Math.max(0, n('wallFdnGravelT') || 0), gravelT: Math.max(0, n('wallFdnGravelT') || 0), dh: 0, tw: wallUnderCoT(), underRc: 0,
+      floor: base - Math.max(0, n('wallFdnConcT') || 0) - Math.max(0, n('wallFdnGravelT') || 0), designFloor: base - Math.max(0, n('wallFdnConcT') || 0) - Math.max(0, n('wallFdnGravelT') || 0),
+      wallFloor: null, emb: 0, tw: wallUnderCoT(), wf: wallFrontMargin(), underRc: 0,
     };
   }
   const ws = (wallSpaceCheckOn && isCircle) ? wallWorkSpaceInfo(info) : null;
@@ -9068,11 +9087,17 @@ function wallPlanSVG(d) {
     s += `<rect x="${X(uLiner)}" y="${Y(halfW)}" width="${(uFront - uLiner) * k}" height="${2 * halfW * k}" fill="url(#hatchGap)" stroke="#64748b"/>`;
   }
   // 一般基礎の控除範囲（壁＋空隙＋前面余裕、116章）
+  const wfP = wallFrontMargin();
+  if (isCircle && R && wfP > 0) {
+    // 117章: バックロック据付けの前面余裕（支圧壁の厚さに含める）
+    const uM = uFront + wfP;
+    const hm = Math.sqrt(Math.max(0, R * R - uM * uM));
+    s += `<line x1="${X(uM)}" y1="${Y(hm)}" x2="${X(uM)}" y2="${Y(-hm)}" stroke="#ea580c" stroke-width="2.5"/>`;
+  }
   if (d.ev && d.ev.dig > 0 && isCircle && R) {
-    const uF = uLiner + d.ev.fdnLen;
+    const uF = uFront + d.ev.wf;
     const hw = Math.sqrt(Math.max(0, R * R - uF * uF));
     s += `<path d="M${X(uF)},${Y(hw)} A${R * k},${R * k} 0 0 0 ${X(uF)},${Y(-hw)} Z" fill="#fdba74" fill-opacity="0.35" stroke="none"/>`;
-    s += `<line x1="${X(uF)}" y1="${Y(hw)}" x2="${X(uF)}" y2="${Y(-hw)}" stroke="#ea580c" stroke-width="2.5"/>`;
     s += `<text x="${X(uF) + 4}" y="${Y(-hw) + 18}" font-size="13" fill="#c2410c">型枠（控除 ${d.ev.ded ? d.ev.ded.A.toFixed(3) + 'm²' : ''}）</text>`;
   }
   // バックロック（台形: 背面W2・前面W1）
@@ -9091,7 +9116,7 @@ function wallPlanSVG(d) {
   const jackLen = parts.jack, ring = parts.ring, pipeL = parts.pipeLen, collar = parts.collar;
   const jackD = jr.jackR * 2;
   const xs = [...new Set(jr.jacks.map(j => +j.x.toFixed(3)))];
-  const u0 = uFront;
+  const u0 = uFront + wallFrontMargin(); // 117章: 前面余裕の先から作業機材を置く
   xs.forEach(x => [-1, 1].forEach(sg => {
     const wc = off + sg * x;
     s += `<rect x="${X(u0)}" y="${Y(wc + jackD / 2)}" width="${jackLen * k}" height="${jackD * k}" rx="3" fill="#fecaca" stroke="#b3261e" stroke-width="1.5"/>`;
@@ -9112,11 +9137,14 @@ function wallPlanSVG(d) {
   let yb = Y(-halfW) + 22;
   if (gi.taper && gi.ok) {
     // 空隙・バックロック厚（推進中心線上）
-    const yT = Math.max(16, Y(off + (m.W1 || 0) / 2) - 30);
+    // 支圧壁の厚さ＝空隙＋BR厚＋前面余裕（推進中心線上）
+    const yT = Math.max(30, Y(off + (m.W1 || 0) / 2) - 30);
+    const wfT = wallFrontMargin();
     s += svgDimH(X(uLiner), X(uBackFace), yT, '', '#475569');
     s += svgDimH(X(uBackFace), X(uFront), yT, '', '#b91c1c');
-    s += `<text x="${X(uLiner) - 4}" y="${yT + 4}" text-anchor="end" font-size="13" fill="#475569">空隙 ${gi.gap.toFixed(3)}</text>`;
-    s += `<text x="${X(uFront) + 4}" y="${yT + 4}" text-anchor="start" font-size="13" fill="#b91c1c">T ${gi.T.toFixed(2)}</text>`;
+    if (wfT > 0) s += svgDimH(X(uFront), X(uFront + wfT), yT, '', '#c2410c');
+    s += svgDimH(X(uLiner), X(uFront + wfT), yT - 22, `支圧壁の厚さ ${(gi.gap + gi.T + wfT).toFixed(3)}`, '#334155');
+    s += `<text x="${X(uFront + wfT) + 4}" y="${yT + 4}" text-anchor="start" font-size="13" fill="#475569">空隙${gi.gap.toFixed(3)}＋BR${gi.T.toFixed(2)}＋余裕${wfT.toFixed(2)}</text>`;
   }
   // 支圧壁の幅（前面の弦）
   s += svgDimV(X(uFront) - 8, Y(wHalfFront), Y(-wHalfFront), '', '#b91c1c', 'end');
@@ -9127,7 +9155,8 @@ function wallPlanSVG(d) {
     const uA = -ws.half, uB = ws.half;
     s += `<line x1="${X(uA)}" y1="${Y(wl)}" x2="${X(uB)}" y2="${Y(wl)}" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="6 3"/>`;
     s += svgDimH(X(uA), X(uB), yb, `管の外側での有効距離 L_out ${ws.Lout.toFixed(3)}`, '#15803d');
-    s += svgDimH(X(uA), X(uA + ws.tD), yb + 22, `t_D ${ws.tD.toFixed(3)}`, '#b91c1c');
+    s += svgDimH(X(uA), X(uA + ws.tD), yb + 22, '', '#b91c1c');
+    s += `<text x="${X(uA) - 4}" y="${yb + 26}" text-anchor="end" font-size="13" fill="#b91c1c">t_D ${ws.tD.toFixed(3)}</text>`;
     s += svgDimH(X(uA + ws.tD), X(uB), yb + 22, `有効作業長 L_eff ${ws.Leff.toFixed(3)} ≥ 必要 ${ws.req.toFixed(2)}`, ws.ok ? '#15803d' : '#b91c1c');
     // 必要長の内訳（図の上）
     const yP = Y(off - ringHalf) + 34;
@@ -9148,13 +9177,16 @@ function wallPlanSVG(d) {
 // 側断面図（管の中心で推進方向に切った図）。
 function wallSideSVG(d) {
   const { gi, Do, Di, uLiner, uFront, uBackFace, uRight, parts, jr, ev, Hw } = d;
-  const Wv = 640, padL = 230, padR = 20, padT = 24, padB = 40;
+  const Wv = 640, padL = 230, padR = 20, padT = 24, padB = 44;
   const tc = ev.tc || 0;
-  const floorZ = ev.floor;            // 全床付（壁側・一般側とも同じ）
+  const floorZ = ev.designFloor != null ? ev.designFloor : ev.floor; // 一般の床付（設計のまま）
+  const wallFloorZ = (ev.dig > 0 && ev.wallFloor != null) ? ev.wallFloor : null; // 支圧壁床付
+  const lowZ = Math.min(floorZ, wallFloorZ != null ? wallFloorZ : Infinity);
   const zTop = Math.max(ev.top, ev.elC + Do / 2 + 0.2) + 0.15;
-  const zLow = floorZ - 0.15;
+  const zLow = lowZ - 0.15;
   // 横も実寸。管の先（既設管）は途中で切る
-  const uPipeEnd = uFront + parts.jack + parts.ring + parts.pipeLen + parts.collar;
+  const uJ = uFront + (ev.wf || 0); // 117章: 前面余裕の先からジャッキ
+  const uPipeEnd = uJ + parts.jack + parts.ring + parts.pipeLen + parts.collar;
   const uMin = uLiner - 0.15, uMax = Math.min(uRight + 0.3, uPipeEnd + 0.5);
   const showRight = uRight < uMax;
   const k = (Wv - padL - padR) / (uMax - uMin);
@@ -9166,9 +9198,10 @@ function wallSideSVG(d) {
   s += `<rect x="${X(uMin)}" y="${Z(zTop)}" width="${X(uLiner) - X(uMin)}" height="${Z(zLow) - Z(zTop)}" fill="#e7e5e4"/>`;
   if (showRight) s += `<rect x="${X(uRight)}" y="${Z(zTop)}" width="${X(uMax) - X(uRight)}" height="${Z(zLow) - Z(zTop)}" fill="#e7e5e4"/>`;
   const uEnd = showRight ? uRight : uMax;
-  s += `<rect x="${X(uLiner)}" y="${Z(floorZ)}" width="${X(uEnd) - X(uLiner)}" height="${Z(zLow) - Z(floorZ)}" fill="#e7e5e4"/>`;
-  // 一般基礎（RC-40・CO）
   const uFdnEnd = ev.dig > 0 ? uLiner + ev.fdnLen : uLiner;
+  s += `<rect x="${X(uFdnEnd)}" y="${Z(floorZ)}" width="${X(uEnd) - X(uFdnEnd)}" height="${Z(zLow) - Z(floorZ)}" fill="#e7e5e4"/>`;
+  if (uFdnEnd > uLiner) s += `<rect x="${X(uLiner)}" y="${Z(wallFloorZ != null ? Math.min(wallFloorZ, floorZ) : floorZ)}" width="${X(uFdnEnd) - X(uLiner)}" height="${Z(zLow) - Z(wallFloorZ != null ? Math.min(wallFloorZ, floorZ) : floorZ)}" fill="#e7e5e4"/>`;
+  // 一般基礎（RC-40・CO、設計のまま）
   const gT = ev.elBase - tc - floorZ;
   const mm = x => Math.round(x * 1000);
   s += `<rect x="${X(uFdnEnd)}" y="${Z(ev.elBase - tc)}" width="${X(uEnd) - X(uFdnEnd)}" height="${gT * k}" fill="url(#hatchGravel)" stroke="#a8a29e"/>`;
@@ -9180,8 +9213,8 @@ function wallSideSVG(d) {
     // 壁側：壁下 CO（＋必要なら RC-40）。一般基礎とは型枠で縁を切る
     if (ev.underRc > 0) s += `<rect x="${X(uLiner)}" y="${Z(ev.bottom - ev.tw)}" width="${ev.fdnLen * k}" height="${ev.underRc * k}" fill="url(#hatchGravel)" stroke="#a8a29e"/>`;
     s += `<rect x="${X(uLiner)}" y="${Z(ev.bottom)}" width="${ev.fdnLen * k}" height="${ev.tw * k}" fill="#a8a29e" stroke="#57534e"/>`;
-    s += `<line x1="${X(uFdnEnd)}" y1="${Z(ev.elBase)}" x2="${X(uFdnEnd)}" y2="${Z(floorZ)}" stroke="#ea580c" stroke-width="3"/>`;
-    s += `<text x="${X(uFdnEnd) + 6}" y="${Z(ev.elBase) - 4}" font-size="13" fill="#c2410c">型枠</text>`;
+    s += `<line x1="${X(uFdnEnd)}" y1="${Z(ev.elBase)}" x2="${X(uFdnEnd)}" y2="${Z(lowZ)}" stroke="#ea580c" stroke-width="3"/>`;
+    s += `<text x="${X(uFdnEnd) + 6}" y="${Z(lowZ) + 14}" font-size="13" fill="#c2410c">型枠（縁切り）</text>`;
   }
   // ライナー
   s += `<line x1="${X(uLiner)}" y1="${Z(zTop)}" x2="${X(uLiner)}" y2="${Z(zLow)}" stroke="#2563eb" stroke-width="2.5"/>`;
@@ -9206,11 +9239,11 @@ function wallSideSVG(d) {
   s += `<line x1="${X(uBackFace) - 8}" y1="${Z(ev.bottom + Hw / 2)}" x2="${X(uFront) + 8}" y2="${Z(ev.bottom + Hw / 2)}" stroke="#64748b" stroke-dasharray="4 3"/>`;
   // ジャッキ（側面）・押輪・推進管
   const jackLen = parts.jack, ring = parts.ring, pipeL = parts.pipeLen, collar = parts.collar;
-  const u1 = uFront + jackLen, u2 = u1 + ring, u3 = u2 + pipeL + collar;
+  const u1 = uJ + jackLen, u2 = u1 + ring, u3 = u2 + pipeL + collar;
   jr.jacks.forEach(j => {
     const zc = ev.elC + j.y;
-    s += `<rect x="${X(uFront)}" y="${Z(zc + jr.jackR)}" width="${jackLen * k}" height="${jr.jackR * 2 * k}" rx="3" fill="#fecaca" stroke="#b3261e" stroke-width="1.5"/>`;
-    if (jr.staged) s += `<text x="${X(uFront + jackLen / 2)}" y="${Z(zc) + 4}" text-anchor="middle" font-size="12" fill="#7f1d1d">${j.stage}段</text>`;
+    s += `<rect x="${X(uJ)}" y="${Z(zc + jr.jackR)}" width="${jackLen * k}" height="${jr.jackR * 2 * k}" rx="3" fill="#fecaca" stroke="#b3261e" stroke-width="1.5"/>`;
+    if (jr.staged) s += `<text x="${X(uJ + jackLen / 2)}" y="${Z(zc) + 4}" text-anchor="middle" font-size="12" fill="#7f1d1d">${j.stage}段</text>`;
   });
   const ringTop = Math.max(ev.elC + Do / 2 + 0.05, ...jr.jacks.map(j => ev.elC + j.y + jr.jackR));
   const ringBot = Math.min(ev.elC - Do / 2 - 0.05, ...jr.jacks.map(j => ev.elC + j.y - jr.jackR));
@@ -9223,12 +9256,12 @@ function wallSideSVG(d) {
   s += `<text x="${X(u2 + pipeL / 2)}" y="${Z(ev.elC) - 6}" text-anchor="middle" font-size="13" fill="#1e3a8a">推進管</text>`;
   s += `<text x="${X(u1 + ring / 2)}" y="${Z(ringTop) - 6}" text-anchor="middle" font-size="13" fill="#92400e">押輪</text>`;
   // 合力点
-  s += `<line x1="${X(uFront + jackLen) + 30}" y1="${Z(ev.elR)}" x2="${X(uFront) + 2}" y2="${Z(ev.elR)}" stroke="#b3261e" stroke-width="2.5" marker-end="url(#arrR)"/>`;
+  s += `<line x1="${X(uJ + jackLen) + 30}" y1="${Z(ev.elR)}" x2="${X(uFront) + 2}" y2="${Z(ev.elR)}" stroke="#b3261e" stroke-width="2.5" marker-end="url(#arrR)"/>`;
   // 標高（左）
   const rel = !!ev.relative;
 
-  const marks = [[ev.top, '壁天端', '#b91c1c'], [ev.elC, '管芯', '#1d4ed8'], [ev.elR, '合力点', '#b3261e'], [ev.elBase, '基礎天端', '#57534e'], [floorZ, '全床付', '#c2410c']];
-  if (ev.dig > 0) marks.push([ev.bottom, '壁底', '#b91c1c']);
+  const marks = [[ev.top, '壁天端', '#b91c1c'], [ev.elC, '管芯', '#1d4ed8'], [ev.elR, '合力点', '#b3261e'], [ev.elBase, '基礎天端', '#57534e']];
+  if (ev.dig > 0) marks.push([ev.bottom, '壁底', '#b91c1c'], [wallFloorZ, '支圧壁床付', '#c2410c']);
   // ラベルの重なりを避ける（14px 以上離す）
   marks.sort((a, b) => b[0] - a[0]);
   let lastY = -1e9;
@@ -9245,9 +9278,15 @@ function wallSideSVG(d) {
   s += svgDimV(X(uLiner) - 10, Z(ev.top), Z(ev.elR), `上 ${mm(ev.top - ev.elR)}`, '#b91c1c', 'end');
   s += svgDimV(X(uLiner) - 10, Z(ev.elR), Z(ev.bottom), `下 ${mm(ev.elR - ev.bottom)}`, '#b91c1c', 'end');
   s += `<text x="${X(uFront) + 4}" y="${Z(ev.top) + 12}" text-anchor="start" font-size="13" fill="#b91c1c">${backrockUse && backrockCurrentModel ? `BR${Math.round(Hw / (backrockCurrentModel.H || 0.5))}段 ` : ''}H=${mm(Hw)}</text>`;
+  // 前面の余裕（支圧壁前面〜一般基礎）
+  if (ev.wf > 0) {
+    const yW = ev.dig > 0 ? Z(ev.elBase) - 14 : Z(ev.bottom) - 14;
+    s += svgDimH(X(uFront), X(uFront + ev.wf), yW, '', '#c2410c');
+    s += `<text x="${X(uFront + ev.wf) + 4}" y="${yW + 4}" font-size="13" fill="#c2410c">余裕 ${mm(ev.wf)}</text>`;
+  }
   if (ev.dig > 0) {
-    s += svgDimH(X(uLiner), X(uFdnEnd), Z(floorZ) + 18, '', '#57534e');
-    s += `<text x="${X(uFdnEnd) + 6}" y="${Z(floorZ) + 22}" font-size="13" fill="#57534e">控除 T2 ${mm(ev.fdnLen)}（空隙＋BR厚＋余裕${mm(ev.wf)}）・壁下CO ${mm(ev.tw)}</text>`;
+    s += svgDimV(X(uFront) + ev.wf * k + 34, Z(ev.elBase), Z(ev.bottom), `根入 ${mm(ev.emb)}`, '#c2410c', 'start');
+    s += `<text x="${X(uLiner) + 3}" y="${Z(lowZ) + 32}" font-size="13" fill="#57534e">壁下CO ${mm(ev.tw)}・控除 T2 ${mm(ev.fdnLen)}（空隙＋BR厚＋余裕）</text>`;
   }
   return `<svg class="report-svg" viewBox="0 0 ${Wv} ${Hv + 10}" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">${SVG_DEFS}${s}</svg>`;
 }
@@ -9298,7 +9337,7 @@ function renderWallReport() {
     const p = ws.parts;
     sec.push(reportSection(no++, '有効作業長', calcSteps([
       stepRow('管の外側での有効距離 L_out', `√(R²−(D/2)²)×2 = √(${ws.R.toFixed(3)}²−${ws.x.toFixed(3)}²)×2`, `${ws.Lout.toFixed(3)} m`),
-      stepRow('支圧壁の厚さ（管外径部）t_D', `√(R²−(D/2)²)−h = ${ws.half.toFixed(3)}−${d.info.hCenter.toFixed(3)}`, `${ws.tD.toFixed(3)} m`),
+      stepRow('支圧壁の厚さ（管外径部）t_D', `√(R²−(D/2)²)−h＋前面余裕 = ${ws.half.toFixed(3)}−${d.info.hCenter.toFixed(3)}＋${ws.wf.toFixed(3)}`, `${ws.tD.toFixed(3)} m`),
       stepRow('有効作業長 L_eff', `L_out−t_D = ${ws.Lout.toFixed(3)}−${ws.tD.toFixed(3)}`, `${ws.Leff.toFixed(3)} m`),
       stepRow('必要長', `(l′＋カラー)＋押輪＋ジャッキ機高＋余裕 = (${p.pipeLen.toFixed(2)}＋${p.collar.toFixed(2)})＋${p.ring.toFixed(2)}＋${p.jack.toFixed(2)}＋${p.margin.toFixed(2)}`, `${p.total.toFixed(2)} m`),
       stepRow('判定', `${ws.Leff.toFixed(3)} ${ws.ok ? '≥' : '＜'} ${p.total.toFixed(2)}`, ws.ok ? 'OK' : 'NG'),
@@ -9318,20 +9357,20 @@ function renderWallReport() {
     }
     rows.push(stepRow('ジャッキを覆う高さ', `2×max(上端−合力点, 合力点−下端) = 2×max(${(e.elJt - e.elR).toFixed(3)}, ${(e.elR - e.elJb).toFixed(3)})`, `${e.Hcover.toFixed(3)} m`));
     rows.push(stepRow('支圧壁の高さ H0', `${e.pieceH.toFixed(2)} m 単位に切上げ${e.HwMin ? `（最小 ${e.HwMin.toFixed(2)}）` : ''}`, `${e.H0.toFixed(2)} m`));
-    rows.push(stepRow('合力点を中央にした底面', `合力点−H0/2 = ${f3(e.elR)}−${(e.H0 / 2).toFixed(3)}`, f3(e.bottomC)));
-    if (e.dig > 0) {
-      rows.push(stepRow('壁底の下げ', `基礎天端−壁底 = ${f3(e.elBase)}−${f3(e.bottom)}`, `${e.dig.toFixed(3)} m`));
-      rows.push(stepRow('壁に要る床付', `壁底−壁下CO厚 = ${f3(e.bottom)}−${e.tw.toFixed(3)}`, f3(e.needFloor)));
-      rows.push(stepRow('設計床付', `基礎天端−CO厚−砕石厚 = ${f3(e.elBase)}−${e.tc.toFixed(3)}−${e.ts.toFixed(3)}`, f3(e.designFloor)));
-      rows.push(stepRow('全床付（壁側・一般側）', `min(${f3(e.designFloor)}, ${f3(e.needFloor)})`, f3(e.floor)));
-      if (e.dh > 0) {
-        rows.push(stepRow('全面の切下げ Δh', `${f3(e.designFloor)}−${f3(e.floor)}`, `${e.dh.toFixed(3)} m`));
-        rows.push(stepRow('一般側 RC-40 厚', `基礎天端−全床付−CO厚 = ${f3(e.elBase)}−${f3(e.floor)}−${e.tc.toFixed(3)}`, `${e.gravelT.toFixed(3)} m`));
-      }
-      if (e.underRc > 0) rows.push(stepRow('壁下 RC-40 厚', `${f3(e.needFloor)}−${f3(e.floor)}`, `${e.underRc.toFixed(3)} m`));
+    if (e.topSet != null) {
+      rows.push(stepRow('支圧壁の高さ Hw（天端高を指定）', `天端−ジャッキ下端 = ${f3(e.topSet)}−${f3(e.elJb)} を切上げ（H0 以上）`, `${e.Hw.toFixed(2)} m`));
+      rows.push(stepRow('壁底', `天端−Hw = ${f3(e.topSet)}−${e.Hw.toFixed(2)}`, f3(e.bottom)));
+    } else if (e.bottomC < e.elBase - 1e-6) {
+      rows.push(stepRow('壁底（合力点を中央に）', `合力点−H0/2 = ${f3(e.elR)}−${(e.H0 / 2).toFixed(3)}`, f3(e.bottom)));
     } else {
-      rows.push(stepRow('底面（基礎面に据える）', `${f3(e.bottomC)} ≥ 基礎面 ${f3(e.elBase)}`, f3(e.bottom)));
-      rows.push(stepRow('支圧壁の高さ', `2×(合力点−基礎面) を切上げ = 2×(${f3(e.elR)}−${f3(e.elBase)})`, `${e.Hw.toFixed(2)} m`));
+      rows.push(stepRow('壁底（基礎天端に据える）', `合力点−H0/2 = ${f3(e.bottomC)} ≥ 基礎天端 ${f3(e.elBase)}`, f3(e.bottom)));
+      rows.push(stepRow('支圧壁の高さ', `2×(合力点−基礎天端) を切上げ = 2×(${f3(e.elR)}−${f3(e.elBase)})`, `${e.Hw.toFixed(2)} m`));
+    }
+    if (e.dig > 0) {
+      rows.push(stepRow('根入れ', `基礎天端−壁底 = ${f3(e.elBase)}−${f3(e.bottom)}`, `${e.emb.toFixed(3)} m`));
+      rows.push(stepRow('支圧壁床付', `壁底−壁下CO = ${f3(e.bottom)}−${e.tw.toFixed(3)}`, f3(e.wallFloor)));
+      rows.push(stepRow('一般の床付', `基礎天端−CO−RC-40 = ${f3(e.elBase)}−${e.tc.toFixed(3)}−${e.ts.toFixed(3)}`, f3(e.designFloor)));
+      if (e.underRc > 0) rows.push(stepRow('壁下 RC-40', `支圧壁床付−一般の床付 = ${f3(e.wallFloor)}−${f3(e.designFloor)}`, `${e.underRc.toFixed(3)} m`));
     }
     rows.push(stepRow('天端高', `底面＋Hw = ${f3(e.bottom)}＋${e.Hw.toFixed(2)}`, f3(e.top)));
     rows.push(stepRow('上／下', `天端−合力点 ／ 合力点−壁底 = ${(e.top - e.elR).toFixed(3)} ／ ${(e.elR - e.bottom).toFixed(3)}`, ''));
@@ -9352,12 +9391,11 @@ function renderWallReport() {
         r.push(stepRow('控除面積 Ar', `立坑幅×T2 = ${q.W.toFixed(3)}×${e.fdnLen.toFixed(3)}`, `${q.A.toFixed(3)} m²`));
         r.push(stepRow('一般基礎の面積 Ag', `${q.Atot.toFixed(3)}−${q.A.toFixed(3)}`, `${q.Ag.toFixed(3)} m²`));
       }
+      r.push(stepRow('一般基礎 CO の控除', `Ar×${e.tc.toFixed(3)}`, `${q.VdedCo.toFixed(3)} m³`));
+      r.push(stepRow('一般基礎 RC-40 の控除', `Ar×${e.ts.toFixed(3)}`, `${q.VdedRc.toFixed(3)} m³`));
       r.push(stepRow('壁下 CO', `Ar×${e.tw.toFixed(3)}`, `${q.Vco.toFixed(3)} m³`));
       if (q.Vrc > 0) r.push(stepRow('壁下 RC-40', `Ar×${e.underRc.toFixed(3)}`, `${q.Vrc.toFixed(3)} m³`));
-      if (e.dh > 0) {
-        r.push(stepRow('全面切下げの追加掘削', `${q.circle ? 'πR²' : '面積'}×Δh = ${q.Atot.toFixed(3)}×${e.dh.toFixed(3)}`, `${q.Vexc.toFixed(3)} m³`));
-        r.push(stepRow('一般側 RC-40 増量', `Ag×Δh = ${q.Ag.toFixed(3)}×${e.dh.toFixed(3)}`, `${q.Vgr.toFixed(3)} m³`));
-      }
+      if (q.Vexc > 0) r.push(stepRow('一般の床付より深い掘削', `Ar×${e.extraDepth.toFixed(3)}`, `${q.Vexc.toFixed(3)} m³`));
       sec.push(reportSection(no++, '立坑基礎 支圧壁施工余裕控除分', calcSteps(r)));
     }
   }
@@ -9394,7 +9432,7 @@ function renderWallReport() {
       <div style="margin:6px 0 10px"><b>${ck.no} ${ck.name}</b>　<span class="pill ${ck.ok ? 'ok' : 'ng'}">${ck.ok ? 'OK' : 'NG'}</span>
         <div class="report-formula mono" style="line-height:1.7">${ck.formula}</div>
         <div style="font-size:12.5px;margin-top:4px">${ck.compare.calcLabel} ${fmt(ck.compare.calc, 2)} ${ck.compare.cmp} ${fmt(ck.compare.limit, 2)} ${ck.compare.unit}</div>
-      </div>`).join('') + `<table class="report-table verdict-table"><tbody><tr><td>総合判定</td><td class="${c.allOk ? 'pass' : 'fail'}">${c.allOk ? 'OK' : 'NG'}</td></tr></tbody></table>`));
+      </div>`).join('') + (c.embNeed ? `<p style="font-size:12.5px">根入れの追加：壁底を ${c.embNeed.dd.toFixed(2)} m 下げる（壁底 ${f3(c.embNeed.bottom)}、根入れ ${c.embNeed.emb.toFixed(3)} m、Hw ${c.embNeed.Hw.toFixed(2)} m）と①②③ OK（Ep ${c.embNeed.Ep.toFixed(0)} kN ≥ F）。</p>` : '') + `<table class="report-table verdict-table"><tbody><tr><td>総合判定</td><td class="${c.allOk ? 'pass' : 'fail'}">${c.allOk ? 'OK' : 'NG'}</td></tr></tbody></table>`));
   }
   // 図
   if (n('pipeOuter') > 0 && Hw > 0) {
@@ -9407,6 +9445,13 @@ function renderWallReport() {
       <div class="report-meta">${site || '現場名未入力'}　MYcurve ${APP_BUILD}　出力日 ${new Date().toISOString().slice(0, 10)}</div>
     </div>
     ${sec.join('')}`;
+}
+
+function applyWallEmbedment(top, Hw) {
+  setV('wallElTopOverride', Number(top).toFixed(3));
+  setV('wallHwMin', Number(Hw).toFixed(2));
+  updateWallLevelDerived();
+  showToast('根入れを反映しました（天端を固定・最小高さを変更）');
 }
 
 function printWallReport() {
@@ -10056,6 +10101,25 @@ function calcBacklock() {
   const Ep = alphaEp * Ep_sum;
   const check3_ok = Ep >= F;
 
+  // 117章: 合力点モードで①②③のどれかが NG のとき、天端を固定して壁底を下げる（根入れを取る）と
+  // OK になる深さを段単位で探す（上側の土被りは変わらない）。
+  let embNeed = null;
+  if (lastWallElev && !(check1_ok && check2_ok && check3_ok)) {
+    const ph = lastWallElev.pieceH || 0.5;
+    for (let i = 1; i <= 12; i++) {
+      const dd = i * ph, H2 = Hw + dd, hc2 = hc + dd, hR2 = hEcc + dd;
+      const f2 = F / (Beff * H2);
+      const e2 = Math.abs(H2 / 2 - hR2);
+      const s2 = f2 + F * e2 / (Beff * H2 * H2 / 6);
+      const dep2 = Math.max(0, Hmax_soil - (H2 - hc2));
+      const Ep2 = alphaEp * (0.5 * gamma * H2 * H2 * Kp * Beff + gamma * dep2 * H2 * Kp * Beff + 2 * C_coh * Math.sqrt(Kp) * H2 * Beff);
+      if (f2 <= fa && s2 <= fa && Ep2 >= F) {
+        embNeed = { dd, Hw: H2, bottom: lastWallElev.bottom - dd, emb: lastWallElev.emb + dd, Ep: Ep2, top: lastWallElev.top };
+        break;
+      }
+    }
+  }
+
   // ④ プレキャスト支圧壁（バックロック）自体の曲げ照査（バックロック使用時のみ）
   // 現場打ちの一体壁と異なり、分割式プレキャストブロックは元押ジャッキの2点（左右）でしか
   // 支持されないため、ブロック自体が「等分布荷重q・2点支持・左右オーバーハングL1/L2」の
@@ -10164,7 +10228,7 @@ function calcBacklock() {
       no: '⑤', name: '推進作業スペース照査', ok: wsInfo.ok,
       formula: `
         管の外側での有効距離 L_out = √(R²−(D/2)²)×2 = √(${wsInfo.R.toFixed(3)}²−${wsInfo.x.toFixed(3)}²)×2 = ${wsInfo.Lout.toFixed(3)} m<br>
-        支圧壁の厚さ（管外径部）t_D = √(R²−(D/2)²)−h = ${wsInfo.half.toFixed(3)}−${hCenter.toFixed(3)} = ${wsInfo.tD.toFixed(3)} m<br>
+        支圧壁の厚さ（管外径部）t_D = √(R²−(D/2)²)−h＋前面余裕 = ${wsInfo.half.toFixed(3)}−${hCenter.toFixed(3)}＋${wsInfo.wf.toFixed(3)} = ${wsInfo.tD.toFixed(3)} m<br>
         有効作業長 L_eff = L_out−t_D = ${wsInfo.Lout.toFixed(3)}−${wsInfo.tD.toFixed(3)} = ${wsInfo.Leff.toFixed(3)} m<br><br>
         必要長 = (l′+カラー)+押輪+ジャッキ機高+余裕 = (${p5.pipeLen.toFixed(2)}+${p5.collar.toFixed(2)})+${p5.ring.toFixed(2)}+${p5.jack.toFixed(2)}+${p5.margin.toFixed(2)} = ${p5.total.toFixed(2)} m
       `,
@@ -10186,7 +10250,7 @@ function calcBacklock() {
   let maxBwForProposal = maxBw;
   if (wsInfo && R_eff) {
     // 115章: L_eff = √(R²−x²)+h ≥ 必要長 ⇔ サジッタ(R−h) ≤ R+√(R²−x²)−必要長
-    const sagittaMax = Math.max(0, Math.min(R_eff, R_eff + wsInfo.half - reqDepth));
+    const sagittaMax = Math.max(0, Math.min(R_eff, R_eff + wsInfo.half - wsInfo.wf - reqDepth));
     const clearanceMaxBeff = 2 * Math.sqrt(Math.max(0, sagittaMax * (2 * R_eff - sagittaMax)));
     maxBwForProposal = Math.min(maxBw, clearanceMaxBeff);
   }
@@ -10202,6 +10266,7 @@ function calcBacklock() {
     <div class="card accordion" id="wallCheckCard">
       <div class="card-title ${allOk?'ok':'warn'}" onclick="toggleAccordion(this)">🧱 支圧壁 ${checks.length}段階照査結果</div>
       ${(!check1_ok || !check2_ok) ? `<div class="ng-box" style="font-size:12px">⚠️ ${!check1_ok && !check2_ok ? '①基礎反力照査・②偏心曲げ照査がともにNGです' : !check1_ok ? '①基礎反力照査がNGです' : '②偏心曲げ照査がNGです'}。許容支圧応力度 f_a（現在 ${faInput} N/mm²）が実際の値より大きすぎないか確認するか、支圧壁の幅Bw・高さHwを見直してください。</div>` : ''}
+      ${embNeed ? `<div class="ng-box" style="font-size:12px">根入れを取れば①②③ OK：壁底を ${embNeed.dd.toFixed(2)} m 下げる（壁底 ${embNeed.bottom.toFixed(3)}、根入れ ${embNeed.emb.toFixed(3)} m、Hw ${embNeed.Hw.toFixed(2)} m、Ep ${embNeed.Ep.toFixed(0)} kN）。 <button type="button" class="mode-btn" onclick="applyWallEmbedment(${embNeed.top}, ${embNeed.Hw})">反映</button></div>` : ''}
       ${check4 && !check4.ok ? `<div class="ng-box" style="font-size:12px">⚠️ ④プレキャスト支圧壁の曲げ照査がNGです。ジャッキの据付位置（片側幅）を支圧壁の端に寄せて曲げを小さくするか、鋼材部厚さt・支圧壁厚さを見直してください。</div>` : ''}
       ${check5 && !check5.ok ? `<div class="ng-box" style="font-size:12px">⚠️ ⑤推進作業スペース照査がNGです。有効作業長${wsInfo ? wsInfo.Leff.toFixed(2) : '—'}m＜必要長${reqDepth.toFixed(2)}m。支圧壁を薄くするか、立坑径を大きくしてください。</div>` : ''}
       <div class="note-box" style="font-size:11px">有効幅 Beff=${Beff.toFixed(2)} m（立坑制約: maxBw=${maxBw.toFixed(2)}m）</div>
@@ -10228,7 +10293,7 @@ function calcBacklock() {
   if (prevOpenId) { const el = document.getElementById(prevOpenId); if (el) el.classList.add('open'); }
   drawWallPlanView();
   drawWallSectionView();
-  lastWallChecks = { checks, allOk };
+  lastWallChecks = { checks, allOk, embNeed };
   renderWallReport();
 }
 
@@ -10589,7 +10654,7 @@ function getProjectData() {
       spaceCheckOn: wallSpaceCheckOn, collarLen: v('wallCollarLen'),
       jackMachineLen: n('wallJackMachineLen'), spaceMargin: n('wallSpaceMargin'),
       fdnConcT: n('wallFdnConcT'), fdnGravelT: n('wallFdnGravelT'), hwMin: n('wallHwMin'),
-      underCoT: n('wallUnderCoT'), frontMargin: n('wallFrontMargin')
+      underCoT: n('wallUnderCoT'), frontMargin: n('wallFrontMargin'), topOverride: v('wallElTopOverride')
     },
     survey: {
       baseAz: n('surveyBaseAz'), internalPct: n('internalPct'),
@@ -10956,6 +11021,7 @@ function setProjectData(d) {
     setV('wallHwMin', wl.hwMin != null ? wl.hwMin : 0);
     setV('wallUnderCoT', wl.underCoT != null ? wl.underCoT : 0.10);
     setV('wallFrontMargin', wl.frontMargin != null ? wl.frontMargin : 0.10);
+    setV('wallElTopOverride', wl.topOverride != null ? wl.topOverride : '');
     setV('railDrop', wl.railDrop||50);
     // railSizeは新形式（H形鋼規格の選択）。旧形式はrailWidth（幅の実測値[mm]）を直接保存していたため、
     // 最も近い規格に丸めて後方互換をとる。
