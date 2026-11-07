@@ -155,6 +155,9 @@
   #printout .ptable th,#printout .ptable td{border:1px solid #666;padding:3px 6px;white-space:normal;color:#000;background:#fff}
   #printout .ptable th{background:#e8eef2}
   #printout .pp-cond-t{width:auto;margin-bottom:8px}
+  #printout .pp-sub{font-size:12pt;font-weight:700;margin:10px 0 4px}
+  #printout .fjqty{width:auto}
+  #printout .fjqty td,#printout .fjqty th{min-width:110px}
   #printout .pp-cond-t th{text-align:left;font-weight:600;white-space:nowrap}
   #printout .pp-cond-t td{min-width:260px}
   #printout .pp-chk>div{font-size:12pt;font-weight:700;margin:8px 0 4px;color:#000!important}
@@ -407,6 +410,11 @@
       <div id="planmap" style="border:1px solid var(--line);border-radius:6px;overflow:hidden;margin-top:6px"></div>
       <div style="margin:10px 0 6px;font-weight:600;color:var(--head)">パターンと貼付け指示 <span class="muted" style="font-weight:400">（パルリングは工場貼付け。現場で貼るのは FJリングだけ）</span></div>
       <div id="planpat" style="overflow-x:auto"></div>
+      <div style="margin:12px 0 6px;display:flex;gap:16px;align-items:center;flex-wrap:wrap">
+        <span style="font-weight:600;color:var(--head)">FJリングの数量（倍率ごと）</span>
+        <label style="font-size:13px;display:flex;gap:5px;align-items:center"><input type="checkbox" id="planUse180" style="width:auto">全周の層を 180° 品で貼る（上下と左右が同じ倍率の層）</label>
+      </div>
+      <div id="planfjqty" style="overflow-x:auto"></div>
       <div id="planpatviz"></div>
       <div style="margin:12px 0 6px;font-weight:600;color:var(--head)">区間ごとの割付と伸び <span class="muted" style="font-weight:400">（パルリングは区間ごとに選べます。選ぶと割付をやり直します）</span></div>
       <div id="planspan" style="overflow-x:auto"></div>
@@ -2226,6 +2234,7 @@ function collectPlanSettings(){
   const o={}; PLAN_FIELDS.forEach(id=>{ const el=$(id); if(el) o[id]=el.value; });
   o.nJoints = myTrace&&myTrace.pipes ? myTrace.pipes.length-1 : planMapsN;
   o.pulForce=[...planPulForce.entries()]; o.cfgForce=[...planCfgForce.entries()];
+  o.use180=!!($('planUse180')&&$('planUse180').checked); o.prices={...planPrices};
   return o;
 }
 function applyPlanSettings(ps){
@@ -2235,6 +2244,8 @@ function applyPlanSettings(ps){
     el.value=ps[id]; } });
   planPulForce=new Map(ps.pulForce||[]); planCfgForce=new Map(ps.cfgForce||[]);
   planMapsN = ps.nJoints!=null ? ps.nJoints : null;
+  if($('planUse180')) $('planUse180').checked=!!ps.use180;
+  if(ps.prices) planPrices = {...ps.prices};   // 単価は現場をまたいで使うので、記録に無ければ今の値を残す
   return true;
 }
 
@@ -2652,6 +2663,49 @@ function planMapSVG(P, pats, spans){
   return h+'</svg>';
 }
 
+/* vr010: FJリングの数量（倍率ごと・製品ごと）。
+   目地ごとに、全周の層は上下面2枚（上下の倍率）＋側方面2枚（左右の倍率）、上下のみの層は上下面2枚、を 90° 品で数える。
+   「全周の層を 180° 品で貼る」にすると、上下と左右が同じ倍率の全周の層は 180° 品2枚で数える（倍率が違う層は 90° 品のまま）。
+   1set＝90° 品4枚／180° 品2枚。発注は倍率・製品ごとに切り上げ。単価（円/set）を入れると金額を出す。 */
+let planPrices = {};   // 'mat|角度' → 円/set
+function fjQty(P){
+  const use180 = !!($('planUse180') && $('planUse180').checked);
+  const m=new Map(), add=(mat,ang,n)=>{ const k=mat+'|'+ang; m.set(k,(m.get(k)||0)+n); };
+  P.joints.forEach(J=>{
+    const c=J.cfg; if(!c || J.kind==='none') return;
+    for(let i=0;i<c.ls;i++){ if(use180 && c.mc===c.ms) add(c.mc,180,2); else { add(c.mc,90,2); add(c.ms,90,2); } }
+    for(let i=c.ls;i<c.lc;i++) add(c.mc,90,2);
+  });
+  const rows=[...m.entries()].map(([k,n])=>{ const [mat,ang]=k.split('|').map(Number); const per=ang===90?4:2;
+    return {key:k, mat, ang, n, per, sets:Math.ceil(n/per-1e-9)}; }).sort((a,b)=>a.mat-b.mat || a.ang-b.ang);
+  return {rows, use180};
+}
+function fjQtyHTML(P, edit){
+  const q=fjQty(P), MS={11:'1.7倍',12:'2.0倍',13:'2.5倍',14:'3.0倍',15:'3.5倍'};
+  if(!q.rows.length) return '<div class="muted">FJリングはありません。</div>';
+  let tot=0, amt=0, anyPrice=false, missing=0;
+  let h='<table class="ptable pp-t fjqty"><thead><tr><th>倍率</th><th>製品</th><th>枚数</th><th>set（切り上げ）</th><th>単価(円/set)</th><th>金額(円)</th></tr></thead><tbody>';
+  q.rows.forEach(r=>{
+    const pr=planPrices[r.key]; const has=pr!=null && pr!=='' && isFinite(+pr);
+    if(has){ anyPrice=true; amt+=r.sets*(+pr); } else missing++;
+    tot+=r.sets;
+    h+=`<tr><td class="z"><i class="pmsw" style="background:${MAT_COLOR[r.mat]}"></i><b>${MS[r.mat]||r.mat}</b></td>`+
+       `<td class="z">${r.ang}° 品（${r.per}枚で1set）</td><td>${fmt(r.n,0)} 枚</td><td><b>${fmt(r.sets,0)}</b></td>`+
+       `<td>${edit?`<input type="number" class="fjprice" data-key="${r.key}" min="0" step="1" value="${has?pr:''}" style="width:110px" placeholder="未入力">`:(has?fmt(+pr,0):'—')}</td>`+
+       `<td>${has?fmt(r.sets*(+pr),0):'—'}</td></tr>`;
+  });
+  h+=`<tr><td class="z" colspan="3"><b>合計</b>（倍率・製品ごとに切り上げ）</td><td><b>${fmt(tot,0)} set</b></td><td></td><td><b>${anyPrice?fmt(amt,0):'—'}</b>${anyPrice&&missing?'<br><span class="v-warn">単価が未入力の行は含まない</span>':''}</td></tr></tbody></table>`;
+  h+=`<div class="note">全周の層：${q.use180?'上下と左右が同じ倍率の層は 180° 品2枚、倍率が違う層は 90° 品4枚':'90° 品4枚（上下2枚・左右2枚）'}。上下のみの層：90° 品2枚。`+
+     (anyPrice?'':'単価を入れると金額を出します。')+'</div>';
+  return h;
+}
+function renderFjQty(P){
+  const el=$('planfjqty'); if(!el) return;
+  el.innerHTML=fjQtyHTML(P,true);
+  el.querySelectorAll('input.fjprice').forEach(inp=>inp.onchange=()=>{
+    const v=inp.value.trim(); if(v==='') delete planPrices[inp.dataset.key]; else planPrices[inp.dataset.key]=+v;
+    renderFjQty(P); scheduleSaveLast(); });
+}
 function patTableHTML(P, pats){
   let h='<table class="ptable pp-t"><thead><tr><th>パターン</th><th>区分</th><th>パルリング</th><th>FJリング</th><th>set／か所</th><th>目地数</th><th>set 計<br>（切り上げ）</th></tr></thead><tbody>';
   pats.list.forEach(p=>{
@@ -2776,6 +2830,7 @@ function renderPlanMap(P){
   $('planmapbox').style.display='';
   $('planmap').innerHTML=planMapSVG(P,pats,spans);
   $('planpat').innerHTML=patTableHTML(P,pats);
+  renderFjQty(P);
   $('planpatviz').innerHTML=patVizHTML(P,pats);
   $('planspan').innerHTML=spanTableHTML(P,spans,true);
   $('planpipes').innerHTML=pipeCountHTML(P);
@@ -3126,7 +3181,7 @@ function buildPrintout(sel){
   }
   if(on('install')) h+=page('配置図・貼付け指示図', cloneForPrint($('layoutpanel'))+cloneForPrint($('instwrap').closest('.panel')));
   if(on('chart')) h+=page('変形量と応力分布（入力の構成）', cloneForPrint($('chartarea').closest('.panel')));
-  if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>${patTableHTML(P,P.pats)}`);
+  if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>${patTableHTML(P,P.pats)}<div class="pp-sub">FJリングの数量（倍率ごと）</div>${fjQtyHTML(P,false)}`);
   if(hasPlan && on('map')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A4'?2:4;   // PDF を直接作るので、収まらなければ自動で分けるか縮める
     for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
   if(hasPlan && on('span')) h+=page('区間ごとの割付と伸び・管の本数', spanTableHTML(P,P.spans,false)+'<div style="height:10px"></div>'+pipeCountHTML(P));
@@ -3851,6 +3906,7 @@ $('planbtn').onclick=runPlan;
 $('ppbtn').onclick=openPrintDialog;
 $('ppbtn2').onclick=openPrintDialog;
 $('mergebtn').onclick=proposeMerge;
+$('planUse180').onchange=()=>{ if(lastPlan&&lastPlan.pats) renderFjQty(lastPlan); scheduleSaveLast(); };
 $('mergeclr').onclick=clearMerge;
 $('saveHist').onclick=saveHistory;
 $('openHist').onclick=()=>{
