@@ -1781,6 +1781,27 @@ function planPulReq(i){
 }
 function matsOf(c){ return c.mc===c.ms ? [c.mc] : [c.mc,c.ms]; }
 
+/* vr010: 割付の設定（画面の欄＋区間ごとの指定）を保存・復元する。
+   履歴JSON・前回入力・MYcurve へ返す結果（input.plan）に入る。MYcurve は input をそのまま現場JSONに保存するので、
+   MYcurve から開き直すと jikuryoku.input.plan から戻る。区間ごとの指定は目地の数（nJoints）が同じときだけ戻す。 */
+const PLAN_FIELDS=['planJoint','planForce','planMaxL','planPulThick','planPulCrush','planMats','planPolicy','planK','planM','planPulAll'];
+let planMapsN = null;   // 区間ごとの指定が作られたときの目地の数
+function collectPlanSettings(){
+  const o={}; PLAN_FIELDS.forEach(id=>{ const el=$(id); if(el) o[id]=el.value; });
+  o.nJoints = myTrace&&myTrace.pipes ? myTrace.pipes.length-1 : planMapsN;
+  o.pulForce=[...planPulForce.entries()]; o.cfgForce=[...planCfgForce.entries()];
+  return o;
+}
+function applyPlanSettings(ps){
+  if(!ps) return false;
+  PLAN_FIELDS.forEach(id=>{ const el=$(id); if(el && ps[id]!=null){
+    if(el.tagName==='SELECT' && ![...el.options].some(o=>o.value===String(ps[id]))) return;
+    el.value=ps[id]; } });
+  planPulForce=new Map(ps.pulForce||[]); planCfgForce=new Map(ps.cfgForce||[]);
+  planMapsN = ps.nJoints!=null ? ps.nJoints : null;
+  return true;
+}
+
 async function runPlan(){
   const tr=myTrace;
   if(!tr || !tr.secs || !tr.pipes || !tr.pipes.length){
@@ -1812,6 +1833,12 @@ async function runPlan(){
   // vr010: 管番号は切羽側（到達側）を1本目にする（管を押すときの番号と同じ）。目地も切羽側から並べる。
   //   a＝切羽側の管・b＝発進側の管（b＝a＋1）。i は発進側から数えた目地の番号（指定を覚えるのに使う）。
   const NP=tr.pipes.length, dn=no=>NP-no+1;
+  let mapNote='';
+  if((planPulForce.size||planCfgForce.size) && planMapsN!=null && planMapsN!==NP-1){
+    planPulForce.clear(); planCfgForce.clear();
+    mapNote='<span class="v-warn">管の本数が保存したときと違うため、区間ごとのパルリング・まとめの指定を外しました。</span>';
+  }
+  planMapsN = NP-1;
   for(let i=0;i<NP-1;i++) joints.push({i, a:dn(tr.pipes[i+1].no), b:dn(tr.pipes[i].no), p:tr.pipes[i].x});
   joints.reverse();
   const prog=$('planprog'), bar=prog.firstElementChild; prog.style.display='block'; bar.style.width='0';
@@ -1923,10 +1950,11 @@ async function runPlan(){
   const minTotal=used.reduce((a,J)=>a+(J.minSets||0),0);
   lastPlan={joints, curves, Xf, lim, mode, worst, tr, align:myAlign, dia:pDia, leng:pLen, base, prOn, diaNote,
     pulThick:+$('planPulThick').value||0, pulCrush:+$('planPulCrush').value||0, joint:$('planJoint').value,
-    policy, K, M, minTotal, groupNote};
+    policy, K, M, minTotal, groupNote, mapNote};
   bar.style.width='100%'; prog.style.display='none'; $('planbtn').disabled=false;
   renderPlan(lastPlan);
   renderPlanMap(lastPlan);
+  scheduleSaveLast();
 }
 
 function renderPlan(P){
@@ -2279,6 +2307,7 @@ function renderPlanMap(P){
   $('planspan').innerHTML=spanTableHTML(P,spans,true);
   $('plancond').textContent=planCondLine(P);
   if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
+  if(P.mapNote) $('planinfo').innerHTML += '<br>'+P.mapNote;
   if(P.policy==='group'){
     const tot=pats.list.reduce((a,p)=>a+p.sets*p.n,0), d=tot-P.minTotal;
     $('planinfo').innerHTML += P.groupNote ? '<br>'+P.groupNote :
@@ -2649,7 +2678,9 @@ function collectRecord(){
       // vr007: 区間（曲線）ごとの構成
       perCurve: cuPerCurve,
       curveCu: curveCu.map(c=>({pul:{...c.pul}, layers:c.layers.map(l=>({...l}))})),
-      curves
+      curves,
+      // vr010: 1本ごとの FJリング割付の設定（画面の欄＋区間ごとのパルリング・まとめの指定）
+      plan: collectPlanSettings()
     },
     propose: {maxLayers:+$('maxLayers').value, jointType:+$('jointType').value},
     result: null
@@ -2717,6 +2748,7 @@ function applyRecord(rec){
                      : (k===0 ? 'L' : (c.drc===0 ? '' : (c.drc===2 ? 'R' : 'L')));
   });
   if(rec.propose){ $('maxLayers').value=rec.propose.maxLayers||5; $('jointType').value=rec.propose.jointType||70; }
+  if(i.plan) applyPlanSettings(i.plan);
   updateDrcNote(); compute();
 }
 
@@ -2817,8 +2849,17 @@ function importMyCurve(d){
     if(d.pipe.pulRingThickness!=null) $('planPulThick').value=d.pipe.pulRingThickness;
     if(d.pipe.crush!=null) $('planPulCrush').value=d.pipe.crush;   // MYcurve の管仕様タブのつぶれ代（画面で変えられる）
   }
+  const prevPlan = d.jikuryoku && d.jikuryoku.input && d.jikuryoku.input.plan;
+  let planNote='';
+  if(prevPlan){
+    const myCrush=$('planPulCrush').value, myThick=$('planPulThick').value;
+    applyPlanSettings(prevPlan);
+    planNote='　前回この現場で使った割付の設定を戻しました'+
+      ((String(myCrush)!==String($('planPulCrush').value)||String(myThick)!==String($('planPulThick').value))
+        ? `<span class="v-warn">（パルリング ${$('planPulThick').value}mm・つぶれ代 ${$('planPulCrush').value}mm。MYcurve の管仕様は ${myThick}mm・${myCrush}mm）</span>` : '')+'。';
+  } else { planPulForce.clear(); planCfgForce.clear(); planMapsN=null; }
   if($('planinfo')) $('planinfo').innerHTML = myTrace
-    ? `MYcurve の1本毎の推進力を読み込みました（管 ${myTrace.pipes.length} 本・最大 ${fmt(myTrace.F_total,1)}kN）。「割付を計算」を押してください。`
+    ? `MYcurve の1本毎の推進力を読み込みました（管 ${myTrace.pipes.length} 本・最大 ${fmt(myTrace.F_total,1)}kN）。「割付を計算」を押してください。`+planNote
     : 'この現場JSONには1本毎の推進力が入っていません（MYcurve M_APP_044 以降で推進力を計算して保存すると入ります）。';
   const site=d.site||{}, pipe=d.pipe||{}, curvesIn=(d.alignment.curves||[]);
   const notes=[];
@@ -3112,6 +3153,7 @@ function watchInputsForLast(){
     el.addEventListener('change', scheduleSaveLast); });
   // 層構成の各セレクトは作り直されるので、コンテナ側でまとめて拾う
   const ly=$('layers'); if(ly) ly.addEventListener('change', scheduleSaveLast);
+  PLAN_FIELDS.forEach(id=>{ const el=$(id); if(el){ el.addEventListener('input', scheduleSaveLast); el.addEventListener('change', scheduleSaveLast); } });
 }
 
 /* ===== 入力のクリア（vr005）===== */
