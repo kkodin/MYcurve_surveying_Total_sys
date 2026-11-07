@@ -154,6 +154,9 @@
   #printout .ptable{font-size:10.5pt}
   #printout .ptable th,#printout .ptable td{border:1px solid #666;padding:3px 6px;white-space:normal;color:#000;background:#fff}
   #printout .ptable th{background:#e8eef2}
+  #printout .pp-cond-t{width:auto;margin-bottom:8px}
+  #printout .pp-cond-t th{text-align:left;font-weight:600;white-space:nowrap}
+  #printout .pp-cond-t td{min-width:260px}
   #printout .pp-chk>div{font-size:12pt;font-weight:700;margin:8px 0 4px;color:#000!important}
   #printout .muted{color:#333;font-size:9.5pt}
   #printout .pp-guide{font-size:13pt;line-height:1.9;padding-left:1.4em}
@@ -364,7 +367,7 @@
 
   <!-- vr009: MYcurve の1本毎の推進力から、目地ごとに必要な FJリングを最小で割り付ける -->
   <div class="panel propose" id="planpanel">
-    <h2>1本ごとの FJリング割付（MYcurve の1本毎推進力から）</h2>
+    <h2>1本ごとの FJリング割付</h2>
     <div class="ctrls">
       <label>継手（カラー）<select id="planJoint">
         <option value="JA" selected>JA（通過中40mm・完了後30mm）</option>
@@ -1699,7 +1702,7 @@ function render(secs){
   if(secs.some(s=>s.prof&&s.prof.length)){
     const lg=document.createElement('div'); lg.className='note';
     lg.innerHTML='※ 左の図は目地を真横から見た断面（横軸＝FJリングの算定位置。曲線の内側→外側）。'+
-      '<b>後ろの管</b>（下）の端面にFJリングが付き、<b>前の管</b>（上）の端面（<span style="color:#d62728;font-weight:600">赤線＝曲線部</span>、'+
+      '<b>前の管</b>（下）の端面にFJリングが付き、<b>後ろの管</b>（上）の端面（<span style="color:#d62728;font-weight:600">赤線＝曲線部</span>、'+
       '<span style="color:#1f6feb;font-weight:600">青線＝直線部</span>）が押し込んでくる。'+
       '<b>黒い点線がFJリングの形</b>（全周の層は側方面まで、上下のみの層は中央の上下面(90°)ゾーンだけ厚くなる）。'+
       '<b>色の四角がFJリング1枚ずつ</b>（色は配置図と同じ材種の色、左端の数字は管端面側から何枚目か）。管の壁は斜線。'+
@@ -1817,8 +1820,8 @@ function jointSVG(s,layerMode,outLimArg){
       <rect x="${f(xl)}" y="${f(yb)}" width="${f(xr-xl)}" height="${f(yb2-yb)}" fill="var(--panel)" fill-opacity=".9" stroke="${HP}" stroke-width="1.3"/>
       <rect x="${f(xl)}" y="${f(yb)}" width="${f(ww)}" height="${f(yb2-yb)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
       <rect x="${f(xr-ww)}" y="${f(yb)}" width="${f(ww)}" height="${f(yb2-yb)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
-      <text x="${f((xl+xr)/2)}" y="${f(Math.max(yb+16,(yb+yb2)/2+4))}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（後ろの管）</text></g>`;
-  // 上の管＝前の管：端面＝赤線の両端（外端部・end）を結ぶ線。そこから面に直角に上へ
+      <text x="${f((xl+xr)/2)}" y="${f(Math.max(yb+16,(yb+yb2)/2+4))}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（前の管）</text></g>`;
+  // 上の管＝後ろの管：端面＝赤線の両端（外端部・end）を結ぶ線。そこから面に直角に上へ
   const P0=[X(0),Y(c0)], P1=[X(xEnd),Y(c1)];
   const dx=P1[0]-P0[0], dy=P1[1]-P0[1], len=Math.hypot(dx,dy)||1;
   const ux=dx/len, uy=dy/len;
@@ -1831,7 +1834,7 @@ function jointSVG(s,layerMode,outLimArg){
       <path d="${quad(P0,P1,Q1,Q0)}" fill="var(--panel)" fill-opacity=".9" stroke="${HP}" stroke-width="1.3"/>
       <path d="${quad(P0,along(P0,wpx),along(Q0,wpx),Q0)}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
       <path d="${quad(along(P1,-wpx),P1,Q1,along(Q1,-wpx))}" fill="url(#p${uid})" stroke="${HP}" stroke-width="1"/>
-      <text x="${f((P0[0]+P1[0]+Q0[0]+Q1[0])/4)}" y="${f((P0[1]+P1[1]+Q0[1]+Q1[1])/4+4)}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（前の管）</text></g>`;
+      <text x="${f((P0[0]+P1[0]+Q0[0]+Q1[0])/4)}" y="${f((P0[1]+P1[1]+Q0[1]+Q1[1])/4+4)}" font-size="12" font-weight="700" fill="#444" text-anchor="middle">H.P.（後ろの管）</text></g>`;
   const hpX=X(xEnd*0.5);
   return `<svg viewBox="0 0 ${W} ${H}" role="img">
     <defs>
@@ -2982,10 +2985,10 @@ function guideChartSVG(){
   const x0=70, x1=560, yb=430, ya=yb-48, yo=yb-210;
   h+=`<text x="${(x0+x1)/2}" y="40" text-anchor="middle" font-size="22" font-weight="800" fill="#2c6e49">変形量の図（目地を真横から見た断面）</text>`;
   h+=`<rect x="${x0}" y="${yb}" width="${x1-x0}" height="120" fill="#fff" stroke="#2e7d32" stroke-width="2.5"/><rect x="${x0}" y="${yb}" width="40" height="120" fill="url(#ghatch)" stroke="#2e7d32"/><rect x="${x1-40}" y="${yb}" width="40" height="120" fill="url(#ghatch)" stroke="#2e7d32"/>`;
-  h+=`<text x="${(x0+x1)/2}" y="${yb+70}" text-anchor="middle" font-size="20" font-weight="700" fill="#444">後ろの管</text>`;
+  h+=`<text x="${(x0+x1)/2}" y="${yb+70}" text-anchor="middle" font-size="20" font-weight="700" fill="#444">前の管</text>`;
   h+=`<rect x="${x0}" y="${yb-34}" width="${x1-x0}" height="34" fill="#e0b32a" fill-opacity=".6" stroke="#7a6a3a"/><text x="${x0+46}" y="${yb-10}" font-size="16" font-weight="700">1</text>`;
   h+=`<rect x="${x0+150}" y="${yb-68}" width="${x1-x0-300}" height="34" fill="#3aa06a" fill-opacity=".55" stroke="#7a6a3a"/><text x="${x0+158}" y="${yb-44}" font-size="16" font-weight="700">2</text>`;
-  { // 前の管：赤い端面（P0→P1）に直角に、管の長さ方向へ伸ばした長方形。両端の管壁を斜線で描く
+  { // 後ろの管：赤い端面（P0→P1）に直角に、管の長さ方向へ伸ばした長方形。両端の管壁を斜線で描く
     const P0=[x0,ya], P1=[x1,yo], dx=P1[0]-P0[0], dy=P1[1]-P0[1], len=Math.hypot(dx,dy), ux=dx/len, uy=dy/len;
     let nx=uy, ny=-ux; if(ny>0){ nx=-nx; ny=-ny; }
     const Lp=150, wall=40, up=(p,k)=>[p[0]+nx*k,p[1]+ny*k], al=(p,k)=>[p[0]+ux*k,p[1]+uy*k];
@@ -2995,12 +2998,12 @@ function guideChartSVG(){
        `<path d="${q(al(P1,-wall),P1,Q1,al(Q1,-wall))}" fill="url(#ghatch)" stroke="#2e7d32"/>`;
     const c=[(P0[0]+P1[0]+Q0[0]+Q1[0])/4,(P0[1]+P1[1]+Q0[1]+Q1[1])/4], ang=Math.atan2(dy,dx)*180/Math.PI;
     h+=`<line x1="${x0}" y1="${ya}" x2="${x1}" y2="${yo}" stroke="#d62728" stroke-width="5"/>`+
-       `<text x="${c[0].toFixed(1)}" y="${(c[1]+7).toFixed(1)}" text-anchor="middle" font-size="20" font-weight="700" fill="#444" transform="rotate(${ang.toFixed(1)} ${c[0].toFixed(1)} ${c[1].toFixed(1)})">前の管</text>`;
+       `<text x="${c[0].toFixed(1)}" y="${(c[1]+7).toFixed(1)}" text-anchor="middle" font-size="20" font-weight="700" fill="#444" transform="rotate(${ang.toFixed(1)} ${c[0].toFixed(1)} ${c[1].toFixed(1)})">後ろの管</text>`;
   }
   h+=`<line x1="${x0+60}" y1="${ya+(yo-ya)*60/(x1-x0)+3}" x2="${x0+60}" y2="${yb}" stroke="#137a3f" stroke-width="3.5" marker-start="url(#garr)" marker-end="url(#garr)"/>`;
   h+=`<line x1="${x1-60}" y1="${yo+(ya-yo)*60/(x1-x0)+3}" x2="${x1-60}" y2="${yb}" stroke="#137a3f" stroke-width="3.5" marker-start="url(#garr)" marker-end="url(#garr)"/>`;
-  h+=bubble(600,60,330,'🔴 赤い線',['前の管の端面（FJに当たる面）。','曲線では斜めに当たる'],x0+(x1-x0)*0.62,ya+(yo-ya)*0.62,...GC.pink);
-  h+=bubble(600,200,330,'🟨 色の四角',['後ろの管に貼った FJリング1枚ずつ。','色＝倍率・数字＝何枚目'],x0+330,yb-50,...GC.orange);
+  h+=bubble(600,60,330,'🔴 赤い線',['後ろの管の端面（FJに当たる面）。','曲線では斜めに当たる'],x0+(x1-x0)*0.62,ya+(yo-ya)*0.62,...GC.pink);
+  h+=bubble(600,200,330,'🟨 色の四角',['前の管に貼った FJリング1枚ずつ。','色＝倍率・数字＝何枚目'],x0+330,yb-50,...GC.orange);
   h+=bubble(600,340,330,'↕ 外側の開口',['継手の許容以下なら OK','（JA 40・JB 50・JC 70mm）'],x1-60,(yo+yb)/2,...GC.blue);
   h+=bubble(110,522,330,'↕ 内側の開口',['5mm 以上なら OK','（管どうしが当たらない）'],x0+60,(ya+yb)/2+4,...GC.green);
   // 右：応力分布（模式）
@@ -3069,9 +3072,9 @@ function cloneForPrint(el){
   return html;
 }
 const PP_ITEMS=[
-  ['map','管割付図・パターン',true,true], ['span','区間ごとの割付と伸び',true,true], ['spanchart','区間ごとの変形量と応力分布',true,true],
-  ['check','目地ごとの照査',true,true], ['input','入力値・計算結果',false,false], ['install','配置図・貼付け指示図',false,false],
-  ['chart','変形量と応力分布（入力の構成）',false,false], ['prop','必要な推進力伝達材の提案（逆算）',false,false], ['guide','読み方（吹き出し）',true,true]];
+  ['input','入力値・計算結果',false,true], ['install','配置図・貼付け指示図',false,true], ['chart','変形量と応力分布（入力の構成）',false,true],
+  ['map','管割付図・パターンと貼付け指示',true,true], ['span','区間ごとの割付と伸び・管の本数',true,true], ['spanchart','区間ごとの変形量と応力分布',true,true],
+  ['check','1本ごとの FJリング割付（条件・先端の推進力・目地ごとの割付・数量）',true,true], ['prop','必要な推進力伝達材の提案（逆算）',false,true], ['guide','読み方（吹き出し）',true,true]];
 function renderPrintDialog(){
   const hasPlan=!!(lastPlan&&lastPlan.pats), hasProp=!!$('propwrap').innerHTML.trim();
   let h='<div class="ppdlg-h">📄 PDFに出す項目</div><div class="ppdlg-items">';
@@ -3092,6 +3095,19 @@ function renderPrintDialog(){
 function openPrintDialog(){
   renderPrintDialog(); const d=$('ppdlg'); d.style.display=''; d.scrollIntoView({block:'nearest'});
 }
+// 割付の条件（画面の欄の値）を表にする。印刷の「1本ごとの FJリング割付」のページの頭に付ける
+const PLAN_LABELS={planJoint:'継手（カラー）', planForce:'目地にかかる力', planMaxL:'最大層数', planPulThick:'パルリング 厚み(mm)',
+  planPulCrush:'パルリング つぶれ代(mm)', planMats:'使う材種', planPolicy:'割付の方針', planK:'パターンの数（まとめる）',
+  planM:'倍率の種類（まとめる）', planPulAll:'パルリング（全体）'};
+function planCondTableHTML(){
+  const val=id=>{ const el=$(id); if(!el) return ''; return el.tagName==='SELECT' ? (el.selectedOptions[0]?el.selectedOptions[0].text:'') : el.value; };
+  const ids=PLAN_FIELDS.filter(id=> $('planPolicy').value==='group' || (id!=='planK' && id!=='planM'));
+  let h='<table class="ptable pp-t pp-cond-t"><tbody>';
+  for(let i=0;i<ids.length;i+=2){
+    h+='<tr>'+[ids[i],ids[i+1]].map(id=> id ? `<th>${PLAN_LABELS[id]}</th><td class="z">${val(id)}</td>` : '<th></th><td></td>').join('')+'</tr>';
+  }
+  return h+'</tbody></table>';
+}
 function buildPrintout(sel){
   const P=lastPlan, hasPlan=!!(P&&P.pats);
   const on=k=>sel ? sel.includes(k) : ($('ppk_'+k) && $('ppk_'+k).checked && !$('ppk_'+k).disabled);
@@ -3101,6 +3117,15 @@ function buildPrintout(sel){
   const head=t=>`<div class="pp-head"><div class="pp-title">${t}</div><div class="pp-site">${site}　${date}</div></div>`;
   const page=(t,body)=>`<section class="pp-page">${head(t)}${body}</section>`;
   let h='';
+  // 並び（利用者の指定 2026-11-07）：入力値・計算結果 → 配置図・貼付け指示図 → 変形量と応力分布（入力の構成）
+  //   → 管割付図 → パターンと貼付け指示 → 区間ごとの割付と伸び・管の本数 → 区間ごとの変形量と応力分布
+  //   → 1本ごとの FJリング割付（条件・先端の位置と推進力・目地ごとの割付・数量）→ 提案（逆算）→ 読み方
+  if(on('input')){
+    const cols=document.querySelector('.cols');
+    h+=page('入力値・計算結果', `<div class="pp-2col">${cloneForPrint(cols.children[0])}${cloneForPrint(cols.querySelector('.results'))}</div>`);
+  }
+  if(on('install')) h+=page('配置図・貼付け指示図', cloneForPrint($('layoutpanel'))+cloneForPrint($('instwrap').closest('.panel')));
+  if(on('chart')) h+=page('変形量と応力分布（入力の構成）', cloneForPrint($('chartarea').closest('.panel')));
   if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>${patTableHTML(P,P.pats)}`);
   if(hasPlan && on('map')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A4'?2:4;   // PDF を直接作るので、収まらなければ自動で分けるか縮める
     for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
@@ -3110,13 +3135,7 @@ function buildPrintout(sel){
     const per = paper==='A4' ? 1 : 2;
     for(let i=0;i<blocks.length;i+=per) h+=page('区間ごとの変形量と応力分布', `<div class="pp-sc2">${blocks.slice(i,i+per).join('')}</div>`);
   }
-  if(hasPlan && on('check')) h+=page('目地ごとの照査', `<div class="pp-chk">${$('planwrap').innerHTML}</div>`);
-  if(on('input')){
-    const cols=document.querySelector('.cols');
-    h+=page('入力値・計算結果', `<div class="pp-2col">${cloneForPrint(cols.children[0])}${cloneForPrint(cols.querySelector('.results'))}</div>`);
-  }
-  if(on('install')) h+=page('配置図・貼付け指示図', cloneForPrint($('layoutpanel'))+cloneForPrint($('instwrap').closest('.panel')));
-  if(on('chart')) h+=page('変形量と応力分布（入力の構成）', cloneForPrint($('chartarea').closest('.panel')));
+  if(hasPlan && on('check')) h+=page('1本ごとの FJリング割付', `<div class="pp-chk"><div>割付の条件</div>${planCondTableHTML()}${$('planwrap').innerHTML}</div>`);
   if(on('prop') && $('propwrap').innerHTML.trim()) h+=page('必要な推進力伝達材の提案（逆算）', cloneForPrint(document.querySelector('.panel.propose')));
   if(on('guide')){ h+=page('読み方（1）', guideHTML(1)); h+=page('読み方（2）', guideHTML(2)); }
   if(!h) return false;
