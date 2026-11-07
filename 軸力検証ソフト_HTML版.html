@@ -114,6 +114,7 @@
   .gcards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
   .gc{border:3px solid;border-radius:14px;padding:10px 12px;font-size:14px;background:#fff;line-height:1.6}
   .gc b{display:block;font-size:16px;margin-bottom:2px}
+  .nofj{margin-top:12px;padding:10px 12px;border:2px solid var(--bad);border-radius:8px;color:var(--bad);background:#c0392b10}
   .sw{display:inline-block;width:12px;height:12px;border-radius:2px;margin-right:5px;vertical-align:-1px}
   /* vr010: PDF出力（管割付図）。画面の入力・ボタンは出さず #printout だけを印刷する */
   #printout{display:none}
@@ -1223,6 +1224,12 @@ function render(secs){
   const layerMode=$('cuMode').value==='layer';
   secs.forEach(s=>{
     if(!s.prof || !s.prof.length) return;
+    if(!(s.mx>0)){   // vr010: FJリングの層が無いと最大厚 0 で解くことになり、図が意味を持たない
+      const w=document.createElement('div'); w.className='nofj';
+      w.innerHTML=`<b>BC.${s.k}：FJリングの層がありません（0.0set）。</b>図は描いていません。`+
+        `「推進力伝達材」の層構成に FJリングを入れるか、下の「提案（逆算）」で構成を選んで採用してから計算してください。`;
+      ca.appendChild(w); return;
+    }
     const t=`BC.${s.k}（第${s.k}直線→第${s.k}曲線 R=${s.curve?s.curve.rad:'—'}m）`+(cuPerCurve?`　区間${s.k}の構成`:'');
     const head=document.createElement('div'); head.className='ct';
     head.style.cssText='margin-top:14px;font-weight:600;color:var(--head);font-size:12.5px';
@@ -1644,6 +1651,7 @@ const PLAN_LIMITS = { JA:{pass:40, done:30}, JB:{pass:50, done:40}, JC:{pass:70,
 let myTrace = null;          // MYcurve の calcResult.trace
 let lastPlan = null;
 let myAlign = null;          // vr010: MYcurve の alignment（曲線の向き。管割付図に使う）
+let myPipe = null;           // vr010: MYcurve の管（呼び径・管長）。割付はこれで計算する
 
 // 区間データから、[y, X] の管列を押すのに要る力（y＝最後尾の目地位置、X＝先端位置）。
 // MYcurve の computeProgressiveTrace と同じ式（直線 S+=K・fo・d、曲線は管1本分ごとに K を掛ける）。
@@ -1751,13 +1759,20 @@ async function runPlan(){
   const maxL=Math.max(2,Math.min(6,+$('planMaxL').value||4));
   const mats=$('planMats').value.split(',').map(Number);
   const policy=$('planPolicy').value, K=+$('planK').value||2, M=+$('planM').value||9;
-  const inp=readInput(), base={dia:inp.dia, leng:inp.leng, sc:inp.sc, curves:inp.curves.map(c=>({rad:+c.rad, drc:+c.drc}))};
+  const inp=readInput();
+  // 呼び径・管長は MYcurve の現場データの値で計算する（上の入力欄が別の値でも割付は変わらない）
+  const pDia = myPipe ? myPipe.dia : inp.dia, pLen = (myPipe && myPipe.len) ? myPipe.len : inp.leng;
+  let diaNote='';
+  if(!myPipe) diaNote='<span class="v-warn">MYcurve の呼び径を読み取れなかったため、上の入力の呼び径 '+inp.dia+' で計算しました。</span>';
+  else if(String(inp.dia)!==String(pDia) || Math.abs((+inp.leng||0)-(+pLen||0))>1e-6)
+    diaNote=`<span class="v-bad">上の入力（呼び径 ${inp.dia}・管長 ${inp.leng}m）が MYcurve（呼び径 ${pDia}・管長 ${pLen}m）と違います。割付は MYcurve の値で計算しました。</span>`;
+  const base={dia:pDia, leng:pLen, sc:inp.sc, curves:inp.curves.map(c=>({rad:+c.rad, drc:+c.drc}))};
   const curves=trCurves(tr);
   const Xf=tr.pipes[tr.pipes.length-1].x;
   const cand=planCandidates(maxL, mats);
   const prOn = Math.max(0, (+$('planPulThick').value||0) - (+$('planPulCrush').value||0));
   // 条件が変わったら「通る／通らない」の控えを捨てる
-  const sig=[$('planJoint').value, mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, inp.dia, inp.leng, inp.sc,
+  const sig=[$('planJoint').value, mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, pDia, pLen, inp.sc,
              base.curves.map(c=>c.rad+'/'+c.drc).join(',')].join('|');
   if(sig!==planPassSig){ planPassCache=new Map(); planPassSig=sig; }
   // 目地＝No.i と No.i+1 の間（発進側を1本目。MYcurve の1本毎の表と同じ番号）。位置は No.i の先端
@@ -1866,7 +1881,7 @@ async function runPlan(){
   const used=joints.filter(J=>J.kind!=='none');
   const worst=used.reduce((w,J)=> (J.cfg && (!w || J.cfg.sets>w.sets || (J.cfg.sets===w.sets && J.cfg.lc>w.lc))) ? J.cfg : w, null);
   const minTotal=used.reduce((a,J)=>a+(J.minSets||0),0);
-  lastPlan={joints, curves, Xf, lim, mode, worst, tr, align:myAlign, dia:inp.dia, leng:inp.leng, base, prOn,
+  lastPlan={joints, curves, Xf, lim, mode, worst, tr, align:myAlign, dia:pDia, leng:pLen, base, prOn, diaNote,
     pulThick:+$('planPulThick').value||0, pulCrush:+$('planPulCrush').value||0, joint:$('planJoint').value,
     policy, K, M, minTotal, groupNote};
   bar.style.width='100%'; prog.style.display='none'; $('planbtn').disabled=false;
@@ -2219,6 +2234,7 @@ function renderPlanMap(P){
   $('planpat').innerHTML=patTableHTML(P,pats);
   $('planspan').innerHTML=spanTableHTML(P,spans,true);
   $('plancond').textContent=planCondLine(P);
+  if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
   if(P.policy==='group'){
     const tot=pats.list.reduce((a,p)=>a+p.sets*p.n,0), d=tot-P.minTotal;
     $('planinfo').innerHTML += P.groupNote ? '<br>'+P.groupNote :
@@ -2626,6 +2642,8 @@ function importMyCurve(d){
   // vr009: 1本毎の推進力（M_APP_044 以降の calcResult.trace）。割付の計算に使う
   myTrace = (d.calcResult && d.calcResult.trace && d.calcResult.trace.secs) ? d.calcResult.trace : null;
   myAlign = d.alignment || null;
+  { const pd=String(parseInt((d.pipe&&(d.pipe.dia||d.pipe.size)),10)), pl=+(d.pipe&&(d.pipe.len||d.pipe.length));
+    myPipe = DATA.pipe[pd] ? {dia:pd, len:pl>0?pl:null} : null; }
   if($('planPulThick') && d.pipe){
     if(d.pipe.pulRingThickness!=null) $('planPulThick').value=d.pipe.pulRingThickness;
     if(d.pipe.crush!=null) $('planPulCrush').value=d.pipe.crush;   // MYcurve の管仕様タブのつぶれ代（画面で変えられる）
@@ -2639,9 +2657,9 @@ function importMyCurve(d){
   $('siteName').value=site.name||''; $('siteSpan').value=site.span||''; $('siteDate').value=site.date||'';
 
   // 呼び径：軸力検証の管データ表にある径だけ選べる
-  const dia=String(parseInt(pipe.dia,10));
+  const dia=String(parseInt(pipe.dia||pipe.size,10));
   if(DATA.pipe[dia]) $('dia').value=dia;
-  else notes.push(`呼び径 ${pipe.dia} は軸力検証の管データ表に無いため、呼び径は変更していません`);
+  else notes.push(`<span class="v-bad">呼び径 ${pipe.dia||pipe.size||'（記録なし）'} を読み取れなかったため、呼び径は変えていません（今は ${$('dia').value}）。上の入力の呼び径を確かめてください</span>`);
   if(pipe.len) $('leng').value=pipe.len;
 
   // 曲線（MYcurveは発進側→到達側の順。軸力検証の第一〜第五と同じ並び）
@@ -2664,6 +2682,9 @@ function importMyCurve(d){
             // つぶれ代は MYcurve の管仕様タブのグローバル値（pipe.crush）を使う
             crush: pipe.crush != null ? pipe.crush : 0, residual:0 },
       layers: pad(layersFromCurve(c)) });
+    const prevPerCurve = cuPerCurve; let keptPrev = false;
+    const prevCurveCu = curveCu.map(c=>({pul:{...c.pul}, layers:c.layers.map(l=>({...l}))}));
+    const myNoLayers = curvesIn.slice(0,CURVE_N).every(c=>!layersFromCurve(c).length);
     const last = cuOf(curvesIn[Math.min(curvesIn.length,CURVE_N)-1]);
     curveCu = Array.from({length:CURVE_N},(_,k)=> curvesIn[k] ? cuOf(curvesIn[k])
                 : {pul:{...last.pul}, layers:last.layers.map(l=>({...l}))});
@@ -2671,6 +2692,18 @@ function importMyCurve(d){
     /* vr008: MYcurve の層は材種を1つしか持たないので、層の「左右の倍率」（matS）は向こうに保存されない。
        現場JSONに前回の軸力検証（jikuryoku.input.curveCu）が入っていて、同じ位置の層の
        材種（上下）・厚み・角度・枚数が一致していれば、そこから左右の倍率を戻す。 */
+    // vr010: MYcurve の曲線に伝達材の層が1枚も無いときは、今の層構成を空で上書きしない（パルリングは MYcurve の値）
+    if(myNoLayers){
+      const prevHas = prevCurveCu.some(c=>c.layers.some(l=>l.on&&l.thick));
+      if(prevHas){
+        curveCu.forEach((cu,k)=>{ cu.layers = prevCurveCu[k].layers.map(l=>({...l})); }); keptPrev = true;
+        notes.push('<span class="v-warn"><b>MYcurve の曲線には推進力伝達材の層が登録されていないため、今の層構成をそのまま残しました。</b></span>'+
+          ' MYcurve 側の層を使いたいときは、MYcurve の曲線に層を入れてから開き直してください');
+      } else {
+        notes.push('<span class="v-bad"><b>FJリングの層がありません（MYcurve の曲線にも登録なし）。</b></span>'+
+          ' 層構成に FJリングを入れるか、「提案（逆算）」で構成を選んで採用してから計算してください');
+      }
+    }
     const prevCu = d.jikuryoku && d.jikuryoku.input && d.jikuryoku.input.curveCu;
     let restored = 0;
     if(Array.isArray(prevCu)){
@@ -2687,7 +2720,7 @@ function importMyCurve(d){
       `<b>${restored}層</b>ぶんの左右の倍率を戻しました。MYcurve 側で層を変えた曲線は戻していません`);
     const k0=curveCushionKey(curvesIn[0],pipe);
     const diff=curvesIn.slice(1,CURVE_N).map((c,i)=>({i:i+2,same:curveCushionKey(c,pipe)===k0})).filter(o=>!o.same);
-    cuPerCurve = diff.length>0;
+    cuPerCurve = keptPrev ? prevPerCurve : diff.length>0;
     cuEditK=1; layerState=curveCu[0].layers; PUL=curveCu[0].pul;
     $('pulUse').checked=PUL.on; $('pulThick').value=PUL.thick; $('pulCrush').value=PUL.crush;
     if(diff.length) notes.push(`第${diff.map(o=>'一二三四五'[o.i-1]).join('・')}曲線は第一曲線と伝達材の構成が異なるため、`+
