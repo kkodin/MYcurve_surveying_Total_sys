@@ -1759,6 +1759,14 @@ function planEval(cfg, base, p, govs, m, finalF, inCurve, pr, lim, exact){
   const ok = !broken && !bott && sig<=25 && inn>=5 && out<=lim.pass && fin<=lim.done;
   return {ok, sig, inner:inn, outer:out, final:fin, rows, broken, bott};
 }
+/* vr010: set 数の合計は切り上げで統一する（0.5set は無い）。構成（パターン）ごとに set×か所 を切り上げてから足す。
+   1か所あたりの「1.5set」（全周1枚＋上下1枚）はメーカーの数え方なのでそのまま出す。 */
+const setCeil = v => Math.max(0, Math.ceil(v - 1e-9)) || 0;
+function setsTotalOf(js, pick){
+  const m=new Map(), cf=pick||(J=>J.cfg);
+  js.forEach(J=>{ const c=cf(J); if(!c || J.kind==='none') return; const k=planCfgKey(c); const o=m.get(k)||{sets:c.sets,n:0}; o.n++; m.set(k,o); });
+  let t=0; m.forEach(o=>{ t+=setCeil(o.sets*o.n); }); return t;
+}
 function planCfgLabel(c){
   const MS={11:'1.7倍',12:'2.0倍',13:'2.5倍',14:'3.0倍',15:'3.5倍'};
   const full = c.mc===c.ms ? `全周 ${MS[c.mc]}×${c.ls}枚` : `全周 上下${MS[c.mc]}／左右${MS[c.ms]}×${c.ls}枚`;
@@ -1869,10 +1877,11 @@ async function runPlan(){
     J.forcedCi = fci>=0 ? fci : null;
     if(policy==='min'){
       J.pass=null; J.cfg=null;
-      for(let ci=0; ci<cand.length; ci++){ if(okPul(ci) && passOf(J,ci)){ J.cfg=cand[ci]; J.minSets=cand[ci].sets; break; } }
+      for(let ci=0; ci<cand.length; ci++){ if(okPul(ci) && passOf(J,ci)){ J.cfg=cand[ci]; J.minSets=cand[ci].sets; J.minCfg=cand[ci]; break; } }
     }else{
       J.pass=[]; for(let ci=0; ci<cand.length; ci++) if(okPul(ci) && passOf(J,ci)) J.pass.push(ci);
       J.minSets = J.pass.length ? Math.min(...J.pass.map(ci=>cand[ci].sets)) : null;
+      J.minCfg = J.pass.length ? cand[J.pass[0]] : null;   // 候補は set の少ない順に並んでいるので先頭が最小
     }
     if(ji%3===0) await tick(ji);
   }
@@ -1905,11 +1914,13 @@ async function runPlan(){
       for(let j=0;j<nJ;j++){
         let b=-1; for(const ci of combo){ if(bits.get(ci)[j] && (b<0 || cand[ci].sets<cand[b].sets)) b=ci; }
         if(b<0) return; pick[j]=b; tot+=cand[b].sets;
-        if(best && tot>best.tot+1e-9) return;
+        if(best && tot>best.tot+1e-9) return;   // best.tot は切り上げ後（≧端数のまま）なので、ここで打ち切っても取りこぼさない
       }
-      let runs=1, pul=0; for(let j=0;j<nJ;j++){ if(j && pick[j]!==pick[j-1]) runs++; if(cand[pick[j]].pul) pul++; }
-      // 並べる順：set の合計 → 倍率の種類 → パターンの数 → 区間の数 → パルリングを貼る目地が多い（自動は貼るを先）
-      const sc=[tot, ms.size, new Set(pick).size, runs, -pul];
+      let runs=1, pul=0; const cnt=new Map();
+      for(let j=0;j<nJ;j++){ if(j && pick[j]!==pick[j-1]) runs++; if(cand[pick[j]].pul) pul++; cnt.set(pick[j],(cnt.get(pick[j])||0)+1); }
+      let ceilTot=0; cnt.forEach((n,ci)=>{ ceilTot+=setCeil(cand[ci].sets*n); });
+      // 並べる順：set の合計（パターンごとに切り上げ）→ 倍率の種類 → パターンの数 → 区間の数 → パルリングを貼る目地が多い
+      const sc=[ceilTot, ms.size, new Set(pick).size, runs, -pul];
       const bs=best?[best.tot, best.nm, best.np, best.runs, -best.pul]:null;
       let better=!best;
       if(best){ for(let q=0;q<sc.length;q++){ const d=sc[q]-bs[q]; if(Math.abs(d)>1e-9){ better=d<0; break; } } }
@@ -1947,7 +1958,7 @@ async function runPlan(){
   // 比較：曲線を通る全部の目地に、一番厳しい目地の構成を一律に貼った場合
   const used=joints.filter(J=>J.kind!=='none');
   const worst=used.reduce((w,J)=> (J.cfg && (!w || J.cfg.sets>w.sets || (J.cfg.sets===w.sets && J.cfg.lc>w.lc))) ? J.cfg : w, null);
-  const minTotal=used.reduce((a,J)=>a+(J.minSets||0),0);
+  const minTotal=setsTotalOf(used, J=>J.minCfg);   // 目地ごとに最小にした場合（パターンごとに切り上げ）
   lastPlan={joints, curves, Xf, lim, mode, worst, tr, align:myAlign, dia:pDia, leng:pLen, base, prOn, diaNote,
     pulThick:+$('planPulThick').value||0, pulCrush:+$('planPulCrush').value||0, joint:$('planJoint').value,
     policy, K, M, minTotal, groupNote, mapNote};
@@ -2010,16 +2021,16 @@ function renderPlan(P){
   h+='</tbody></table>';
   // 3) 数量と比較
   const nCurveJ=joints.filter(J=>J.kind!=='none').length, nNone=joints.length-nCurveJ;
-  const sumSets=nFull+nTop/2;
-  const wSets = worst ? worst.sets*nCurveJ : 0;
+  const sumSets=setsTotalOf(joints);
+  const wSets = worst ? setCeil(worst.sets*nCurveJ) : 0;
   h+='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">数量</div>'+
     `<table class="ptable"><tbody>`+
     `<tr><td class="z">目地の数</td><td>${joints.length} か所（FJ不要 ${nNone}・FJあり ${nCurveJ}）</td></tr>`+
     `<tr><td class="z">FJリング 全周の層</td><td>${nFull} 枚（90°×4切片で ${nFull*4} 切片）</td></tr>`+
     `<tr><td class="z">FJリング 上下のみの層</td><td>${nTop} 枚（90°×2切片で ${nTop*2} 切片）</td></tr>`+
-    `<tr><td class="z">合計</td><td><b>${fmt(sumSets,1)} set</b></td></tr>`+
+    `<tr><td class="z">合計（パターンごとに切り上げ）</td><td><b>${fmt(sumSets,0)} set</b></td></tr>`+
     `<tr><td class="z">パルリングを外す目地</td><td>${nPulOff} か所</td></tr>`+
-    (worst?`<tr><td class="z">比較：曲線を通る目地すべてに一番厳しい構成（${planCfgLabel(worst)}）を貼った場合</td><td>${fmt(wSets,1)} set → <b class="v-ok">${fmt(wSets-sumSets,1)} set 少ない</b></td></tr>`:'')+
+    (worst?`<tr><td class="z">比較：曲線を通る目地すべてに一番厳しい構成（${planCfgLabel(worst)}）を貼った場合</td><td>${fmt(wSets,0)} set → <b class="v-ok">${fmt(wSets-sumSets,0)} set 少ない</b></td></tr>`:'')+
     (nFail?`<tr><td class="z v-bad">構成が見つからない目地</td><td class="v-bad">${nFail} か所</td></tr>`:'')+
     `</tbody></table>`;
   $('planwrap').innerHTML=h;
@@ -2214,15 +2225,15 @@ function planMapSVG(P, pats, spans){
 }
 
 function patTableHTML(P, pats){
-  let h='<table class="ptable pp-t"><thead><tr><th>パターン</th><th>区分</th><th>パルリング</th><th>FJリング</th><th>set／か所</th><th>目地数</th><th>set 計</th></tr></thead><tbody>';
+  let h='<table class="ptable pp-t"><thead><tr><th>パターン</th><th>区分</th><th>パルリング</th><th>FJリング</th><th>set／か所</th><th>目地数</th><th>set 計<br>（切り上げ）</th></tr></thead><tbody>';
   pats.list.forEach(p=>{
     h+=`<tr><td class="z"><span class="sw" style="background:${p.color}"></span><b>${p.letter}</b></td><td class="z">${p.kind}</td><td class="z">${p.pul}</td>`+
-       `<td class="z">${p.fj}</td><td>${fmt(p.sets,1)}</td><td>${p.n}</td><td>${fmt(p.sets*p.n,1)}</td></tr>`;
+       `<td class="z">${p.fj}</td><td>${fmt(p.sets,1)}</td><td>${p.n}</td><td>${fmt(setCeil(p.sets*p.n),0)}</td></tr>`;
   });
-  const tot=pats.list.reduce((a,p)=>a+p.sets*p.n,0), n=pats.list.reduce((a,p)=>a+p.n,0);
+  const tot=pats.list.reduce((a,p)=>a+setCeil(p.sets*p.n),0), n=pats.list.reduce((a,p)=>a+p.n,0);
   const mset=new Set(); pats.list.forEach(p=>{ if(p.cfg) matsOf(p.cfg).forEach(x=>mset.add(x)); });
   const MS={11:'1.7倍',12:'2.0倍',13:'2.5倍',14:'3.0倍',15:'3.5倍'};
-  h+=`<tr><td class="z" colspan="5"><b>合計</b>（使う倍率 ${mset.size} 種類：${[...mset].sort().map(x=>MS[x]).join('・')||'—'}）</td><td>${n}</td><td><b>${fmt(tot,1)}</b></td></tr></tbody></table>`;
+  h+=`<tr><td class="z" colspan="5"><b>合計</b>（使う倍率 ${mset.size} 種類：${[...mset].sort().map(x=>MS[x]).join('・')||'—'}）</td><td>${n}</td><td><b>${fmt(tot,0)}</b></td></tr></tbody></table>`;
   return h;
 }
 // 区間の表。edit＝画面用（パルリングを区間ごとに選ぶ欄を出す）
@@ -2309,9 +2320,9 @@ function renderPlanMap(P){
   if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
   if(P.mapNote) $('planinfo').innerHTML += '<br>'+P.mapNote;
   if(P.policy==='group'){
-    const tot=pats.list.reduce((a,p)=>a+p.sets*p.n,0), d=tot-P.minTotal;
+    const tot=pats.list.reduce((a,p)=>a+setCeil(p.sets*p.n),0), mt=P.minTotal, d=tot-mt;
     $('planinfo').innerHTML += P.groupNote ? '<br>'+P.groupNote :
-      `<br>まとめた割付：<b>${fmt(tot,1)} set</b>（目地ごとに最小なら ${fmt(P.minTotal,1)} set。差 ${d>0?'+':''}${fmt(d,1)} set）`;
+      `<br>まとめた割付：<b>${fmt(tot,0)} set</b>（目地ごとに最小なら ${fmt(mt,0)} set。差 ${d>0?'+':''}${fmt(d,0)} set）`;
   }
   $('plancharts').innerHTML=spans.map(sp=>spanChartsHTML(P,sp)).join('');
   $('planspan').querySelectorAll('select.spanpul').forEach(sel=>sel.onchange=()=>{
@@ -2433,12 +2444,12 @@ function proposeMerge(){
     for(const c of cand){ if(!failOf(c)){ pick=c; break; } }
   }
   const lab=picked.map(s=>spanNo(s.no)).join('');
-  const now=js.reduce((a,J)=>a+(J.cfg?J.cfg.sets:0),0);
+  const now=setsTotalOf(js);
   if(!pick){ box.innerHTML=`<span class="v-bad">区間${lab}をまとめられる構成が見つかりませんでした。</span>${why}`; mergeProposal=null; return; }
-  const after=pick.sets*js.length, d=after-now;
+  const after=setCeil(pick.sets*js.length), d=after-now;
   mergeProposal={js, cfg:pick};
   box.innerHTML=`<div class="mergeprop"><b>提案：区間${lab}（目地 ${js.length} か所）を「${planCfgLabel(pick)}・パルリング${pick.pul?'貼る':'貼らない'}」にまとめる</b>`+
-    `<div class="muted">${why||`選んだ区間でいちばん推進力が大きい目地（No.${hard.a}/${hard.b}・${fmt(gF(hard),0)}kN）の構成に合わせます（緩い側には合わせない）。全部の目地で照査を満たします。`}　set：${fmt(now,1)} → ${fmt(after,1)}（${d>=0?'+':''}${fmt(d,1)}）</div>`+
+    `<div class="muted">${why||`選んだ区間でいちばん推進力が大きい目地（No.${hard.a}/${hard.b}・${fmt(gF(hard),0)}kN）の構成に合わせます（緩い側には合わせない）。全部の目地で照査を満たします。`}　set：${fmt(now,0)} → ${fmt(after,0)}（${d>=0?'+':''}${fmt(d,0)}）</div>`+
     `<div style="margin-top:6px;display:flex;gap:8px"><button class="propbtn" id="mergeok">この構成でまとめる</button><button id="mergeno" class="ghostbtn">やめる</button></div></div>`;
   $('mergeok').onclick=()=>{ const k=planCfgKey(mergeProposal.cfg); mergeProposal.js.forEach(J=>planCfgForce.set(J.i,k)); mergeProposal=null; box.innerHTML=''; runPlan(); };
   $('mergeno').onclick=()=>{ mergeProposal=null; box.innerHTML=''; };
