@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 14:14）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 14:51）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -217,6 +217,15 @@
   #printout .charts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   #printout .chartbox{border:1px solid #ccc;border-radius:6px;padding:4px}
   #printout .pp-sc2 .spanchart{break-inside:avoid;margin-bottom:6px;padding:6px 8px}
+  /* vr012: 区間ごとの変形量と応力分布は A4 横に2つ並べる（1つの区間の2つの図は縦に積む） */
+  #printout .pp-sc-land{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:start}
+  #printout .pp-sc-land .charts{grid-template-columns:1fr!important}
+  #printout .pp-sc-land .charts svg{max-height:62mm!important;width:100%;display:block}
+  #printout .pp-sc-land .spanchart .sct{font-size:11pt}
+  /* vr012: 印刷の表で OK／NG の色が黒に上書きされていた */
+  #printout .ptable td.v-bad,#printout .ptable td .v-bad,#printout td.v-bad{color:#b00!important}
+  #printout .ptable td.v-ok,#printout .ptable td .v-ok,#printout td.v-ok{color:#0a6a33!important}
+  #printout .ptable td.v-warn,#printout .ptable td .v-warn,#printout td.v-warn{color:#a05a00!important}
   #printout .pp-sc2 .charts svg{max-height:88mm}
   #printout.a4 .pp-sc2 .charts svg{max-height:120mm}
   #printout .spanchart .sct{font-size:12.5pt}
@@ -243,7 +252,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 14:14</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 14:51</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -3705,12 +3714,18 @@ function cloneForPrint(el){
   });
   return html;
 }
+// vr012: 出力の順（利用者の指定 2026-11-09）
 const PP_ITEMS=[
-  ['input','入力値・計算結果',false,true], ['install','配置図・貼付け指示図',false,true], ['chart','変形量と応力分布（入力の構成）',false,true],
-  ['map','管割付図・パターンと貼付け指示',true,true], ['span','区間ごとの割付と伸び・管の本数',true,true], ['spanchart','区間ごとの変形量と応力分布',true,true],
-  ['check','1本ごとの FJリング割付（条件・先端の推進力・目地ごとの割付・数量）',true,true], ['prop','必要な推進力伝達材の提案（逆算）',false,true], ['guide','読み方（吹き出し）',true,true]];
+  ['input','入力値（現場・推進管・線形と区間ごとの推力）',false,true],
+  ['check','1本ごとの FJリング割付（条件・先端の推進力・目地ごとの割付）',true,true],
+  ['prop','採用した提案（逆算）／自分で検討の結果',false,true],
+  ['map','管割付図',true,true], ['pattern','パターンと貼付け指示',true,true],
+  ['spanchart','区間ごとの変形量と応力分布（A4横に2つ）',true,true],
+  ['qty','FJリングの数量総括',true,true], ['span','管の伸び（区間ごと）',true,true], ['count','管の伸びによる本数の変化',true,true],
+  ['selfinput','照査した構成：推進力伝達材・計算結果',false,true], ['install','照査した構成：配置図・貼付け指示図',false,true],
+  ['chart','照査した構成：変形量と応力分布',false,true], ['guide','読み方（吹き出し）',true,true]];
 function renderPrintDialog(){
-  const hasPlan=!!(lastPlan&&lastPlan.pats), hasProp=!!$('propwrap').innerHTML.trim();
+  const hasPlan=!!(lastPlan&&lastPlan.pats), hasProp=!!($('propwrap').innerHTML.trim()||$('selfWrap').innerHTML.trim());
   let h='<div class="ppdlg-h">📄 PDFに出す項目</div><div class="ppdlg-items">';
   PP_ITEMS.forEach(([k,lab,plan,def])=>{
     const dis=(plan&&!hasPlan)||(k==='prop'&&!hasProp);
@@ -3756,36 +3771,44 @@ function buildPrintout(sel){
   // vr011: A4 縦（A4P）では、横に長い管割付図のページだけ横向き（data-land）にする
   const page=(t,body,land)=>`<section class="pp-page"${land&&paper==='A4P'?' data-land="1"':''}>${head(t)}${body}</section>`;
   let h='';
-  // 並び（利用者の指定 2026-11-07）：入力値・計算結果 → 配置図・貼付け指示図 → 変形量と応力分布（入力の構成）
-  //   → 管割付図 → パターンと貼付け指示 → 区間ごとの割付と伸び・管の本数 → 区間ごとの変形量と応力分布
-  //   → 1本ごとの FJリング割付（条件・先端の位置と推進力・目地ごとの割付・数量）→ 提案（逆算）→ 読み方
-  if(on('input')){
-    const cols=document.querySelector('.cols');
-    h+=page('入力値・計算結果', cloneForPrint($('basePanel'))+`<div class="pp-2col">${cloneForPrint(cols.children[0])}${cloneForPrint(cols.querySelector('.results'))}</div>`);
-  }
-  if(on('install')) h+=page('配置図・貼付け指示図', cloneForPrint($('layoutpanel'))+cloneForPrint($('instwrap').closest('.panel')));
-  if(on('chart')) h+=page('変形量と応力分布（入力の構成）', cloneForPrint($('chartarea').closest('.panel')));
-  if(hasPlan && on('map')){
-    const mapH=`<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>`;
-    const tblH=`${patTableHTML(P,P.pats)}<div class="pp-sub">FJリングの数量（倍率ごと）</div>${fjQtyHTML(P,false)}`;
-    // vr011: A4 縦では図だけを横向きのページにし（縮めずに大きく）、パターンの表と数量は次の縦のページへ
-    if(paper==='A4P'){ h+=page('管割付図（FJリング・パルリング）', mapH, true); h+=page('パターンと FJリングの数量', tblH); }
-    else h+=page('管割付図（FJリング・パルリング）', mapH+tblH);
-  }
-  if(hasPlan && on('map')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A3'?4:2;   // PDF を直接作るので、収まらなければ自動で分けるか縮める
-    for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
-  if(hasPlan && on('span')) h+=page('区間ごとの割付と伸び・管の本数', spanTableHTML(P,P.spans,false)+'<div style="height:10px"></div>'+pipeCountHTML(P));
-  if(hasPlan && on('spanchart')){
-    const blocks=P.spans.map(sp=>spanChartsHTML(P,sp)).filter(Boolean);
-    const per = paper==='A3' ? 2 : 1;
-    for(let i=0;i<blocks.length;i+=per) h+=page('区間ごとの変形量と応力分布', `<div class="pp-sc2">${blocks.slice(i,i+per).join('')}</div>`);
-  }
-  if(hasPlan && on('check')) h+=page('1本ごとの FJリング割付', `<div class="pp-chk"><div>割付の条件</div>${planCondTableHTML()}${$('planwrap').innerHTML}</div>`);
-  // vr012: 逆算のときは提案（提案ごとの区間とパターンの図）、自分で検討のときは指定した区間と照査の結果
+  // 並び（利用者の指定 2026-11-09）：
+  //   入力値（現場・推進管・線形と区間ごとの推力）→ 1本ごとの FJリング割付（条件・先端の推進力・目地ごとの割付）
+  //   → 採用した提案（逆算）／自分で検討の結果 → 管割付図 → パターンと貼付け指示 → 区間ごとの変形量と応力分布（A4横に2つ）
+  //   → FJリングの数量総括 → 管の伸び（区間ごと）→ 管の伸びによる本数の変化
+  //   → 照査した構成（推進力伝達材・計算結果／配置図・貼付け指示図／変形量と応力分布）→ 読み方
+  if(on('input')) h+=page('入力値（現場・推進管・線形と区間ごとの推力）', cloneForPrint($('basePanel')));
+  // 割付の表から「数量」の部分を外し、数量総括のページへ回す
+  const QTY_MARK='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">数量</div>';
+  const pw=$('planwrap').innerHTML, qi=pw.indexOf(QTY_MARK);
+  const planMain = qi>=0 ? pw.slice(0,qi) : pw, planQty = qi>=0 ? pw.slice(qi+QTY_MARK.length) : '';
+  if(hasPlan && on('check')) h+=page('1本ごとの FJリング割付', `<div class="pp-chk"><div>割付の条件</div>${planCondTableHTML()}${planMain}</div>`);
   if(on('prop')){
-    if($('fjMode').value==='self'){ if($('selfWrap').innerHTML.trim()) h+=page('FJリングの検討（自分で検討）', cloneForPrint($('fjCommon'))+cloneForPrint($('selfPanel'))); }
-    else if($('propwrap').innerHTML.trim()) h+=page('必要な推進力伝達材の提案（逆算）', cloneForPrint($('fjCommon'))+cloneForPrint($('propPanel')));
+    if($('fjMode').value==='self'){
+      if($('selfWrap').innerHTML.trim()) h+=page('FJリングの検討（自分で検討）', cloneForPrint($('fjCommon'))+cloneForPrint($('selfPanel')));
+    } else {
+      // 逆算：採用した提案だけを出す（利用者の指示 2026-11-09）
+      const ad=[...document.querySelectorAll('#propwrap .propblk.adopted')];
+      if(ad.length) h+=page('採用した推進力伝達材（逆算の提案）', ad.map(b=>cloneForPrint(b)).join(''));
+    }
   }
+  if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>`, true);
+  if(hasPlan && on('pattern')){ const cards=P.pats.list.map(p=>patCardHTML(p,P)); const per=paper==='A3'?4:2;
+    for(let i=0;i<cards.length;i+=per) h+=page('パターンと貼付け指示', `<div class="patviz">${cards.slice(i,i+per).join('')}</div>`); }
+  if(hasPlan && on('spanchart')){
+    // 半分の大きさにして、A4 横に2つ並べる（利用者の指示 2026-11-09）
+    const blocks=P.spans.map(sp=>spanChartsHTML(P,sp)).filter(Boolean);
+    const per = paper==='A3' ? 4 : 2;
+    for(let i=0;i<blocks.length;i+=per) h+=page('区間ごとの変形量と応力分布', `<div class="pp-sc2 pp-sc-land">${blocks.slice(i,i+per).join('')}</div>`, true);
+  }
+  if(hasPlan && on('qty')) h+=page('FJリングの数量総括', `<div class="pp-sub">パターンごと</div>${patTableHTML(P,P.pats)}<div class="pp-sub">FJリングの数量（倍率ごと）</div>${fjQtyHTML(P,false)}`+(planQty?`<div class="pp-sub">目地と枚数</div>${planQty}`:''));
+  if(hasPlan && on('span')) h+=page('管の伸び（区間ごと）', spanTableHTML(P,P.spans,false));
+  if(hasPlan && on('count')) h+=page('管の伸びによる本数の変化', pipeCountHTML(P));
+  if(on('selfinput')){
+    const cols=document.querySelector('.cols');
+    h+=page('照査した構成：推進力伝達材・計算結果', `<div class="pp-2col">${cloneForPrint(cols.children[0])}${cloneForPrint(cols.querySelector('.results'))}</div>`);
+  }
+  if(on('install')) h+=page('照査した構成：配置図・貼付け指示図', cloneForPrint($('layoutpanel'))+cloneForPrint($('instwrap').closest('.panel')));
+  if(on('chart')) h+=page('照査した構成：変形量と応力分布', cloneForPrint($('chartarea').closest('.panel')));
   if(on('guide')){ h+=page('読み方（1）', guideHTML(1)); h+=page('読み方（2）', guideHTML(2)); }
   if(!h) return false;
   $('printout').innerHTML=h;
@@ -4264,7 +4287,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 14:14';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 14:51';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
