@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 12:20）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 13:43）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -186,6 +186,18 @@
   .plchip{display:inline-block;margin:1px 10px 1px 0;white-space:nowrap}
   .plchip .sw,.prop-t .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:3px;vertical-align:-1px}
   .pfh{font-weight:700;margin:12px 0 6px;color:var(--head)}
+  .fjtabs{display:flex;gap:6px;margin-top:8px}
+  .fjtab{padding:8px 16px;border:1px solid var(--line);border-radius:8px 8px 0 0;background:var(--chip);cursor:pointer;font-weight:600;color:var(--sub)}
+  .fjtab.on{background:var(--head);color:#fff;border-color:var(--head)}
+  .propblk{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;background:var(--panel)}
+  .propblk.adopted{border:3px solid #d00}
+  .pbh{font-size:13px;margin-bottom:4px}
+  .pspan{border-top:1px dashed var(--line);padding-top:6px;margin-top:6px}
+  .psh{font-size:12.5px;margin-bottom:4px}
+  .psh .sw{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+  .selft td{padding:2px 4px}.selft input,.selft select{padding:3px 4px;font-size:12.5px}
+  #printout .propblk{break-inside:auto}
+  #printout .pspan{break-inside:avoid}
   #printout .prop-t tr.plsub td{white-space:normal}
   /* vr012: 採用した組合せ（画面・印刷とも赤い枠） */
   .prop-t tr.adopted td{border-top:3px solid #d00!important;border-bottom:3px solid #d00!important}
@@ -228,7 +240,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 12:20</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 13:43</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -381,21 +393,34 @@
     <span class="muted">判定基準（概要説明PDF）：<b>BC点</b> 最大応力度 ≤ 25 N/mm²・内側の開口長 ≥ 5mm ／ <b>EP点</b> 外側の開口長 ≤ <span id="critAllow">60mm(JC)・40mm(JB)・30mm(JA)</span> ／ <b>配置</b> FJリングは最小1.5set（全周1枚＋上下90°1枚。メーカー推奨）</span>
   </div>
 
-  <div class="panel propose">
+  <!-- vr012: FJリングの検討。曲線プログラムから引き継ぐのは線形と推進力の計算。ここから「逆算」と「自分で検討」に分かれる（利用者の指示 2026-11-09） -->
+  <div class="panel" id="fjCommon" style="margin-top:10px">
+    <h2>FJリングの検討</h2>
+    <div class="muted" style="margin-bottom:6px">曲線プログラムから引き継ぐもの：線形と1本毎の推進力（どちらの検討にも使う）。下の2つから検討の仕方を選びます。</div>
+    <div class="ctrls">
+      <label>継手タイプ<select id="jointType"><option value="70">JC</option><option value="50">JB</option><option value="40">JA</option></select></label>
+      <label>目地にかかる力<select id="planForce">
+        <option value="jack" selected>ジャッキの力そのまま（安全側）</option>
+        <option value="trans">後ろの管の摩擦分を引いた力</option></select></label>
+    </div>
+    <div class="fjtabs noprint">
+      <button type="button" class="fjtab on" data-mode="prop">逆算（構成を提案）</button>
+      <button type="button" class="fjtab" data-mode="self">自分で検討（区間ごとに指定）</button>
+      <select id="fjMode" style="display:none"><option value="prop" selected>prop</option><option value="self">self</option></select>
+    </div>
+  </div>
+
+  <div class="panel propose" id="propPanel">
     <h2>必要な推進力伝達材の提案（逆算）</h2>
     <div class="muted" style="margin-bottom:8px">上の入力（呼び径・曲線・推進力）に対して、上下面(90°)と側方面それぞれの
       材種（発泡倍率）×厚み（層数）を総当たりで計算し、成立する構成を一覧します。</div>
     <!-- vr012: 提案と割付の条件をここに集めた（利用者の指示「条件を上に集約」2026-11-09）。下の割付の欄は計算ボタンと結果だけ -->
     <div class="ctrls">
       <label>最大層数<input type="number" id="maxLayers" value="4" min="2" max="6" step="1"></label>
-      <label>継手タイプ<select id="jointType"><option value="70">JC</option><option value="50">JB</option><option value="40">JA</option></select></label>
       <label>使う材種<select id="planMats">
         <option value="11,12,13,14" selected>FJ 1.7〜3.0倍</option>
         <option value="12,13,14">FJ 2.0〜3.0倍</option>
         <option value="12,13">FJ 2.0・2.5倍</option></select></label>
-      <label>目地にかかる力<select id="planForce">
-        <option value="jack" selected>ジャッキの力そのまま（安全側）</option>
-        <option value="trans">後ろの管の摩擦分を引いた力</option></select></label>
       <label>パルリング（全体）<select id="planPulAll">
         <option value="auto" selected>自動（貼るを先に試す）</option>
         <option value="off">すべて貼らない</option>
@@ -428,22 +453,32 @@
     <div id="propwrap" style="overflow-x:auto;margin-top:8px"></div>
   </div>
 
-  <div class="toolbar" style="margin-top:10px">
+  <div class="toolbar" style="margin-top:10px" id="propLegend">
     <span class="muted">区分：<span class="tier t-rec">推奨</span> 応力≤25 ／
       <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
       <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過 or 1.5set未満</span>
   </div>
 
+  <!-- vr012: 自分で検討。管番号の区間ごとに貼付けを指定し、目地ごとに照査する -->
+  <div class="panel propose" id="selfPanel" style="display:none">
+    <h2>自分で検討（管番号の区間ごとに貼付けを指定）</h2>
+    <div class="muted" style="margin-bottom:6px">管番号は切羽側から1本目（管割付図と同じ）。「No.a〜No.b」は a 本目と b 本目の間の目地（a/a+1 … b−1/b）。
+      指定の無い目地は、曲線に入らなければパルリングのみ、曲線を通るなら「未指定」として NG にします。曲線に入らない目地には FJリングは要りません（指定してもパルリングだけ見ます）。</div>
+    <div id="selfRows"></div>
+    <div class="ctrls noprint">
+      <button type="button" class="propbtn" id="selfAdd" style="background:#6b7a89">行を追加</button>
+      <button type="button" class="propbtn" id="selfFromPlan" style="background:#6b7a89">今の割付から区間を作る</button>
+      <button type="button" class="propbtn" id="selfRun">照査する</button>
+    </div>
+    <div class="note" id="selfInfo"></div>
+    <div id="selfWrap"></div>
+  </div>
+
   <!-- vr009: 曲線プログラムの1本毎の推進力から、目地ごとに必要な FJリングを最小で割り付ける -->
   <div class="panel propose" id="planpanel">
     <h2>1本ごとの FJリング割付</h2>
-    <!-- vr012: 割付の条件を「提案の条件を使う」か「自分で指定する」か選ぶ（利用者の指示 2026-11-09）。
-         欄（id）は1組だけで、placePlanCtrls() が提案の欄と割付の欄のどちらかへ移す -->
-    <div class="ctrls">
-      <label>割付の条件<select id="planCondMode"><option value="prop" selected>提案の条件を使う</option><option value="self">自分で指定する</option></select></label>
-    </div>
     <div class="ctrls" id="planCtrls">
-      <span class="muted" id="planCondNote">条件は上の「必要な推進力伝達材の提案（逆算）」の欄で選びます。</span>
+      <span class="muted" id="planCondNote">条件は上の「FJリングの検討」と「提案（逆算）」の欄で選びます（割付の方針の「費用優先」「まとめる」もここで計算）。</span>
       <button class="propbtn" id="planbtn">割付を計算</button>
     </div>
     <div class="prog" id="planprog"><i></i></div>
@@ -1695,10 +1730,11 @@ function syncJoint(src){
 }
 /* vr012: 割付の条件の置き場所。「提案の条件を使う」なら提案の欄に（継手・最大層数・パルリングの厚み/つぶれ代は上の欄にそろえる）、
    「自分で指定する」なら割付の欄に全部並べる。欄の id は1組だけ。 */
-const PLAN_PROP_TOP=['planMats','planForce','planPulAll'], PLAN_PROP_ROW2=['planPolicy','planK','planM'],
+const PLAN_PROP_TOP=['planMats','planPulAll'], PLAN_PROP_ROW2=['planPolicy','planK','planM'],
       PLAN_HIDDEN=['planJoint','planMaxL','planPulThick','planPulCrush'],
       PLAN_SELF_ORDER=['planJoint','planForce','planMaxL','planPulThick','planPulCrush','planMats','planPolicy','planK','planM','planPulAll'];
-function planCondMode(){ const el=document.getElementById('planCondMode'); return el&&el.value==='self'?'self':'prop'; }
+// vr012: 割付の条件はいつも提案の欄（自分で検討するときは「自分で検討」のタブで区間ごとに指定する）
+function planCondMode(){ return 'prop'; }
 function placePlanCtrls(){
   const lab=id=>document.getElementById(id).closest('label');
   if(planCondMode()==='self'){
@@ -2147,7 +2183,7 @@ function compute(){
   }catch(e){ lastSections=null; $('reswrap').innerHTML='<div class="v-bad">計算エラー：'+e.message+'</div>'; console.error(e); }
 }
 /* ===== 提案（逆算）===== */
-const PROPOSE_LIMIT = 10;   // 提案の表示件数（合計厚みの小さい順）
+const PROPOSE_LIMIT = 5;   // vr012: 条件をいろいろ選べるので5個まで（利用者の指示 2026-11-09）   // 提案の表示件数（合計厚みの小さい順）
 Engine.prototype._solveFast=function(s,target){
   const mx=this.mx, CD=this.CD, n=this.Cu.nsep, step=0.5;
   let x=0; this.Inpt[s]=0; this._compute(s); let prev=this._sumForce(s);
@@ -2287,39 +2323,61 @@ function renderProposal(prop){
     h+=`<div style="margin-top:10px"><b>区間${sec.k}</b>`+
        `<span class="muted" style="font-size:11.5px">（第${names[sec.k-1]}曲線とその先の直線に静止する管`+
        (sec.k>1?`。第一〜第${names[sec.k-1]}曲線を通過`:'')+`）</span></div>`;
-    h+='<table class="ptable prop-t"><thead><tr><th>区分</th><th>上下面<br>(90°)<br>材種</th><th>厚み<br>(層)</th><th>側方面<br>材種</th><th>厚み<br>(層)</th>'+
-       '<th>合計<br>厚</th><th>最大<br>応力</th><th>内側の<br>開口長<br>（最小）</th><th>外側の<br>開口長<br>（最大）</th><th class="noprint"></th></tr></thead><tbody>';
+    // vr012: 提案は5個まで。提案ごとに、その構成で割付けた区間（管番号）とパターン（図付き）を並べる
     sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
-      h+=`<tr${prop.adopted&&prop.adopted[sec.k]===i?' class="adopted"':''}><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
-         `<td class="z">${PROP_SN[r.mc]}</td><td>${r.lc*p}mm (${r.lc}層)</td>`+
-         `<td class="z">${PROP_SN[r.ms]}</td><td>${r.ls*p}mm (${r.ls}層)</td>`+
-         `<td>${r.thick}mm</td><td>${fmt(r.sig,1)}</td><td>${fmt(r.inn,1)}</td><td class="lastv">${fmt(r.fin!=null?Math.max(r.out,r.fin):r.out,1)}</td>`+
-         `<td class="noprint"><button type="button" class="adoptbtn" data-k="${sec.k}" data-i="${i}" `+
-         `style="padding:2px 7px;font-size:11px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button></td></tr>`;
-      // vr012: その構成で割付けた結果（パターンと目地開き）
-      if(r.plan){
-        const ad=prop.adopted&&prop.adopted[sec.k]===i;
-        h+=`<tr class="plsub${ad?' adopted':''}"><td colspan="9" class="z plsum">${planSummaryHTML(r.plan)}</td>`+
-           `<td class="noprint"><button type="button" class="figbtn" data-k="${sec.k}" data-i="${i}" `+
-           `style="padding:2px 7px;font-size:11px;border-radius:5px;border:1px solid var(--line);cursor:pointer">図</button></td></tr>`;
-      }
+      const ad=prop.adopted&&prop.adopted[sec.k]===i, mo=r.fin!=null?Math.max(r.out,r.fin):r.out;
+      h+=`<div class="propblk${ad?' adopted':''}"><div class="pbh"><b style="font-size:14px">提案${i+1}</b> <span class="tier ${cls[r.t]}">${r.t}</span>　`+
+         `<b>上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm（${r.lc}層）／側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm（${r.ls}層）</b>　合計 ${r.thick}mm`+
+         `<span class="muted">　最大応力 ${fmt(r.sig,1)}・内側の開口 ${fmt(r.inn,1)}・外側の開口 ${fmt(mo,1)}mm</span>`+
+         (ad?'　<b style="color:#d00">採用</b>':'')+
+         ` <button type="button" class="adoptbtn noprint" data-k="${sec.k}" data-i="${i}" `+
+         `style="padding:2px 9px;font-size:11.5px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button></div>`+
+         (r.plan ? propPlanHTML(r.plan) : '<div class="muted">曲線プログラムの線形と1本毎の推進力が無いので、区間ごとの割付は出せません。</div>')+
+         '</div>';
     });
-    h+='</tbody></table>';
-    if(sec.show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:4px">合計厚みの小さい順に上位${PROPOSE_LIMIT}件を表示（該当 ${sec.show.length} 件）。</div>`;
+    if(sec.show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:4px">合計厚みの小さい順に${PROPOSE_LIMIT}件を表示（該当 ${sec.show.length} 件）。条件を変えると別の提案になります。</div>`;
     if(sec.show.length===0) h+='<div class="v-warn" style="margin-top:4px">条件を満たす構成が見つかりませんでした。最大層数を増やす／曲線・推進力を見直す／継手タイプをご確認ください。</div>';
   });
   if(sections.length>1) h+='<div class="muted" style="margin-top:8px">'+
     '※ 発進立坑側の曲線ほど多くの管が通過するので、到達側の区間ほど条件は厳しくなります（合計厚は単調に増えるのが普通）。'+
     '「採用」を押すとその区間の層構成に反映します（曲線ごとに構成を変える＝ONになります）。</div>';
-  h+='<div id="propfig"></div>';
   $('propwrap').innerHTML=h;
   $('propwrap').querySelectorAll('.adoptbtn').forEach(b=>b.onclick=()=>adoptProposal(+b.dataset.k,+b.dataset.i));
-  $('propwrap').querySelectorAll('.figbtn').forEach(b=>b.onclick=()=>showPropFig(+b.dataset.k,+b.dataset.i));
-  // 図は 採用した行（無ければ区間1の1行目）を出す。「図」で切り替え
-  const ak=prop.adopted ? Object.keys(prop.adopted).map(Number)[0] : null;
-  if(prop.figAt) showPropFig(prop.figAt.k, prop.figAt.i);
-  else if(ak!=null) showPropFig(ak, prop.adopted[ak]);
-  else if(sections[0] && sections[0].show[0] && sections[0].show[0].plan) showPropFig(sections[0].k, 0);
+}
+// vr012: 割付の結果を「区間 No.a〜No.b　パターン A-1 …（図）」の形で並べる（提案ごと・自分で検討の結果）
+function propPlanHTML(P){
+  const seen=new Set(), lim=P.lim||planLim($('planJoint').value);
+  let h='<div class="pspans">';
+  planSpanLabels(P).forEach(({sp,lab})=>{
+    const L=sp.pat.letter, ngJ=sp.js.filter(J=>J.res && !J.res.ok), unspec=sp.pat.key==='fail';
+    const kind = unspec && P.selfMode ? '未指定（曲線を通る目地）' : sp.pat.kind;
+    const judge = unspec ? '<b class="v-bad">NG</b>' : sp.pat.cfg ? (ngJ.length?`<b class="v-bad">NG ${ngJ.length}か所</b>（${planWhy(ngJ,lim).join('・')}）`:'<b class="v-ok">OK</b>') : '';
+    h+=`<div class="pspan"><div class="psh"><i class="sw" style="background:${sp.pat.color}"></i><b>区間 No.${sp.A.a}〜No.${sp.B.b}</b>`+
+       `（目地 ${sp.js.length} か所・止まる所 ${sp.stopAt||'—'}）　<b>パターン${lab}</b> ${kind}　目地開き ${planGapIOText(sp)}　${judge}</div>`;
+    if(unspec){ h+='</div>'; return; }
+    if(!seen.has(L)){ seen.add(L); h+=patCardHTML(sp.pat,P); }
+    else h+=`<div class="muted" style="font-size:12px">貼付けはパターン${L}（上の図）と同じ。目地開きが違う。</div>`;
+    h+='</div>';
+  });
+  return h+`</div><div style="margin-top:4px"><b class="${P.ngCount?'v-bad':'v-ok'}">${P.ngCount?'NG の目地 '+P.ngCount+' か所':'全目地 OK'}</b></div>`;
+}
+// 目地開き（押し終わったとき）。内側・外側（直線で止まる目地は同じ値）
+function planGapIOText(sp){
+  const r=(a,b)=> a==null ? '—' : Math.abs(b-a)<0.05 ? fmt(a,1) : `${fmt(a,1)}〜${fmt(b,1)}`;
+  if(sp.imin==null) return '—';
+  const same = Math.abs(sp.imin-sp.omin)<0.05 && Math.abs(sp.imax-sp.omax)<0.05;
+  return same ? `${r(sp.imin,sp.imax)}mm（内外同じ）` : `内側 ${r(sp.imin,sp.imax)}／外側 ${r(sp.omin,sp.omax)}mm`;
+}
+// NG の目地の理由（最悪値）
+function planWhy(ngJ, lim){
+  const why=[]; if(!ngJ.length) return why;
+  const mx=f=>Math.max(...ngJ.map(f)), mn=f=>Math.min(...ngJ.map(f));
+  if(ngJ.some(J=>J.res.broken)) why.push('材料の破壊');
+  if(ngJ.some(J=>J.res.bott)) why.push('FJリングがつぶれきる');
+  if(mx(J=>J.res.sig)>25) why.push(`最大応力 ${fmt(mx(J=>J.res.sig),1)}＞25`);
+  if(mn(J=>J.res.inner)<5) why.push(`内側の開口 ${fmt(mn(J=>J.res.inner),1)}mm＜5`);
+  const o=mx(J=>Math.max(J.res.outer,J.res.final)); if(o>lim.allow) why.push(`外側の開口 ${fmt(o,1)}mm＞${lim.allow}`);
+  return why;
 }
 /* vr012: 割付の区間（管割付図の①②…）に、同じパターンが何度も出るとき A-1・A-2… と番号を付ける */
 function planSpanLabels(P){
@@ -2356,6 +2414,64 @@ function showPropFig(k,i){
   h+=`<div class="patviz">${P.pats.list.map(pt=>patCardHTML(pt,P)).join('')}</div>`;
   el.innerHTML=h;
 }
+/* ===== vr012: 自分で検討（管番号の区間ごとに貼付けを指定）===== */
+let selfRanges=[];
+const SELF_MATS=[[11,'FJ 1.7倍'],[12,'FJ 2.0倍'],[13,'FJ 2.5倍'],[14,'FJ 3.0倍'],[15,'FJ 3.5倍']];
+function selfDefaultRow(){
+  const last=selfRanges[selfRanges.length-1];
+  return {from: last ? last.to : 1, to: last ? last.to+10 : 10, mc:12, lc:2, ms:12, ls:1, pul:true};
+}
+function setFjMode(m){
+  m = m==='self' ? 'self' : 'prop';
+  $('fjMode').value=m;
+  document.querySelectorAll('.fjtab').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
+  $('propPanel').style.display = m==='prop' ? '' : 'none';
+  $('propLegend').style.display = m==='prop' ? '' : 'none';
+  $('selfPanel').style.display = m==='self' ? '' : 'none';
+}
+function renderSelfRows(){
+  const opt=(list,v)=>list.map(([k,n])=>`<option value="${k}"${+v===k?' selected':''}>${n}</option>`).join('');
+  const num=(v,a,b)=>Array.from({length:b-a+1},(_,i)=>a+i).map(n=>`<option value="${n}"${+v===n?' selected':''}>${n}</option>`).join('');
+  let h='<table class="ptable selft"><thead><tr><th>区間（管番号）<br>No.〜No.</th><th>上下面の材種</th><th>上下面の層数</th><th>左右（側方面）の材種</th><th>全周の層数<br>（左右に貼る）</th><th>パルリング</th><th class="noprint"></th></tr></thead><tbody>';
+  selfRanges.forEach((r,i)=>{
+    h+=`<tr data-i="${i}"><td class="z"><input type="number" class="sf-from" value="${r.from}" min="1" step="1" style="width:64px"> 〜 <input type="number" class="sf-to" value="${r.to}" min="1" step="1" style="width:64px"></td>`+
+       `<td><select class="sf-mc">${opt(SELF_MATS,r.mc)}</select></td><td><select class="sf-lc">${num(r.lc,1,6)}</select></td>`+
+       `<td><select class="sf-ms">${opt(SELF_MATS,r.ms)}</select></td><td><select class="sf-ls">${num(r.ls,0,6)}</select></td>`+
+       `<td><select class="sf-pul"><option value="1"${r.pul?' selected':''}>貼る</option><option value="0"${r.pul?'':' selected'}>貼らない</option></select></td>`+
+       `<td class="noprint"><button type="button" class="sf-del" style="padding:2px 8px">削除</button></td></tr>`;
+  });
+  h+='</tbody></table>';
+  if(!selfRanges.length) h='<div class="muted">「行を追加」か「今の割付から区間を作る」で区間を作ってください。</div>';
+  $('selfRows').innerHTML=h;
+  $('selfRows').querySelectorAll('tr[data-i]').forEach(tr=>{
+    const r=selfRanges[+tr.dataset.i];
+    const upd=()=>{ r.from=+tr.querySelector('.sf-from').value||1; r.to=+tr.querySelector('.sf-to').value||r.from;
+      r.mc=+tr.querySelector('.sf-mc').value; r.lc=+tr.querySelector('.sf-lc').value; r.ms=+tr.querySelector('.sf-ms').value;
+      r.ls=Math.min(+tr.querySelector('.sf-ls').value, r.lc); r.pul=tr.querySelector('.sf-pul').value==='1'; scheduleSaveLast(); };
+    tr.querySelectorAll('input,select').forEach(el=>el.onchange=()=>{ upd(); if(+tr.querySelector('.sf-ls').value>r.lc) renderSelfRows(); });
+    tr.querySelector('.sf-del').onclick=()=>{ selfRanges.splice(+tr.dataset.i,1); renderSelfRows(); scheduleSaveLast(); };
+  });
+}
+// 今の割付（管割付図）の区間とパターンを、自分で検討の区間にする（FJ を貼る区間だけ）
+function selfFromPlan(){
+  const P=lastPlan;
+  if(!P || !P.joints){ $('selfInfo').innerHTML='<span class="v-warn">先に提案の「採用」か「割付を計算」で割付を作ってください。</span>'; return; }
+  const spans=P.spans||planSpans(P, planPatterns(P));
+  selfRanges=spans.filter(sp=>sp.pat.cfg).map(sp=>({from:sp.A.a, to:sp.B.b, mc:sp.pat.cfg.mc, lc:sp.pat.cfg.lc, ms:sp.pat.cfg.ms, ls:sp.pat.cfg.ls, pul:!!sp.pat.cfg.pul}));
+  renderSelfRows(); scheduleSaveLast();
+  $('selfInfo').innerHTML='今の割付の区間を入れました。区間や貼付けを変えて「照査する」を押してください。';
+}
+async function runSelf(){
+  if(!myTrace){ $('selfInfo').innerHTML=PLAN_NEED_MY; return; }
+  if(!selfRanges.length){ $('selfInfo').innerHTML='<span class="v-warn">区間を作ってください。</span>'; return; }
+  const cfgOf=J=>{ const r=selfRanges.find(r=>J.a>=r.from && J.a<r.to); if(!r) return null;
+    const ls=Math.min(r.ls,r.lc); return {ls, lc:r.lc, mc:r.mc, ms:ls?r.ms:r.mc, pul:!!r.pul, sets:ls+(r.lc-ls)/2}; };
+  $('selfInfo').textContent='照査中…';
+  await runPlan({cfgOf, render:true});
+  const P=lastPlan; if(!P) return;
+  $('selfInfo').innerHTML = P.groupNote || '';
+  $('selfWrap').innerHTML = propPlanHTML(P);
+}
 function planPulDefault(){ const a=$('planPulAll').value; return a==='on' ? true : (a==='off'||a==='fjnone') ? false : !!$('pulUse').checked; }
 // 提案の1件を、その区間の層構成に流し込む。
 // 側方面を覆う全周(360°)の層を ls 枚、その上に上下面だけ(180°)の層を lc-ls 枚重ねると、
@@ -2379,7 +2495,7 @@ function adoptProposal(k,i){
   curveCu[idx].layers=out.slice(0,LAYER_N);
   selectCuCurve(cuPerCurve?k:1);
   // vr012: 採用した組合せに赤い枠を付ける（利用者の指示 2026-11-09）。区間ごとに1つ
-  lastProposal.adopted=Object.assign({}, lastProposal.adopted, {[k]:i}); lastProposal.figAt={k,i}; renderProposal(lastProposal);
+  lastProposal.adopted=Object.assign({}, lastProposal.adopted, {[k]:i}); renderProposal(lastProposal);
   // vr012: 採用した構成で割付を計算する（利用者の指示「採用結果を割付計算」）
   $('planPolicy').value='adopt'; compute();
   if(myTrace) runPlan();
@@ -2528,13 +2644,14 @@ function matsOf(c){ return c.mc===c.ms ? [c.mc] : [c.mc,c.ms]; }
 /* vr010: 割付の設定（画面の欄＋区間ごとの指定）を保存・復元する。
    履歴JSON・前回入力・曲線プログラムへ返す結果（input.plan）に入る。曲線プログラムは input をそのまま現場JSONに保存するので、
    曲線プログラムから開き直すと jikuryoku.input.plan から戻る。区間ごとの指定は目地の数（nJoints）が同じときだけ戻す。 */
-const PLAN_FIELDS=['planCondMode','planJoint','planForce','planMaxL','planPulThick','planPulCrush','planMats','planPolicy','planK','planM','planPulAll'];
+const PLAN_FIELDS=['fjMode','planJoint','planForce','planMaxL','planPulThick','planPulCrush','planMats','planPolicy','planK','planM','planPulAll'];
 let planMapsN = null;   // 区間ごとの指定が作られたときの目地の数
 function collectPlanSettings(){
   const o={}; PLAN_FIELDS.forEach(id=>{ const el=$(id); if(el) o[id]=el.value; });
   o.nJoints = myTrace&&myTrace.pipes ? myTrace.pipes.length-1 : planMapsN;
   o.pulForce=[...planPulForce.entries()]; o.cfgForce=[...planCfgForce.entries()];
   o.use180=!!($('planUse180')&&$('planUse180').checked); o.prices={...planPrices};
+  o.selfRanges=selfRanges.map(r=>({...r}));
   return o;
 }
 function applyPlanSettings(ps){
@@ -2547,13 +2664,15 @@ function applyPlanSettings(ps){
   if($('planUse180')) $('planUse180').checked=!!ps.use180;
   if(ps.prices) planPrices = {...ps.prices};   // 単価は現場をまたいで使うので、記録に無ければ今の値を残す
   placePlanCtrls();   // vr012: 割付の条件の置き場所を戻す
+  if(Array.isArray(ps.selfRanges)){ selfRanges=ps.selfRanges.map(r=>({...r})); renderSelfRows(); }
+  setFjMode($('fjMode').value);
   return true;
 }
 
 /* vr012: opt.cfgA（曲線ごとの構成の配列）を渡すと「その構成で割付」を画面に出さずに計算し、P（パターン・区間つき）を返す。
    提案（逆算）の行ごとのパターンと目地開き（A-1・A-2…）に使う。lastPlan も画面も変えない。 */
 async function runPlan(opt){
-  opt=opt||{}; const silent=!!opt.cfgA, prevPlan=lastPlan;
+  opt=opt||{}; const forced=!!(opt.cfgA||opt.cfgOf), silent=forced && !opt.render, prevPlan=lastPlan;
   syncPlanFromTop();
   const tr=myTrace;
   if(!tr || !tr.secs || !tr.pipes || !tr.pipes.length){
@@ -2563,7 +2682,7 @@ async function runPlan(opt){
   const lim=planLim($('planJoint').value), mode=$('planForce').value;
   const maxL=Math.max(2,Math.min(6,+$('planMaxL').value||4));
   const mats=$('planMats').value.split(',').map(Number);
-  const policy=silent ? 'adopt' : $('planPolicy').value, K=+$('planK').value||2, M=+$('planM').value||9;
+  const policy=forced ? 'adopt' : $('planPolicy').value, K=+$('planK').value||2, M=+$('planM').value||9;
   const inp=readInput();
   // 呼び径・管長は 曲線プログラムの現場データの値で計算する（上の入力欄が別の値でも割付は変わらない）
   const pDia = myPipe ? myPipe.dia : inp.dia, pLen = (myPipe && myPipe.len) ? myPipe.len : inp.leng;
@@ -2584,7 +2703,7 @@ async function runPlan(opt){
   const prOn = Math.max(0, (+$('planPulThick').value||0) - (+$('planPulCrush').value||0));
   // 条件が変わったら「通る／通らない」の控えを捨てる
   // vr012: 方針「採用した構成で割付」…… 区間（止まる曲線）ごとに上の照査の層構成を1つずつ使う
-  const candA = silent ? opt.cfgA : policy==='adopt' ? Array.from({length:Math.max(1,curves.length)},(_,i)=>adoptedPlanCfg(i+1, pitchOf(pDia))) : null;
+  const candA = opt.cfgA ? opt.cfgA : opt.cfgOf ? [null] : policy==='adopt' ? Array.from({length:Math.max(1,curves.length)},(_,i)=>adoptedPlanCfg(i+1, pitchOf(pDia))) : null;
   const sig=[$('planJoint').value, openBasis(), mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, pDia, pLen, inp.sc,
              base.curves.map(c=>c.rad+'/'+c.drc).join(',')].join('|');
   if(sig!==planPassSig){ planPassCache=new Map(); planPassSig=sig; }
@@ -2623,7 +2742,9 @@ async function runPlan(opt){
     const J=joints[ji];
     J.pulReq=planPulReq(J.i); J.prOn=prOn;
     const passed=curves.filter(c=>J.p>c.BC);
-    if(!passed.length){ J.kind='none'; J.pulOn = (!silent && planPulForce.has(J.i)) ? planPulForce.get(J.i) : $('planPulAll').value!=='off'; continue; }   // 曲線に入らない → FJ なし
+    if(!passed.length){ J.kind='none';
+      if(opt.cfgOf){ const c=opt.cfgOf(J); J.pulOn = c ? !!c.pul : $('planPulAll').value!=='off'; continue; }
+      J.pulOn = (!forced && planPulForce.has(J.i)) ? planPulForce.get(J.i) : $('planPulAll').value!=='off'; continue; }   // 曲線に入らない → FJ なし
     const m=passed.length, last=passed[m-1];
     J.kind = J.p<last.EC ? 'in' : 'through';
     J.govs=passed.map(c=>jointGov(tr, J.p, c, Xf, mode));
@@ -2634,8 +2755,8 @@ async function runPlan(opt){
     J.forcedCi = fci>=0 ? fci : null;
     if(policy==='adopt'){
       // vr012: 採用した構成（上の照査の層構成）をそのまま貼る。止まる区間 m の構成で、目地ごとの力で照査し直す
-      const c=candA[Math.min(m,candA.length)-1];
-      J.cfg=c; J.pass=[]; J.minCfg=c; J.minSets=c.sets; J.forcedCi=null;
+      const c = opt.cfgOf ? opt.cfgOf(J) : candA[Math.min(m,candA.length)-1];
+      J.cfg=c||null; J.pass=[]; J.minCfg=c||null; J.minSets=c?c.sets:null; J.forcedCi=null;
       if(ji%3===0) await tick(ji);
       continue;
     }
@@ -2713,25 +2834,20 @@ async function runPlan(opt){
   });
   if(policy==='adopt'){
     const ngJ=joints.filter(J=>J.res && !J.res.ok), ng=ngJ.length;
-    const why=[];
-    if(ng){
-      const mx=f=>Math.max(...ngJ.map(f)), mn=f=>Math.min(...ngJ.map(f));
-      if(ngJ.some(J=>J.res.broken)) why.push('材料の破壊');
-      if(ngJ.some(J=>J.res.bott)) why.push('FJリングがつぶれきる');
-      if(mx(J=>J.res.sig)>25) why.push(`最大応力 ${fmt(mx(J=>J.res.sig),1)}＞25`);
-      if(mn(J=>J.res.inner)<5) why.push(`内側の開口 ${fmt(mn(J=>J.res.inner),1)}mm＜5`);
-      const o=mx(J=>Math.max(J.res.outer,J.res.final)); if(o>lim.allow) why.push(`外側の開口 ${fmt(o,1)}mm＞${lim.allow}`);
-    }
-    groupNote = ng
-      ? `<span class="v-bad">採用した構成では ${ng} か所の目地が条件を満たしません（目地ごとの割付の表の赤字）。理由：${why.join('・')||'条件を満たさない'}</span>`
-      : '<span class="v-ok">採用した構成で、曲線を通る目地はすべて条件を満たします。</span>';
+    const why=planWhy(ngJ, lim);
+    const unspec=joints.filter(J=>J.kind!=='none' && !J.cfg).length;
+    if(unspec) why.push(`曲線を通るのに貼付けが未指定の目地 ${unspec} か所`);
+    groupNote = (ng||unspec)
+      ? `<span class="v-bad">${opt.cfgOf?'指定した貼付け':'採用した構成'}では ${ng+unspec} か所の目地が条件を満たしません（目地ごとの割付の表の赤字）。理由：${why.join('・')||'条件を満たさない'}</span>`
+      : `<span class="v-ok">${opt.cfgOf?'指定した貼付け':'採用した構成'}で、曲線を通る目地はすべて条件を満たします。</span>`;
   }
   // 押し終わったときの目地の開き（管の中心）。FJ なしの目地はパルリングの残り厚み（貼らないなら 0）
   joints.forEach(J=>{
-    if(J.kind==='none'){ J.gap=J.pulOn?prOn:0; J.stopAt='直線'; return; }
-    if(!J.cfg){ J.gap=null; return; }
+    if(J.kind==='none'){ J.gap=J.pulOn?prOn:0; J.gapIn=J.gapOut=J.gap; J.stopAt='直線'; return; }
+    if(!J.cfg){ J.gap=J.gapIn=J.gapOut=null; J.stopAt = J.kind==='in' ? `曲線${curves.length>1?J.govs.length:''}の中` : '直線'; return; }
     const m=J.govs.length;
-    J.gap=planFinalGap(J.cfg, base, J.govs, m, J.finalF, J.kind==='in', J.cfg.pul?J.prOn:0);
+    const gio=planFinalGapIO(J.cfg, base, J.govs, m, J.finalF, J.kind==='in', J.cfg.pul?J.prOn:0);
+    J.gap=gio.c; J.gapIn=gio.i; J.gapOut=gio.o;
     J.stopAt = J.kind==='in' ? `曲線${curves.length>1?m:''}の中` : '直線';
   });
   // 比較：曲線を通る全部の目地に、一番厳しい目地の構成を一律に貼った場合
@@ -2743,10 +2859,12 @@ async function runPlan(opt){
     policy, K, M, minTotal, groupNote, mapNote};
   if(silent){
     const P=lastPlan; lastPlan=prevPlan;
-    P.ngCount=joints.filter(J=>J.res && !J.res.ok).length;
+    P.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && !J.cfg)).length;
     P.pats=planPatterns(P); P.spans=planSpans(P,P.pats);
     return P;
   }
+  lastPlan.selfMode=!!opt.cfgOf;
+  lastPlan.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && !J.cfg)).length;
   bar.style.width='100%'; prog.style.display='none'; $('planbtn').disabled=false;
   renderPlan(lastPlan);
   renderPlanMap(lastPlan);
@@ -2848,6 +2966,21 @@ function planFinalGap(cfg, base, govs, m, finalF, inCurve, pr){
   const r=eng._solve(2*m+1, finalF);
   return mx-r.pl+pr;
 }
+// vr012: 押し終わったときの目地開き（内側・管の中心・外側）。曲線の先の直線で止まる目地は3つとも同じ
+function planFinalGapIO(cfg, base, govs, m, finalF, inCurve, pr){
+  const pitch=pitchOf(base.dia);
+  const eng=new Engine();
+  const curves=base.curves.map((c,i)=> i<m ? {rad:c.rad, drc:c.drc, pbc:govs[i]?govs[i].F:0} : {rad:0,drc:0,pbc:0});
+  eng.setup(Object.assign({},base,{varc:cfg.mc, thic:cfg.lc*pitch, vars:cfg.ms, this:cfg.ls*pitch, curves}));
+  const mx=eng.mx;
+  if(inCurve){
+    const r=eng._solve(2*m, finalF), C=eng.Cv[m];
+    const o=(mx-r.pl+C.sd)+(C.sd0-C.sd)/2+pr, ii=(mx-r.pl)-(C.sd0-C.sd)/2+pr;
+    return {c:(o+ii)/2, i:ii, o};
+  }
+  const r=eng._solve(2*m+1, finalF), g=mx-r.pl+pr;
+  return {c:g, i:g, o:g};
+}
 
 const PAT_COLORS=['#1f5fbf','#d0392b','#2e9a4a','#8e44ad','#e67e22','#16a2b8','#c2185b','#6d4c41','#7f8c00'];
 const PAT_NONE='#a87b45';   // パルリングのみ（貼付け指示図のコルク色に近い）
@@ -2886,6 +3019,9 @@ function planSpans(P, pats){
     s.no=i+1;
     const g=s.js.map(J=>J.gap).filter(v=>v!=null);
     s.gmin=g.length?Math.min(...g):null; s.gmax=g.length?Math.max(...g):null;
+    const gi=s.js.map(J=>J.gapIn).filter(v=>v!=null), go=s.js.map(J=>J.gapOut).filter(v=>v!=null);
+    s.imin=gi.length?Math.min(...gi):null; s.imax=gi.length?Math.max(...gi):null;
+    s.omin=go.length?Math.min(...go):null; s.omax=go.length?Math.max(...go):null;
     s.sum=g.reduce((a,b)=>a+b,0); cum+=s.sum; s.cum=cum;
     s.A=s.js[0]; s.B=s.js[s.js.length-1]; s.stopAt=s.A.stopAt||'';
   });
@@ -3543,7 +3679,7 @@ function openPrintDialog(){
   renderPrintDialog(); const d=$('ppdlg'); d.style.display=''; d.scrollIntoView({block:'nearest'});
 }
 // 割付の条件（画面の欄の値）を表にする。印刷の「1本ごとの FJリング割付」のページの頭に付ける
-const PLAN_LABELS={planCondMode:'割付の条件', planJoint:'継手（カラー）', planForce:'目地にかかる力', planMaxL:'最大層数', planPulThick:'パルリング 厚み(mm)',
+const PLAN_LABELS={fjMode:'検討の仕方', planJoint:'継手（カラー）', planForce:'目地にかかる力', planMaxL:'最大層数', planPulThick:'パルリング 厚み(mm)',
   planPulCrush:'パルリング つぶれ代(mm)', planMats:'使う材種', planPolicy:'割付の方針', planK:'パターンの数（まとめる）',
   planM:'倍率の種類（まとめる）', planPulAll:'パルリング（全体）'};
 function planCondTableHTML(){
@@ -3590,7 +3726,11 @@ function buildPrintout(sel){
     for(let i=0;i<blocks.length;i+=per) h+=page('区間ごとの変形量と応力分布', `<div class="pp-sc2">${blocks.slice(i,i+per).join('')}</div>`);
   }
   if(hasPlan && on('check')) h+=page('1本ごとの FJリング割付', `<div class="pp-chk"><div>割付の条件</div>${planCondTableHTML()}${$('planwrap').innerHTML}</div>`);
-  if(on('prop') && $('propwrap').innerHTML.trim()) h+=page('必要な推進力伝達材の提案（逆算）', cloneForPrint(document.querySelector('.panel.propose')));
+  // vr012: 逆算のときは提案（提案ごとの区間とパターンの図）、自分で検討のときは指定した区間と照査の結果
+  if(on('prop')){
+    if($('fjMode').value==='self'){ if($('selfWrap').innerHTML.trim()) h+=page('FJリングの検討（自分で検討）', cloneForPrint($('fjCommon'))+cloneForPrint($('selfPanel'))); }
+    else if($('propwrap').innerHTML.trim()) h+=page('必要な推進力伝達材の提案（逆算）', cloneForPrint($('fjCommon'))+cloneForPrint($('propPanel')));
+  }
   if(on('guide')){ h+=page('読み方（1）', guideHTML(1)); h+=page('読み方（2）', guideHTML(2)); }
   if(!h) return false;
   $('printout').innerHTML=h;
@@ -4069,7 +4209,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 12:20';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 13:43';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
@@ -4377,7 +4517,11 @@ $('run').onclick=compute;
 $('loadex').onclick=loadExample;
 $('propbtn').onclick=propose;
 $('openBasis').onchange=onOpenBasisChange;
-$('planCondMode').onchange=()=>{ placePlanCtrls(); scheduleSaveLast(); };
+document.querySelectorAll('.fjtab').forEach(b=>b.onclick=()=>{ setFjMode(b.dataset.mode); scheduleSaveLast(); });
+$('selfAdd').onclick=()=>{ selfRanges.push(selfDefaultRow()); renderSelfRows(); scheduleSaveLast(); };
+$('selfFromPlan').onclick=selfFromPlan;
+$('selfRun').onclick=runSelf;
+renderSelfRows();
 placePlanCtrls();
 $('jointType').addEventListener('change', ()=>onJointChange('jt'));
 $('planJoint').addEventListener('change', ()=>onJointChange('plan'));
