@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 11:10）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 11:32）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -222,7 +222,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 11:10</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 11:32</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -416,13 +416,15 @@
         <option value="12,13">FJ 2.0・2.5倍</option></select></label>
       <label>割付の方針<select id="planPolicy">
         <option value="min" selected>費用優先（目地ごとに FJ を最小）</option>
-        <option value="group">まとめる（パターン・倍率の種類を減らす）</option></select></label>
+        <option value="group">まとめる（パターン・倍率の種類を減らす）</option>
+        <option value="adopt">採用した構成（上の照査の層構成）で割付</option></select></label>
       <label>パターンの数（まとめる）<select id="planK"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option></select></label>
       <label>倍率の種類（まとめる）<select id="planM"><option value="1" selected>1種類</option><option value="2">2種類まで</option><option value="9">制限なし</option></select></label>
       <label>パルリング（全体）<select id="planPulAll">
         <option value="auto" selected>自動（貼るを先に試す）</option>
         <option value="off">すべて貼らない</option>
-        <option value="on">すべて貼る</option></select></label>
+        <option value="on">すべて貼る</option>
+        <option value="fjnone">FJ が不要な目地だけ貼る</option></select></label>
       <button class="propbtn" id="planbtn">割付を計算</button>
     </div>
     <div class="prog" id="planprog"><i></i></div>
@@ -2263,6 +2265,9 @@ function adoptProposal(k,i){
   selectCuCurve(cuPerCurve?k:1);
   // vr012: 採用した組合せに赤い枠を付ける（利用者の指示 2026-11-09）。区間ごとに1つ
   lastProposal.adopted=Object.assign({}, lastProposal.adopted, {[k]:i}); renderProposal(lastProposal);
+  // vr012: 採用した構成で割付を計算する（利用者の指示「採用結果を割付計算」）
+  $('planPolicy').value='adopt'; compute();
+  if(myTrace) runPlan();
   $('propinfo').innerHTML = `<span class="v-ok">区間${k}に「上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm ／ 側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm」を採用しました。</span>`;
 }
 
@@ -2380,6 +2385,14 @@ function planCfgHTML(c){
   if(c.lc>c.ls) h+='<br>'+line(`${rng(c.ls+1,c.lc)} 上下のみ ${MS[c.mc]}`);
   return h;
 }
+/* vr012: 上の照査の層構成（区間 k）を割付の構成の形にする（方針「採用した構成で割付」）。
+   全周の層＝側方面の厚み／ピッチ、上下面の層＝上下面の厚み／ピッチ。パルリングは上の照査の指定に従う。 */
+function adoptedPlanCfg(k, pitch){
+  const z=zonesFor(k), s=setCheckFor(k), layer=$('cuMode').value==='layer';
+  const ls=Math.round((+z.this||0)/pitch), lc=Math.max(ls, Math.round((+z.thic||0)/pitch));
+  const pul = layer ? !!(cuSpecFor(k).pul && cuSpecFor(k).pul.on) : $('pulUse').checked;
+  return {ls, lc, mc:+z.varc, ms: ls ? +z.vars : +z.varc, pul, sets: s ? s.sets : ls+(lc-ls)/2, adopted:true};
+}
 function planCfgKey(c){ return c ? [c.ls,c.lc,c.mc,c.ms,c.pul].join('/') : 'none'; }
 
 /* vr010: 割付の方針（オプション）
@@ -2392,7 +2405,8 @@ let planPulForce = new Map();      // 目地の番号（0始まり）→ true＝
 let planPassCache = new Map(), planPassSig = '';
 function planPulReq(i){
   if(planPulForce.has(i)) return planPulForce.get(i);
-  const a=$('planPulAll').value; return a==='on' ? true : a==='off' ? false : null;
+  // vr012: fjnone＝FJ が不要な目地（曲線に入らない）だけ貼る。ここは FJ を貼る目地の指定なので「貼らない」
+  const a=$('planPulAll').value; return a==='on' ? true : (a==='off'||a==='fjnone') ? false : null;
 }
 function matsOf(c){ return c.mc===c.ms ? [c.mc] : [c.mc,c.ms]; }
 
@@ -2449,6 +2463,8 @@ async function runPlan(){
   const cand=planCandidates(maxL, mats);
   const prOn = Math.max(0, (+$('planPulThick').value||0) - (+$('planPulCrush').value||0));
   // 条件が変わったら「通る／通らない」の控えを捨てる
+  // vr012: 方針「採用した構成で割付」…… 区間（止まる曲線）ごとに上の照査の層構成を1つずつ使う
+  const candA = policy==='adopt' ? Array.from({length:Math.max(1,curves.length)},(_,i)=>adoptedPlanCfg(i+1, pitchOf(pDia))) : null;
   const sig=[$('planJoint').value, openBasis(), mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, pDia, pLen, inp.sc,
              base.curves.map(c=>c.rad+'/'+c.drc).join(',')].join('|');
   if(sig!==planPassSig){ planPassCache=new Map(); planPassSig=sig; }
@@ -2482,7 +2498,7 @@ async function runPlan(){
     const J=joints[ji];
     J.pulReq=planPulReq(J.i); J.prOn=prOn;
     const passed=curves.filter(c=>J.p>c.BC);
-    if(!passed.length){ J.kind='none'; J.pulOn = J.pulReq!==false; continue; }   // 曲線に入らない → FJ なし
+    if(!passed.length){ J.kind='none'; J.pulOn = planPulForce.has(J.i) ? planPulForce.get(J.i) : $('planPulAll').value!=='off'; continue; }   // 曲線に入らない → FJ なし
     const m=passed.length, last=passed[m-1];
     J.kind = J.p<last.EC ? 'in' : 'through';
     J.govs=passed.map(c=>jointGov(tr, J.p, c, Xf, mode));
@@ -2491,6 +2507,13 @@ async function runPlan(){
     const okPul=ci=> J.pulReq==null || cand[ci].pul===J.pulReq;
     const fk=planCfgForce.get(J.i), fci = fk ? cand.findIndex(c=>planCfgKey(c)===fk) : -1;
     J.forcedCi = fci>=0 ? fci : null;
+    if(policy==='adopt'){
+      // vr012: 採用した構成（上の照査の層構成）をそのまま貼る。止まる区間 m の構成で、目地ごとの力で照査し直す
+      const c=candA[Math.min(m,candA.length)-1];
+      J.cfg=c; J.pass=[]; J.minCfg=c; J.minSets=c.sets; J.forcedCi=null;
+      if(ji%3===0) await tick(ji);
+      continue;
+    }
     if(policy==='min'){
       J.pass=null; J.cfg=null;
       for(let ci=0; ci<cand.length; ci++){ if(okPul(ci) && passOf(J,ci)){ J.cfg=cand[ci]; J.minSets=cand[ci].sets; J.minCfg=cand[ci]; break; } }
@@ -2563,6 +2586,12 @@ async function runPlan(){
     if(J.kind==='none' || !J.cfg) return;
     J.res=planEval(J.cfg, base, J.p, J.govs, J.govs.length, J.finalF, J.kind==='in', J.cfg.pul?J.prOn:0, lim, true);
   });
+  if(policy==='adopt'){
+    const ng=joints.filter(J=>J.res && !J.res.ok).length;
+    groupNote = ng
+      ? `<span class="v-bad">採用した構成では ${ng} か所の目地が条件を満たしません（目地ごとの割付の表の赤字）。</span>`
+      : '<span class="v-ok">採用した構成で、曲線を通る目地はすべて条件を満たします。</span>';
+  }
   // 押し終わったときの目地の開き（管の中心）。FJ なしの目地はパルリングの残り厚み（貼らないなら 0）
   joints.forEach(J=>{
     if(J.kind==='none'){ J.gap=J.pulOn?prOn:0; J.stopAt='直線'; return; }
@@ -3053,6 +3082,7 @@ function renderPlanMap(P){
   $('plancond').textContent=planCondLine(P);
   if(P.diaNote) $('planinfo').innerHTML += '<br>'+P.diaNote;
   if(P.mapNote) $('planinfo').innerHTML += '<br>'+P.mapNote;
+  if(P.policy==='adopt' && P.groupNote) $('planinfo').innerHTML += '<br>'+P.groupNote;
   if(P.policy==='group'){
     const tot=pats.list.reduce((a,p)=>a+setCeil(p.sets*p.n),0), mt=P.minTotal, d=tot-mt;
     $('planinfo').innerHTML += P.groupNote ? '<br>'+P.groupNote :
@@ -3275,7 +3305,7 @@ function guideChartSVG(){
   h+=`<line x1="${x1-60}" y1="${yo+(ya-yo)*60/(x1-x0)+3}" x2="${x1-60}" y2="${yb}" stroke="#137a3f" stroke-width="3.5" marker-start="url(#garr)" marker-end="url(#garr)"/>`;
   h+=bubble(600,60,330,'🔴 赤い線',['後ろの管の端面（FJに当たる面）。','曲線では斜めに当たる'],x0+(x1-x0)*0.62,ya+(yo-ya)*0.62,...GC.pink);
   h+=bubble(600,200,330,'🟨 色の四角',['前の管に貼った FJリング1枚ずつ。','色＝倍率・数字＝何枚目'],x0+330,yb-50,...GC.orange);
-  h+=bubble(600,340,330,'↕ 外側の開口',['継手の許容以下なら OK','（JA 40・JB 50・JC 70mm）'],x1-60,(yo+yb)/2,...GC.blue);
+  h+=bubble(600,340,330,'↕ 外側の開口',['継手の許容目地開き','以下なら OK'],x1-60,(yo+yb)/2,...GC.blue);
   h+=bubble(110,522,330,'↕ 内側の開口',['5mm 以上なら OK','（管どうしが当たらない）'],x0+60,(ya+yb)/2+4,...GC.green);
   // 右：応力分布（模式）
   const sx0=990, sx1=1270, sy0=90, sy1=470, Y=v=>sy0+(v/40)*(sy1-sy0);
@@ -3893,7 +3923,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 11:10';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 11:32';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
