@@ -4811,6 +4811,10 @@ function calcExtPressureCheck(D_in, t, W, P_ext, q_ext) {
   const ratio = Mr / M;
   return { r, M, Mr, ratio, P_ext, ok: ratio >= 1.2 };
 }
+// 2026-11-09（122章）: 鉛直土圧 q＝0（粘着力が大きく緩み土圧が生じない）だと M＝0 で Mr/M が Infinity になる。
+// 判定は OK のまま、表示は「—（土圧 0）」にする。
+function ratioText(x, d) { return Number.isFinite(x) ? x.toFixed(d) : '—（土圧 0）';
+}
 
 // ══════════════════════════════════════
 //  メイン推進力計算
@@ -5198,14 +5202,14 @@ function renderResults(res) {
     <div class="metric-card"><div class="metric-label">fo 周面摩擦（${hTag(H)==='H最大'?'H最小='+Hmin:'H最大='+Hmax}m）</div><div class="metric-value">${(hTag(H)==='H最大'?fo_min:fo_max).toFixed(2)}</div><div class="metric-sub">kN/m（参考）</div></div>
     <div class="metric-card"><div class="metric-label">先端抵抗 Fo</div><div class="metric-value">${Fo.toFixed(0)}</div><div class="metric-sub">kN</div></div>
     <div class="metric-card"><div class="metric-label">周面摩擦 fo</div><div class="metric-value">${fo.toFixed(2)}</div><div class="metric-sub">kN/m</div></div>
-    <div class="metric-card"><div class="metric-label">Mr/M（外圧・標準仕様）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${extCheck.ratio.toFixed(2)}</div><div class="metric-sub">≥1.2 要求（区間別は下表参照）</div></div>
+    <div class="metric-card"><div class="metric-label">Mr/M（外圧・標準仕様）</div><div class="metric-value ${extCheck.ok?'ok':'ng'}">${Number.isFinite(extCheck.ratio)?extCheck.ratio.toFixed(2):'—'}</div><div class="metric-sub">${Number.isFinite(extCheck.ratio)?'≥1.2 要求（区間別は下表参照）':'鉛直土圧 0 のため曲げが生じない（OK）'}</div></div>
     <div class="metric-card"><div class="metric-label">q_total 鉛直土圧</div><div class="metric-value">${q_total.toFixed(1)}</div><div class="metric-sub">kN/m²</div></div>
   `;
 
   // 総合判定
   const verdicts = [];
   verdicts.push(`<span class="pill ${okForce?'ok':'ng'}">最大推進力 ${F_total.toFixed(0)}kN ${okForce?'＜':'>'} 許容耐力 ${Fa.toFixed(0)}kN ${okForce?'OK':'NG'}</span>`);
-  verdicts.push(`<span class="pill ${extCheck.ok?'ok':'ng'}">外圧耐荷力 Mr/M=${extCheck.ratio.toFixed(2)} ${extCheck.ok?'OK':'NG'}</span>`);
+  verdicts.push(`<span class="pill ${extCheck.ok?'ok':'ng'}">外圧耐荷力 Mr/M=${ratioText(extCheck.ratio,2)} ${extCheck.ok?'OK':'NG'}</span>`);
 
   document.getElementById('summaryVerdict').innerHTML = verdicts.join(' ');
 
@@ -5252,7 +5256,7 @@ function renderResults(res) {
     ['r 管壁中心半径', extCheck.r.toFixed(3), 'm', '(Di/2)+t/2'],
     ['M 外圧曲げモーメント', extCheck.M.toFixed(3), 'kN·m/m', '0.275×q×r²（q は H最小・H最大の大きい方 ' + (res.q_ext ?? q_total).toFixed(2) + '）'],
     ['Mr 抵抗モーメント', extCheck.Mr.toFixed(3), 'kN·m/m', '0.318×Pext×r+0.239×W×r'],
-    ['Mr/M 安全率', extCheck.ratio.toFixed(3), '—', extCheck.ok?'≥1.2 OK':'<1.2 NG'],
+    ['Mr/M 安全率', ratioText(extCheck.ratio,3), '—', extCheck.ok?'≥1.2 OK':'<1.2 NG'],
   ];
   document.getElementById('basisTable').innerHTML =
     '<thead><tr><th>項目</th><th>値</th><th>単位</th><th>備考</th></tr></thead><tbody>' +
@@ -5335,7 +5339,7 @@ function renderResults(res) {
       const rowNG = !e.ok;
       return `<tr class="${rowNG?'row-ng':''}"><td class="left">${e.label}${e.individual?' <span class="pill warn" style="font-size:10px">個別仕様</span>':''}</td>
         <td class="mono">${e.M.toFixed(3)}</td><td class="mono">${e.Mr.toFixed(3)}</td>
-        <td class="mono"><b>${e.ratio.toFixed(2)}</b></td><td><span class="pill ${e.ok?'ok':'ng'}">${e.ok?'OK':'NG'}</span></td></tr>`;
+        <td class="mono"><b>${ratioText(e.ratio,2)}</b></td><td><span class="pill ${e.ok?'ok':'ng'}">${e.ok?'OK':'NG'}</span></td></tr>`;
     }).join('');
     document.getElementById('extTable').innerHTML =
       `<thead><tr><th>区間</th><th>M(kN·m/m)</th><th>Mr(kN·m/m)</th><th>Mr/M</th><th>判定</th></tr></thead><tbody>${extRows}</tbody>`;
@@ -5633,7 +5637,7 @@ function renderReport(res) {
   const pipeOk = F_total <= Fa;
   const verdictItems = [
     { name:'① 推進力（管の許容耐荷力）', criteria:`F ≤ Fr`, value:`${fmt(F_total,0)} ≤ ${fmt(Fa,0)} kN`, ok: pipeOk },
-    { name:'② 外圧耐荷力', criteria:'Mr/M ≥ 1.2', value:`Mr/M = ${fmt(extCheck.ratio,2)}`, ok: extCheck.ok },
+    { name:'② 外圧耐荷力', criteria:'Mr/M ≥ 1.2', value:`Mr/M = ${ratioText(extCheck.ratio,2)}`, ok: extCheck.ok },
     { name:'③ 推進設備（元押ジャッキ）', criteria:'F ≤ ジャッキ総能力', value:`${fmt(F_total,0)} ≤ ${fmt(jackTotal,0)} kN`, ok: jackOk },
     ...extraVerdictItems(res),   // 119章: 曲線部の管・継手・支圧壁・推進力伝達材（ok=null は未照査）
   ];
@@ -6244,7 +6248,7 @@ async function exportReportXLSX() {
     ['0.318×', [aP, 1, stdSpec.Pext], '×', [aR0, 3, extCheck.r], '+0.239×', [aW, 2, stdSpec.W], '×', [aR0, 3, extCheck.r]],
     `0.318*${aP}*${aR0}+0.239*${aW}*${aR0}`, extCheck.Mr, 3, 'kN·m/m');
   const aRatio = calcRow('安全率', 'Mr / M（≧1.2）', [[aMr, 3, extCheck.Mr], '÷', [aM, 3, extCheck.M]],
-    `IF(${aM}>0,${aMr}/${aM},999)`, extCheck.ratio, 2, '—');
+    `IF(${aM}>0,${aMr}/${aM},999)`, (Number.isFinite(extCheck.ratio) ? extCheck.ratio : 999), 2, '—');
 
   // ── 10. 曲線部の側方土圧（参考計算、103章） ──
   const lat = res.lat;
@@ -6296,7 +6300,7 @@ async function exportReportXLSX() {
     hdr(['検討項目', '判定基準', '結果', '判定', '']);
     const vRow = (name, crit, parts, f, cached) => { T(r, 1, name); T(r, 2, crit); subst(r, 3, parts); const a = fxs(r, 4, f, cached); T(r, 5, ''); r++; return a; };
     const v1 = vRow('① 推進力（管の許容耐荷力）', 'F ≤ Fr', [[aFt, 0, F_total], ' ≤ ', [aFr, 0, Fa], ' kN'], `IF(${aFt}<=${aFr},"OK","NG")`, pipeOk ? 'OK' : 'NG');
-    const v2 = vRow('② 外圧耐荷力', 'Mr/M ≥ 1.2', ['Mr/M = ', [aRatio, 2, extCheck.ratio]], `IF(${aRatio}>=1.2,"OK","NG")`, extCheck.ok ? 'OK' : 'NG');
+    const v2 = vRow('② 外圧耐荷力', 'Mr/M ≥ 1.2', ['Mr/M = ', [aRatio, 2, (Number.isFinite(extCheck.ratio) ? extCheck.ratio : 999)]], `IF(${aRatio}>=1.2,"OK","NG")`, extCheck.ok ? 'OK' : 'NG');
     const v3 = vRow('③ 推進設備（元押ジャッキ）', 'F ≤ ジャッキ総能力', [[aFt, 0, F_total], ' ≤ ', [aJt, 0, jackTotal], ' kN'], `IF(${aFt}<=${aJt},"OK","NG")`, jackOk ? 'OK' : 'NG');
     T(r, 1, '総合'); T(r, 2, ''); T(r, 3, '');
     fxs(r, 4, `IF(AND(${v1}="OK",${v2}="OK",${v3}="OK"),"すべてOK","要見直し")`, allOk ? 'すべてOK' : '要見直し');
