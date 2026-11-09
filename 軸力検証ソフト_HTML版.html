@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 14:51）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 14:59）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -252,7 +252,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 14:51</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 14:59</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -2352,14 +2352,22 @@ async function propose(){
   // vr012: 提案の行ごとに、その構成で割付を計算する（パターン A-1・A-2…・B… と目地開き。利用者の指示 2026-11-09）
   if(myTrace){
     const nCv=Math.max(1,trCurves(myTrace).length), pd=pitchOf(myPipe?myPipe.dia:base.dia), pulDef=planPulDefault();
-    let done=0; const tot=sections.reduce((a,s)=>a+Math.min(PROPOSE_LIMIT,s.show.length),0);
+    // vr012: 目地ごとの割付で全目地 OK の構成を先に5個集める（合計厚みの小さい順に最大 PROPOSE_SCAN 件まで調べる）。
+    //   照査（BC点の推進力1つ）で推奨でも、目地ごとの力で見ると NG になることがあるため（利用者の指摘 2026-11-09）
+    const PROPOSE_SCAN=20;
+    let done=0;
     for(const sec of sections){
-      for(const r of sec.show.slice(0,PROPOSE_LIMIT)){
+      const ok=[], ng=[];
+      for(const r of sec.show.slice(0,PROPOSE_SCAN)){
         const cfg={ls:r.ls, lc:r.lc, mc:r.mc, ms:r.ms, pul:pulDef, sets:r.ls+(r.lc-r.ls)/2};
         const cfgA=Array.from({length:nCv},(_,i)=> (!cuPerCurve || i+1===sec.k) ? cfg : adoptedPlanCfg(i+1,pd));
         try{ r.plan=await runPlan({cfgA}); }catch(e){ r.plan=null; }
-        done++; $('propinfo').textContent=`提案ごとの割付を計算中… ${done} / ${tot}`; await new Promise(rs=>setTimeout(rs));
+        (r.plan && !r.plan.ngCount ? ok : ng).push(r);
+        done++; $('propinfo').textContent=`提案ごとの割付を計算中… ${done}（全目地 OK ${ok.length} 件）`; await new Promise(rs=>setTimeout(rs));
+        if(ok.length>=PROPOSE_LIMIT) break;
       }
+      const rest=sec.show.filter(r=>!ok.includes(r) && !ng.includes(r));
+      sec.okCount=ok.length; sec.show=[...ok, ...ng, ...rest];
     }
   }
   lastProposal={pitch:p, outlim:outlim, donelim:donelim, sections:sections, layerMode:layerMode};
@@ -2386,7 +2394,10 @@ function renderProposal(prop){
     // vr012: 提案は5個まで。提案ごとに、その構成で割付けた区間（管番号）とパターン（図付き）を並べる
     sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
       const ad=prop.adopted&&prop.adopted[sec.k]===i, mo=r.fin!=null?Math.max(r.out,r.fin):r.out;
-      h+=`<div class="propblk${ad?' adopted':''}"><div class="pbh"><b style="font-size:14px">提案${i+1}</b> <span class="tier ${cls[r.t]}">${r.t}</span>　`+
+      // vr012: 目地ごとの割付で NG の目地があれば、照査の区分（推奨など）ではなく「割付で NG」と出す
+      const planNg = r.plan && r.plan.ngCount;
+      h+=`<div class="propblk${ad?' adopted':''}"><div class="pbh"><b style="font-size:14px">提案${i+1}</b> `+
+         (planNg ? `<span class="tier t-ng">割付で NG ${r.plan.ngCount}か所</span>` : `<span class="tier ${cls[r.t]}">${r.t}</span>`)+`　`+
          `<b>上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm（${r.lc}層）／側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm（${r.ls}層）</b>　合計 ${r.thick}mm`+
          `<span class="muted">　最大応力 ${fmt(r.sig,1)}・内側の開口 ${fmt(r.inn,1)}・外側の開口 ${fmt(mo,1)}mm</span>`+
          (ad?'　<b style="color:#d00">採用</b>':'')+
@@ -2395,7 +2406,9 @@ function renderProposal(prop){
          (r.plan ? propPlanHTML(r.plan) : '<div class="muted">曲線プログラムの線形と1本毎の推進力が無いので、区間ごとの割付は出せません。</div>')+
          '</div>';
     });
-    if(sec.show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:4px">合計厚みの小さい順に${PROPOSE_LIMIT}件を表示（該当 ${sec.show.length} 件）。条件を変えると別の提案になります。</div>`;
+    if(sec.okCount!=null) h+= sec.okCount ? `<div class="muted" style="margin-top:4px">目地ごとの割付で全目地 OK の構成を、合計厚みの小さい順に先に並べています（OK ${sec.okCount} 件）。</div>`
+      : '<div class="v-bad" style="margin-top:4px">目地ごとの割付で全目地 OK になる構成が見つかりませんでした（合計厚みの小さい順に20件まで調べた）。最大層数・使う倍率・継手を見直してください。</div>';
+    if(sec.show.length>PROPOSE_LIMIT) h+=`<div class="muted" style="margin-top:4px">${PROPOSE_LIMIT}件を表示（該当 ${sec.show.length} 件）。条件を変えると別の提案になります。</div>`;
     if(sec.show.length===0) h+='<div class="v-warn" style="margin-top:4px">条件を満たす構成が見つかりませんでした。最大層数を増やす／曲線・推進力を見直す／継手タイプをご確認ください。</div>';
   });
   if(sections.length>1) h+='<div class="muted" style="margin-top:8px">'+
@@ -2680,7 +2693,12 @@ function planCfgHTML(c){
 function adoptedPlanCfg(k, pitch){
   const z=zonesFor(k), s=setCheckFor(k), layer=$('cuMode').value==='layer';
   const ls=Math.round((+z.this||0)/pitch), lc=Math.max(ls, Math.round((+z.thic||0)/pitch));
-  const pul = layer ? !!(cuSpecFor(k).pul && cuSpecFor(k).pul.on) : $('pulUse').checked;
+  // vr012: パルリング（全体）の指定に従う（すべて貼る／すべて貼らない／FJ が不要な目地だけ貼る）。自動のときだけ上の照査の指定。
+  //   以前は照査の指定だけを見ていたので、「FJ が不要な目地だけ貼る」でも FJ の目地にパルリングが入り、
+  //   提案では OK の構成が採用後の割付で外側の開口 NG になっていた（利用者の指摘 2026-11-09）
+  const a=$('planPulAll').value;
+  const pul = a==='on' ? true : (a==='off'||a==='fjnone') ? false
+            : (layer ? !!(cuSpecFor(k).pul && cuSpecFor(k).pul.on) : $('pulUse').checked);
   return {ls, lc, mc:+z.varc, ms: ls ? +z.vars : +z.varc, pul, sets: s ? s.sets : ls+(lc-ls)/2, adopted:true};
 }
 function planCfgKey(c){ return c ? [c.ls,c.lc,c.mc,c.ms,c.pul].join('/') : 'none'; }
@@ -4287,7 +4305,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 14:51';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 14:59';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
