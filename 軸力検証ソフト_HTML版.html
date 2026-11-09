@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 10:08）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 11:10）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -174,6 +174,17 @@
   #printout.a4p .pp-2col{grid-template-columns:1fr}
   #printout.a4p .pp-page:not([data-land]) .charts{grid-template-columns:1fr}
   #printout.a4p .pp-page:not([data-land]) .pp-sc2 .charts svg{max-height:95mm}
+  /* vr012: 「変形量と応力分布（入力の構成）」も A4 縦では図を縦に積むので、図の高さを抑えて BC点ごとに1ページへ収める
+     （幅いっぱいだと1つの図が約19cmになり、無駄にページが分かれていた・2026-11-09 利用者の指摘） */
+  #printout.a4p .pp-page:not([data-land]) .charts svg{max-height:92mm;display:block;margin:0 auto}
+  /* vr012: 提案（逆算）の表。見出しは決めた所で改行、値は折り返さない（「採用」の列は印刷に出さない）。A4 縦の幅に収める */
+  #printout .prop-t th{white-space:nowrap;padding:2px 4px;line-height:1.25}
+  #printout .prop-t td{white-space:nowrap;padding:2px 5px}
+  #printout .prop-t .tier{white-space:nowrap}
+  /* vr012: 採用した組合せ（画面・印刷とも赤い枠） */
+  .prop-t tr.adopted td{border-top:3px solid #d00!important;border-bottom:3px solid #d00!important}
+  .prop-t tr.adopted td:first-child{border-left:3px solid #d00!important}
+  .prop-t tr.adopted td:last-child{border-right:3px solid #d00!important}
   #printout.a4 .ptable{font-size:10pt}
   #printout.a4 .ptable th,#printout.a4 .ptable td{padding:2px 5px}
   #printout .v-ok{color:#0a6a33}#printout .v-bad{color:#b00}#printout .v-warn{color:#a05a00}
@@ -211,7 +222,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 10:08</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 11:10</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -2209,14 +2220,14 @@ function renderProposal(prop){
     h+=`<div style="margin-top:10px"><b>区間${sec.k}</b>`+
        `<span class="muted" style="font-size:11.5px">（第${names[sec.k-1]}曲線とその先の直線に静止する管`+
        (sec.k>1?`。第一〜第${names[sec.k-1]}曲線を通過`:'')+`）</span></div>`;
-    h+='<table class="ptable"><thead><tr><th>区分</th><th>上下面(90°)材種</th><th>厚み(層)</th><th>側方面材種</th><th>厚み(層)</th>'+
-       '<th>合計厚</th><th>最大応力</th><th>内側の開口長<br>（最小）</th><th>外側の開口長<br>（最大）</th><th></th></tr></thead><tbody>';
+    h+='<table class="ptable prop-t"><thead><tr><th>区分</th><th>上下面<br>(90°)<br>材種</th><th>厚み<br>(層)</th><th>側方面<br>材種</th><th>厚み<br>(層)</th>'+
+       '<th>合計<br>厚</th><th>最大<br>応力</th><th>内側の<br>開口長<br>（最小）</th><th>外側の<br>開口長<br>（最大）</th><th class="noprint"></th></tr></thead><tbody>';
     sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
-      h+=`<tr><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
+      h+=`<tr${prop.adopted&&prop.adopted[sec.k]===i?' class="adopted"':''}><td class="z"><span class="tier ${cls[r.t]}">${r.t}</span></td>`+
          `<td class="z">${PROP_SN[r.mc]}</td><td>${r.lc*p}mm (${r.lc}層)</td>`+
          `<td class="z">${PROP_SN[r.ms]}</td><td>${r.ls*p}mm (${r.ls}層)</td>`+
-         `<td>${r.thick}mm</td><td>${fmt(r.sig,1)}</td><td>${fmt(r.inn,1)}</td><td>${fmt(r.fin!=null?Math.max(r.out,r.fin):r.out,1)}</td>`+
-         `<td><button type="button" class="adoptbtn" data-k="${sec.k}" data-i="${i}" `+
+         `<td>${r.thick}mm</td><td>${fmt(r.sig,1)}</td><td>${fmt(r.inn,1)}</td><td class="lastv">${fmt(r.fin!=null?Math.max(r.out,r.fin):r.out,1)}</td>`+
+         `<td class="noprint"><button type="button" class="adoptbtn" data-k="${sec.k}" data-i="${i}" `+
          `style="padding:2px 7px;font-size:11px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button></td></tr>`;
     });
     h+='</tbody></table>';
@@ -2250,6 +2261,8 @@ function adoptProposal(k,i){
   while(out.length<LAYER_N) out.push({on:false, mat:12, thick:10, angle:90, count:4});
   curveCu[idx].layers=out.slice(0,LAYER_N);
   selectCuCurve(cuPerCurve?k:1);
+  // vr012: 採用した組合せに赤い枠を付ける（利用者の指示 2026-11-09）。区間ごとに1つ
+  lastProposal.adopted=Object.assign({}, lastProposal.adopted, {[k]:i}); renderProposal(lastProposal);
   $('propinfo').innerHTML = `<span class="v-ok">区間${k}に「上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm ／ 側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm」を採用しました。</span>`;
 }
 
@@ -3880,7 +3893,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 10:08';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 11:10';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
