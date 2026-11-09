@@ -912,7 +912,11 @@ tr.row-selected{background:#eff6ff}
     <div class="card accordion" id="cushionCard" style="display:none">
       <div class="card-title accent" onclick="toggleAccordion(this)">🧊 詳細: クッション材（PB/FJ）選定</div>
       <div class="note-box" style="font-size:11px;margin-bottom:6px">
-        BC点の軸力FBCを<b>管の有効断面積Ae</b>で除した無潰れ（剛体接触）想定の局部圧縮応力度σ_reqと、推進管仕様カードで入力したσ_allowを比較し、PB（標準品）またはFJリングの推奨グレードを選定します。σ_allow未入力の間は判定しません。
+        <b>曲線では管の外側が開き、管の内側だけで当たります。</b>パルリング（コルク）はほとんどつぶれないので、その分の力が直接管に掛かります。
+        当たる幅 <b>a＝つぶれ代δc÷折れ角θ</b>（θ＝管長÷曲線半径R）の帯（管口の内側の端から a 以内）で BC点の軸力 FBC を受けるとして、
+        <b>σ＝FBC÷当たる面積</b> を推進管仕様カードの継手部許容局部圧縮応力度 σ_allow と比べます。
+        <b>持つ</b>ならパルリング（標準品）で対応でき、推進力伝達材の検討（軸力検証）は不要。<b>持たない</b>（管の継手部が破損するおそれ）なら、FJリングなどの推進力伝達材を軸力検証で選びます。
+        つぶれ代δcは管仕様タブのつぶれ代（パルリングのつぶれ代）を使います。0 だと内側の端の線だけで当たる＝持たない、になります。σ_allow未入力の間は判定しません。<br>
         Aeは一次資料『E型推進管耐荷力』の値（許容耐荷力 Fa＝1000×σmean×Ae の Ae と同じもの）。継手部は埋め込みカラー・目地溝・クッション材で断面が欠けるため、管壁の全断面より小さくなります（例 φ1350：全断面0.5792 に対し Ae＝0.47996m²）。NS管もE型推進管と同じAeとして扱います。
       </div>
       <div class="tbl-wrap"><table id="cushionTable"></table></div>
@@ -4374,18 +4378,33 @@ const FJ_GRADES = [
   { key:'fj30', label:'FJ 3.0倍Y', plateau:7.5  },
 ]; // プラトー応力が高い（＝剛性が高い）順に並べる
 
-// sigmaReq: 無潰れ想定の局部圧縮応力度[N/mm²]、sigmaAllow: 許容応力度[N/mm²]（未入力なら判定不可）
+/* 123章（2026-11-09 利用者の指示）: 曲線では管の外側が開き、管の内側だけで当たる。パルリング（コルク）は
+   ほとんどつぶれないので、その分の力が直接管に掛かる。当たるのは、内側の端から「目地の折れ角 θ×距離 ≦ つぶれ代 δc」の範囲、
+   つまり幅 a＝δc÷θ（θ＝管長÷曲線半径）の帯だけと考え、σ＝F÷当たる面積 を継手部の許容局部圧縮応力度 σ_allow と比べる。
+   当たる面積＝管端の円環（外径 D・内径 Di）のうち、内側の端から a 以内の部分（円の弓形の差）×（Ae÷全断面）。
+   a が外径以上なら全面で当たる（従来の F÷Ae）。つぶれ代 0 なら内側の端の線だけで当たる＝持たない。 */
+function innerContactArea(D_mm, Di_mm, a_mm, aeRatio) {
+  if (!(a_mm > 0)) return 0;
+  const R = D_mm / 2, r = Di_mm / 2, t = (D_mm - Di_mm) / 2;
+  const seg = (rad, h) => {
+    if (h <= 0) return 0;
+    if (h >= 2 * rad) return Math.PI * rad * rad;
+    return rad * rad * Math.acos((rad - h) / rad) - (rad - h) * Math.sqrt(2 * rad * h - h * h);
+  };
+  return (seg(R, a_mm) - seg(r, a_mm - t)) * aeRatio;
+}
+// sigmaReq: 局部圧縮応力度[N/mm²]（123章から曲線の内側だけで当たるとして求めた値）、sigmaAllow: 許容応力度[N/mm²]（未入力なら判定不可）
 function selectCushionMaterial(sigmaReq, sigmaAllow) {
   if (!(sigmaAllow > 0)) return { material:'unknown', label:'—', note:'σ_allowを入力してください。' };
   if (sigmaReq <= sigmaAllow) {
-    return { material:'PB', label:'PB（パーティクルボード）標準品', note:'無潰れ（剛体接触）と仮定しても許容応力度以内のため、標準品PBで対応可能と考えられます。' };
+    return { material:'PB', label:'パルリング（標準品）で対応可能', note:'曲線で内側だけに当たっても、管の継手部の許容局部圧縮応力度以内。推進力伝達材（FJリング）の検討（軸力検証）は不要です。' };
   }
   const fit = FJ_GRADES.filter(g => g.plateau <= sigmaAllow);
   if (fit.length) {
     const g = fit[0];
-    return { material:'FJ', grade:g, label:`FJリング ${g.label}`, note:`プラトー応力${g.plateau}N/mm²が許容応力度以下となる、規格グレードの中で最も剛性の高いものを推奨します。` };
+    return { material:'FJ', grade:g, label:'管が持たない → 推進力伝達材が必要', note:`パルリングだけでは、曲線の内側に力が集中して許容局部圧縮応力度を超えます（管の継手部が破損するおそれ）。FJリングなどの推進力伝達材を、軸力検証で選んでください（参考：プラトー応力から ${g.label}）。` };
   }
-  return { material:'NG', label:'規格品では対応不可', note:'最も柔らかいFJ 3.0倍Y（プラトー応力約7.5N/mm²）でも許容応力度を上回ります。特殊クッション材や多重積層等の個別検討が必要です。' };
+  return { material:'NG', label:'管が持たない → 推進力伝達材が必要', note:'パルリングだけでは、曲線の内側に力が集中して許容局部圧縮応力度を超えます。最も柔らかいFJ 3.0倍Y（プラトー応力約7.5N/mm²）でも許容を上回るため、多重積層など軸力検証で個別に検討してください。' };
 }
 
 // 67章: 「推進力伝達材」— 従来は上のselectCushionMaterial()による自動推奨のみだったが、
@@ -5147,10 +5166,22 @@ function calculate() {
     const A_mm2 = aeApprox
       ? Math.PI / 4 * (Math.pow(spec.D * 1000, 2) - Math.pow(spec.Di * 1000, 2))
       : spec.Ae * 1e6;
-    const sigmaReq = A_mm2 > 0 ? (bc.F * 1000) / A_mm2 : 0;
+    const sigmaFull = A_mm2 > 0 ? (bc.F * 1000) / A_mm2 : 0;   // 全面で当たる場合（従来の値）
+    // 123章: 曲線の内側だけで当たる場合。δc＝パルリングのつぶれ代（管仕様の基本値）、θ＝管長÷R
+    const Dmm = spec.D * 1000, Dimm = spec.Di * 1000;
+    const Afull = Math.PI / 4 * (Dmm * Dmm - Dimm * Dimm);
+    const aeRatio = aeApprox || !(Afull > 0) ? 1 : A_mm2 / Afull;
+    const dc = n('pipeCrush') || 0;
+    const theta = spec.lp > 0 && bc.R > 0 ? spec.lp / bc.R : 0;
+    const a = theta > 0 ? dc / theta : Infinity;
+    const full = !(theta > 0) || a >= Dmm;
+    const Ac = full ? A_mm2 : innerContactArea(Dmm, Dimm, a, aeRatio);
+    const sigmaReq = Ac > 0 ? (bc.F * 1000) / Ac : Infinity;
     const sel = selectCushionMaterial(sigmaReq, sigmaAllowCushion);
     const chosen = spec.cushionMaterial ? evaluateCushionMaterial(spec.cushionMaterial, sigmaReq, sigmaAllowCushion) : null;
-    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sel, chosen, Ae: spec.Ae, aeApprox };
+    return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sigmaFull, sel, chosen, Ae: spec.Ae, aeApprox,
+             R: bc.R, lp: spec.lp, theta, dc, a, full, Ac, Aratio: A_mm2 > 0 ? Ac / A_mm2 : 0,
+             pipeOk: sigmaAllowCushion > 0 ? sigmaReq <= sigmaAllowCushion : null };
   });
 
   const latMode = v('soilLatKMode') || 'k0';
@@ -5308,10 +5339,10 @@ function renderResults(res) {
   if (cushionResults && cushionResults.length > 0) {
     cushionCard.style.display = '';
     const cRows = cushionResults.map(c => {
-      const rowNG = c.sel.material === 'NG' || c.chosen?.ok === false;
+      const rowNG = c.pipeOk === false || c.chosen?.ok === false;
       const matPill = c.sel.material === 'unknown' ? '<span class="pill">未入力</span>'
-        : c.sel.material === 'NG' ? '<span class="pill ng">対応不可</span>'
-        : `<span class="pill ok">${c.sel.label}</span>`;
+        : c.sel.material === 'PB' ? `<span class="pill ok">${c.sel.label}</span>`
+        : `<span class="pill ng">${c.sel.label}</span>`;
       const chosenPill = !c.chosen ? '<span class="pill" style="font-size:10px">未選択</span>'
         : c.chosen.ok == null ? `<span class="pill" style="font-size:10px">${c.chosen.label}</span>`
         : `<span class="pill ${c.chosen.ok?'ok':'ng'}" style="font-size:10px">${c.chosen.label} ${c.chosen.ok?'OK':'NG'}</span>`;
@@ -5320,14 +5351,19 @@ function renderResults(res) {
       const aeCell = c.aeApprox
         ? `<td class="mono" style="color:var(--sub)">概算</td>`
         : `<td class="mono">${c.Ae.toFixed(5)}</td>`;
+      // 123章: 曲線の内側だけで当たるときの当たる幅・面積と応力
+      const aCell = c.full ? '全面' : !(c.dc > 0) ? '0（線）' : `${c.a.toFixed(0)}`;
+      const sCell = Number.isFinite(c.sigmaReq) ? c.sigmaReq.toFixed(2) : '∞';
+      const pipePill = c.pipeOk == null ? '<span class="pill">未入力</span>' : `<span class="pill ${c.pipeOk?'ok':'ng'}">${c.pipeOk?'持つ':'持たない'}</span>`;
       return `<tr class="${rowNG?'row-ng':''}"><td>${c.name}</td><td class="mono">${c.FBC.toFixed(0)}</td>
-        ${aeCell}<td class="mono">${c.sigmaReq.toFixed(2)}</td><td>${matPill}</td><td>${chosenPill}</td>
+        <td class="mono">${c.R}</td><td class="mono">${(c.theta*1000).toFixed(1)}</td><td class="mono">${c.dc}</td><td class="mono">${aCell}</td>
+        ${aeCell}<td class="mono">${(c.Aratio*100).toFixed(0)}%</td><td class="mono">${c.sigmaFull.toFixed(2)}</td><td class="mono"><b>${sCell}</b></td><td>${pipePill}</td><td>${matPill}</td><td>${chosenPill}</td>
         <td class="left" style="font-size:11px">${note}</td></tr>`;
     }).join('');
     document.getElementById('cushionTable').innerHTML =
-      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>Ae(m²)</th><th>σ_req(N/mm²)</th><th>推奨材質</th><th>指定材質の判定</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
-      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="7" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`)
-      + (cushionResults.some(c => c.aeApprox) ? `<tfoot><tr><td colspan="7" style="padding:6px;font-size:11px;color:#b45309">この管種は有効断面積Aeの資料値を持たないため、管壁の全断面 π/4(D²−Di²) による<b>概算</b>です。実際のAeは継手部の欠損分だけ小さく、σ_reqはこの表より大きくなります（危険側）。別途確認してください。</td></tr></tfoot>` : '');
+      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>R(m)</th><th>折れ角θ<br>(×10⁻³rad)</th><th>つぶれ代<br>δc(mm)</th><th>当たる幅<br>a(mm)</th><th>Ae(m²)</th><th>当たる面積<br>(Ae比)</th><th>σ 全面<br>(N/mm²)</th><th>σ 内側だけ<br>(N/mm²)</th><th>管</th><th>推奨</th><th>指定材質の判定</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
+      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="14" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`)
+      + (cushionResults.some(c => c.aeApprox) ? `<tfoot><tr><td colspan="14" style="padding:6px;font-size:11px;color:#b45309">この管種は有効断面積Aeの資料値を持たないため、管壁の全断面 π/4(D²−Di²) による<b>概算</b>です。実際のAeは継手部の欠損分だけ小さく、σ_reqはこの表より大きくなります（危険側）。別途確認してください。</td></tr></tfoot>` : '');
   } else {
     cushionCard.style.display = 'none';
   }
@@ -5397,9 +5433,20 @@ function extraVerdictItems(res) {
     value: !w ? '未照査（支圧壁の諸元を入力）' : w.allOk ? 'すべて OK' : (w.checks || []).filter(c => !c.ok).map(c => `${c.no || ''}${c.name || ''}`).join('・') + ' が NG',
     ok: w ? !!w.allOk : null });
   if (hasCurve) {
+    // 123章: まず「パルリングだけで管が持つか」（クッション材の選定）。持てば軸力検証は不要、持たなければ軸力検証の結果で判定
+    const cr = (res.cushionResults || []).filter(c => c.pipeOk != null);
+    const crNg = cr.filter(c => !c.pipeOk);
     const j = jikuryokuVerdict();
-    items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'応力 ≤ 25・内側 ≥ 5mm・外側 ≤ 許容・完了後 ≤ 許容',
-      value: j.text, ok: j.ok });
+    if (cr.length && !crNg.length && j.ok == null) {
+      items.push({ name:'⑦ 推進力伝達材', criteria:'曲線の内側だけで当たっても σ ≤ σ_allow（パルリングで対応）',
+        value: `パルリングで対応可能（${cr.length} か所すべて持つ。軸力検証は不要）`, ok: true });
+    } else if (crNg.length && j.ok == null) {
+      items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'パルリングで持たない BC点は軸力検証で伝達材を選ぶ',
+        value: `パルリングだけでは管が持たない（${crNg.map(c => `${c.name} σ=${Number.isFinite(c.sigmaReq)?c.sigmaReq.toFixed(1):'∞'}`).join('・')}＞${res.sigmaAllowCushion}）→ 軸力検証が必要`, ok: false });
+    } else {
+      items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'応力 ≤ 25・内側 ≥ 5mm・外側 ≤ 許容目地開き',
+        value: j.text, ok: j.ok });
+    }
   }
   return items;
 }
