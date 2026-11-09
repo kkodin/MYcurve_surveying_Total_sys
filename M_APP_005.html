@@ -101,7 +101,10 @@ body{font-family:Meiryo,"Yu Gothic UI","Hiragino Sans",sans-serif;background:var
 .pill.warn{background:#fef3c7;color:#92400e}
 .pill.ng{background:#fee2e2;color:#991b1b}
 .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0}
-table{border-collapse:collapse;width:100%;background:var(--card);font-size:12px;white-space:nowrap}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:12px;white-space:normal}
+/* 124章: 表は横スクロールしないで読めるように、文字は折り返し、数値（.mono）だけ1行にする */
+td.mono,th.mono,td .mono{white-space:nowrap}
+td.left{word-break:normal;overflow-wrap:anywhere}
 th,td{border:1px solid #cfd7e3;padding:6px 7px;text-align:center;vertical-align:middle}
 th{background:#334155;color:#fff;font-size:11px}
 td.left{text-align:left}
@@ -3741,7 +3744,7 @@ function updateSeismicJointCheck() {
     rows += rowHtml(`${sLabel}（第${k}曲線を通過後）`, sSpec.lp, straightJointOpenMm(k), pass.mm, sSpec.jointAllowMm);
   });
 
-  resultEl.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px">`
+  resultEl.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">`
     + `<tr style="background:var(--bg)"><th style="padding:4px;border-bottom:1px solid var(--line)">管の静止位置</th><th>管長</th><th>完了時の残留開口</th><th>継手抜出し長</th><th>L1余裕</th><th>L2余裕</th><th>必要継手<br>(L1)</th><th>必要継手<br>(L2)</th></tr>`
     + rows + `</table></div>`
     + `<p class="report-note" style="margin:6px 2px 0">残留開口の「軸力検証」は軸力検証ソフトの照査結果（曲線＝外側開口、通過後の直線＝通過後直線の開口）、`
@@ -5355,15 +5358,17 @@ function renderResults(res) {
       const aCell = c.full ? '全面' : !(c.dc > 0) ? '0（線）' : `${c.a.toFixed(0)}`;
       const sCell = Number.isFinite(c.sigmaReq) ? c.sigmaReq.toFixed(2) : '∞';
       const pipePill = c.pipeOk == null ? '<span class="pill">未入力</span>' : `<span class="pill ${c.pipeOk?'ok':'ng'}">${c.pipeOk?'持つ':'持たない'}</span>`;
-      return `<tr class="${rowNG?'row-ng':''}"><td>${c.name}</td><td class="mono">${c.FBC.toFixed(0)}</td>
-        <td class="mono">${c.R}</td><td class="mono">${(c.theta*1000).toFixed(1)}</td><td class="mono">${c.dc}</td><td class="mono">${aCell}</td>
-        ${aeCell}<td class="mono">${(c.Aratio*100).toFixed(0)}%</td><td class="mono">${c.sigmaFull.toFixed(2)}</td><td class="mono"><b>${sCell}</b></td><td>${pipePill}</td><td>${matPill}</td><td>${chosenPill}</td>
-        <td class="left" style="font-size:11px">${note}</td></tr>`;
+      // 124章: 横スクロールしないよう、関係する値を1つの欄にまとめ、備考は判定の欄の下に出す
+      return `<tr class="${rowNG?'row-ng':''}"><td><b>${c.name}</b></td>
+        <td class="left"><span class="mono">${c.FBC.toFixed(0)}kN</span><br><span class="mono">R${c.R}m・θ${(c.theta*1000).toFixed(1)}×10⁻³</span></td>
+        <td class="left"><span class="mono">δc ${c.dc}mm → 幅 ${aCell}${c.full||!(c.dc>0)?'':'mm'}</span><br><span class="mono">面積 Ae の ${(c.Aratio*100).toFixed(0)}%</span></td>
+        <td class="left"><span class="mono">全面 ${c.sigmaFull.toFixed(2)}</span><br><span class="mono"><b>内側だけ ${sCell}</b></span></td>
+        <td class="left">${pipePill} ${matPill}${c.chosen?'<br>'+chosenPill:''}<div style="font-size:10.5px;color:var(--sub);margin-top:3px">${note}</div></td></tr>`;
     }).join('');
     document.getElementById('cushionTable').innerHTML =
-      `<thead><tr><th>BC点</th><th>FBC(kN)</th><th>R(m)</th><th>折れ角θ<br>(×10⁻³rad)</th><th>つぶれ代<br>δc(mm)</th><th>当たる幅<br>a(mm)</th><th>Ae(m²)</th><th>当たる面積<br>(Ae比)</th><th>σ 全面<br>(N/mm²)</th><th>σ 内側だけ<br>(N/mm²)</th><th>管</th><th>推奨</th><th>指定材質の判定</th><th>備考</th></tr></thead><tbody>${cRows}</tbody>`
-      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="14" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`)
-      + (cushionResults.some(c => c.aeApprox) ? `<tfoot><tr><td colspan="14" style="padding:6px;font-size:11px;color:#b45309">この管種は有効断面積Aeの資料値を持たないため、管壁の全断面 π/4(D²−Di²) による<b>概算</b>です。実際のAeは継手部の欠損分だけ小さく、σ_reqはこの表より大きくなります（危険側）。別途確認してください。</td></tr></tfoot>` : '');
+      `<thead><tr><th>BC点</th><th>軸力 FBC<br>曲線・折れ角θ(rad)</th><th>つぶれ代 → 当たる幅<br>当たる面積</th><th>σ(N/mm²)<br>全面／内側だけ</th><th>管・推奨・備考</th></tr></thead><tbody>${cRows}</tbody>`
+      + (sigmaAllowCushion > 0 ? '' : `<tfoot><tr><td colspan="5" style="padding:6px;font-size:11px;color:var(--sub)">σ_allow未入力のため判定していません。推進管仕様カードでσ_allowを入力してください。</td></tr></tfoot>`)
+      + (cushionResults.some(c => c.aeApprox) ? `<tfoot><tr><td colspan="5" style="padding:6px;font-size:11px;color:#b45309">この管種は有効断面積Aeの資料値を持たないため、管壁の全断面 π/4(D²−Di²) による<b>概算</b>です。実際のAeは継手部の欠損分だけ小さく、σ_reqはこの表より大きくなります（危険側）。別途確認してください。</td></tr></tfoot>` : '');
   } else {
     cushionCard.style.display = 'none';
   }
@@ -6640,7 +6645,7 @@ function buildPipeForceTable(segments, Fo) {
       <td class="mono">${r.x.toFixed(3)}</td>
       <td class="mono">${r.dF == null ? '—' : r.dF.toFixed(1)}</td>
       <td class="mono"><b>${r.F.toFixed(1)}</b></td>
-      <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
+      <td class="left" style="font-size:10.5px;min-width:180px">${r.formula}</td>
     </tr>`).join('') +
     '</tbody>';
 }
