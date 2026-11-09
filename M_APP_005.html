@@ -893,7 +893,7 @@ tr.row-selected{background:#eff6ff}
       <div class="card-title" onclick="toggleAccordion(this)">🔩 詳細: 1本毎の推進力計算表</div>
       <button class="big-btn secondary" onclick="exportPipeForceCSV()" style="min-height:42px;font-size:14px;margin-bottom:8px">📄 CSV出力</button>
       <button class="big-btn secondary" onclick="exportPipeForceXLSX()" style="min-height:42px;font-size:14px;margin-bottom:8px">📊 Excel出力（計算式入り・距離を変えると推力も変わる）</button>
-      <p class="report-note" style="margin:0 2px 6px">距離は発進人孔芯からの中心線距離、地山内は発進坑口（ライナープレート）からの距離です。管を実ピッチで順に並べ、人孔芯〜坑口は空押し（推力なし）、到達坑口〜押し終わりは先端抵抗なしで計算します。色の付いた行は BC・EC など位置の推進力です。直線のピッチは 管長＋目地開口長（S4−つぶれ代）、曲線は内側で 管長＋内側の開口長 です。区間の境をまたぐ管はそのまま1本に数え、到達坑口で余った分は端数の管になります。</p>
+      <p class="report-note" style="margin:0 2px 6px">距離は発進坑口からの中心線距離（推進距離と同じ物差し。到達坑口＝推進距離）です。立坑内（空押し）は負の値になります。参考に BP（ダボ点）からの距離も出します。管を実ピッチで順に並べ、人孔芯〜坑口は空押し（推力なし）、到達坑口〜押し終わりは先端抵抗なしで計算します。色の付いた行は BC・EC など位置の推進力です。直線のピッチは 管長＋目地開口長（S4−つぶれ代）、曲線は内側で 管長＋内側の開口長 です。区間の境をまたぐ管はそのまま1本に数え、到達坑口で余った分は端数の管になります。</p>
       <div class="tbl-wrap" style="max-height:360px;overflow-y:auto"><table id="pipeForceTable"></table></div>
     </div>
 
@@ -6568,6 +6568,7 @@ function buildPipeForceTable(segments, Fo) {
   let prevF = trace.startF, pipeNo = 0;
   rows.forEach(r => {
     r.groundX = Math.max(0, r.x - trace.launchX);
+    r.portalX = r.x - trace.launchX;   // 2026-11-09: 発進坑口からの距離（推進距離と同じ物差し。立坑内は負）
     if (r.kind === 'mark') { r.no = r.label; r.dF = null; return; }
     r.no = ++pipeNo;
     r.dF = r.F - prevF; prevF = r.F;
@@ -6580,12 +6581,12 @@ function buildPipeForceTable(segments, Fo) {
   if (!tableEl) return;
   if (!rows.length) { tableEl.innerHTML = ''; return; }
   tableEl.innerHTML =
-    '<thead><tr><th>本数</th><th>区間</th><th>距離(m)<br>人孔芯から</th><th>地山内(m)</th><th>F区間(kN)</th><th>F累計(kN)</th><th>計算式</th></tr></thead><tbody>' +
+    '<thead><tr><th>本数</th><th>区間</th><th>距離(m)<br>発進坑口から</th><th>距離(m)<br>BPから（参考）</th><th>F区間(kN)</th><th>F累計(kN)</th><th>計算式</th></tr></thead><tbody>' +
     rows.map(r => `<tr${r.kind === 'pipe' ? '' : ' style="background:#fde3c0;color:#7a3e00;font-weight:700"'}>
-      <td class="mono">${r.no}</td>
+      <td class="mono">${r.no === '発進人孔芯' ? 'BP（ダボ点）' : r.no}</td>
       <td class="left">${r.seg}</td>
+      <td class="mono"><b>${r.portalX.toFixed(3)}</b></td>
       <td class="mono">${r.x.toFixed(3)}</td>
-      <td class="mono">${r.groundX.toFixed(3)}</td>
       <td class="mono">${r.dF == null ? '—' : r.dF.toFixed(1)}</td>
       <td class="mono"><b>${r.F.toFixed(1)}</b></td>
       <td class="left" style="font-size:11px;white-space:nowrap">${r.formula}</td>
@@ -6600,10 +6601,10 @@ function csvEscape(v) {
 
 function exportPipeForceCSV() {
   if (!lastPipeForceRows.length) { showToast('先に推進力計算を実行してください'); return; }
-  const header = ['本数', '区間', '距離(m)', '地山内(m)', 'F区間(kN)', 'F累計(kN)', '計算式'];
+  const header = ['本数', '区間', '距離(m) 発進坑口から', '距離(m) BPから（参考）', 'F区間(kN)', 'F累計(kN)', '計算式'];
   const lines = [header.map(csvEscape).join(',')];
   lastPipeForceRows.forEach(r => {
-    lines.push([r.no, r.seg, r.x.toFixed(3), r.groundX.toFixed(3), r.dF == null ? '' : r.dF.toFixed(1), r.F.toFixed(1), r.formula].map(csvEscape).join(','));
+    lines.push([r.no === '発進人孔芯' ? 'BP（ダボ点）' : r.no, r.seg, r.portalX.toFixed(3), r.x.toFixed(3), r.dF == null ? '' : r.dF.toFixed(1), r.F.toFixed(1), r.formula].map(csvEscape).join(','));
   });
   const csv = '﻿' + lines.join('\r\n'); // BOM付きでExcelの文字化けを防ぐ
   const blob = new Blob([csv], { type: 'text/csv' });
@@ -7839,15 +7840,15 @@ function drawForceGraph(segments, Fa, Fo) {
   ctx.fillStyle='#ef4444'; ctx.font='9px sans-serif'; ctx.textAlign='left';
   ctx.fillText('許容耐力 Fa', pad.left+4, sy(Fa)-4);
 
-  // X軸 距離目盛（発進坑口=0 〜 到達坑口=maxL）
+  // X軸 距離目盛（2026-11-09: 発進坑口=0 〜。推進距離と同じ物差しで目盛る。内部の x は BP から）
   ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 0.5;
   const xTicks = 5;
   for (let i=0;i<=xTicks;i++) {
-    const x = maxL * i / xTicks;
+    const L0 = trace.launchX || 0, x = L0 + (maxL - L0) * i / xTicks;
     const px = sx(x);
     ctx.beginPath(); ctx.moveTo(px, pad.top); ctx.lineTo(px, pad.top+ch); ctx.stroke();
     ctx.fillStyle='#64748b'; ctx.font='9px sans-serif'; ctx.textAlign='center';
-    ctx.fillText(x.toFixed(1)+'m', px, pad.top+ch+12);
+    ctx.fillText((x - L0).toFixed(1)+'m', px, pad.top+ch+12);
   }
 
   // 折れ線本体（管1本ごとの点をそのままつなぐことで、曲線区間内の増幅もなめらかに表現。曲線=青／直線=緑）
@@ -7891,7 +7892,7 @@ function drawForceGraph(segments, Fa, Fo) {
   });
 
   ctx.fillStyle='#374151'; ctx.font='10px sans-serif'; ctx.textAlign='center';
-  ctx.fillText('発進人孔芯からの距離 (m)　E1(発進坑口) → E2(到達坑口)　●=5本ごと／推進の進行とともに推力は増加', pad.left + cw/2, h - 5);
+  ctx.fillText('発進坑口からの距離 (m)　E1(発進坑口) → E2(到達坑口)　●=5本ごと／推進の進行とともに推力は増加', pad.left + cw/2, h - 5);
 }
 
 // ══════════════════════════════════════

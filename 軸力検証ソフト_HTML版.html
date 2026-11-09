@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 11:32）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 11:50）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -222,7 +222,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 11:32</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 11:50</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -2616,17 +2616,20 @@ async function runPlan(){
 function renderPlan(P){
   const {joints, curves, Xf, lim, mode, worst, tr}=P;
   const f1=x=>fmt(x,1), f0=x=>fmt(x,0);
+  // vr012: 距離は発進坑口から（推進距離と同じ物差し。利用者の指示 2026-11-09）。内部の x は BP（ダボ点）から
+  const L0=tr.launchX||0, k1=x=>fmt(x-L0,1), k2=x=>fmt(x-L0,2);
   // 1) 先端が BC・SP・EC に来たときの推進力と、そのとき立坑で押し始める管の最終位置
   const marks=[];
   curves.forEach(c=>{ [['BC',c.BC],['SP',c.SP],['EC',c.EC]].forEach(([n,x])=>marks.push({lab:`${n}${curves.length>1?c.k:''}`, X:x})); });
   marks.push({lab:'到達坑口', X:tr.groundEnd}); marks.push({lab:'押し終わり', X:Xf});
+  if(L0>0) marks.unshift({lab:'発進坑口', X:L0});
   let h='<div style="margin:4px 0 6px;font-weight:600;color:var(--head)">先端の位置と推進力</div>'+
-    '<table class="ptable"><thead><tr><th>先端</th><th>距離(m)</th><th>ジャッキの力(kN)</th><th>そのとき曲線の中にいる目地（最終位置）</th></tr></thead><tbody>';
+    '<table class="ptable"><thead><tr><th>先端</th><th>距離(m)<br>発進坑口から</th><th>ジャッキの力(kN)</th><th>そのとき曲線の中にいる目地（最終位置）</th></tr></thead><tbody>';
   marks.forEach(mk=>{
     const ins=curves.map(c=>{ const a=c.BC+Xf-mk.X, b=c.EC+Xf-mk.X;
       const js=joints.filter(J=>J.p>=a && J.p<=b && J.p>c.BC); if(!js.length) return '';
-      return `${curves.length>1?'第'+c.k+'曲線：':''}No.${js[0].a}〜${js[js.length-1].b} の間（最終 ${f1(Math.min(js[0].p,js[js.length-1].p))}〜${f1(Math.max(js[0].p,js[js.length-1].p))}m）`; }).filter(Boolean).join('／')||'—';
-    h+=`<tr><td class="z">${mk.lab}</td><td>${fmt(mk.X,2)}</td><td>${f1(trJack(tr,mk.X))}</td><td class="z">${ins}</td></tr>`;
+      return `${curves.length>1?'第'+c.k+'曲線：':''}No.${js[0].a}〜${js[js.length-1].b} の間（最終 ${k1(Math.min(js[0].p,js[js.length-1].p))}〜${k1(Math.max(js[0].p,js[js.length-1].p))}m）`; }).filter(Boolean).join('／')||'—';
+    h+=`<tr><td class="z">${mk.lab}</td><td>${k2(mk.X)}</td><td>${f1(trJack(tr,mk.X))}</td><td class="z">${ins}</td></tr>`;
   });
   h+='</tbody></table>';
   // 2) 割付（同じ構成が続く目地をまとめる）
@@ -2639,12 +2642,12 @@ function renderPlan(P){
   // vr011: A4 縦に収めるため、目地と最終位置・FJリングと set を1つの欄にまとめ、見出しと区分は決まった所で改行する
   const kindLab={none:'曲線に<br>入らない', in:'曲線の中で<br>止まる', through:'曲線を通り<br>直線で止まる'};
   h+='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">目地ごとの割付</div>'+
-    '<table class="ptable jt"><thead><tr><th>目地（管番号）<br>最終位置(m)</th><th>区分</th><th>最大推進力<br>(kN)<br>先端の位置</th>'+
+    '<table class="ptable jt"><thead><tr><th>目地（管番号）<br>最終位置(m)<br>発進坑口から</th><th>区分</th><th>最大推進力<br>(kN)<br>先端の位置</th>'+
     '<th>パル<br>リング</th><th>FJリング<br>（set／か所）</th><th>最大<br>応力<br>≤25</th><th>内側<br>≥5</th><th>外側<br>≤'+lim.allow+'</th></tr></thead><tbody>';
   let nJ=0, nFull=0, nTop=0, nPulOff=0, nFail=0;
   groups.forEach(g=>{
     const A=g.js[0], B=g.js[g.js.length-1], n=g.js.length;
-    const range=`No.${A.a}/${A.b}〜No.${B.a}/${B.b}<br><span class="muted">${f1(Math.min(A.p,B.p))}〜${f1(Math.max(A.p,B.p))}m（${n}か所）</span>`;
+    const range=`No.${A.a}/${A.b}〜No.${B.a}/${B.b}<br><span class="muted">${k1(Math.min(A.p,B.p))}〜${k1(Math.max(A.p,B.p))}m（${n}か所）</span>`;
     if(A.kind==='none'){
       h+=`<tr><td class="z">${range}</td><td class="z">${kindLab.none}</td><td>—</td><td class="z">${A.pulOn?'あり':'貼らない'}</td><td class="z v-ok">不要（0）</td><td colspan="3" class="z muted">曲線を通らないので FJリングは要らない</td></tr>`;
       return;
@@ -2652,13 +2655,13 @@ function renderPlan(P){
     const gmax=g.js.reduce((w,J)=>{ const f=Math.max(...J.govs.map(x=>x.F)); return (!w||f>w.f)?{f,J}:w; },null);
     const gX=gmax.J.govs.reduce((w,x)=>(!w||x.F>w.F)?x:w,null);
     if(!A.cfg){ nFail+=n;
-      h+=`<tr><td class="z">${range}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${f1(gX.X)}m</span></td><td colspan="5" class="z v-bad">条件を満たす構成が見つかりません（最大層数・材種・継手を見直す）</td></tr>`;
+      h+=`<tr><td class="z">${range}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${k1(gX.X)}m</span></td><td colspan="5" class="z v-bad">条件を満たす構成が見つかりません（最大層数・材種・継手を見直す）</td></tr>`;
       return;
     }
     const c=A.cfg, rs=g.js.map(J=>J.res);
     const sig=Math.max(...rs.map(r=>r.sig)), inn=Math.min(...rs.map(r=>r.inner)), out=Math.max(...rs.map(r=>r.outer)), fin=Math.max(...rs.map(r=>r.final));
     nJ+=n; nFull+=c.ls*n; nTop+=(c.lc-c.ls)*n; if(!c.pul) nPulOff+=n;
-    h+=`<tr><td class="z">${range}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${f1(gX.X)}m</span></td>`+
+    h+=`<tr><td class="z">${range}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${k1(gX.X)}m</span></td>`+
        `<td class="z ${c.pul?'':'v-warn'}">${c.pul?'あり':'外す'}</td><td class="z">${planCfgHTML(c)}<br><span class="muted">${fmt(c.sets,1)} set</span></td>`+
        `<td class="${sig<=25?'v-ok':'v-bad'}">${fmt(sig,1)}</td><td class="${inn>=5?'v-ok':'v-bad'}">${fmt(inn,1)}</td>`+
        `<td class="${Math.max(out,fin)<=lim.allow?'v-ok':'v-bad'}">${fmt(Math.max(out,fin),1)}</td></tr>`;
@@ -2898,7 +2901,7 @@ function planMapSVG(P, pats, spans){
     h+=`<line x1="${f(B.x)}" y1="${f(B.y)}" x2="${f(T.x)}" y2="${f(T.y)}" stroke="#666" stroke-width="1" stroke-dasharray="3 3"/>`+
        `<line x1="${f(A.x)}" y1="${f(A.y)}" x2="${f(B.x)}" y2="${f(B.y)}" stroke="#222" stroke-width="2"/>`+
        `<text x="${f(T.x)}" y="${f(T.y+y1)}" text-anchor="middle" font-size="15" font-weight="700" fill="#222">${m.lab}</text>`+
-       `<text x="${f(T.x)}" y="${f(T.y+y2)}" text-anchor="middle" font-size="14.5" fill="#333">${fmt(m.x,2)}m</text>`;
+       `<text x="${f(T.x)}" y="${f(T.y+y2)}" text-anchor="middle" font-size="14.5" fill="#333">${fmt(m.x-(tr.launchX||0),2)}m</text>`;
   });
   const tenM=10*sc, sx=mL, sy=H-14;
   h+=`<line x1="${sx}" y1="${sy}" x2="${f(sx+tenM)}" y2="${sy}" stroke="#222" stroke-width="3"/>`+
@@ -3061,7 +3064,8 @@ function pipeCountHTML(P){
   const cut = c.last<c.Lp-1e-3;
   const fjSets=setsTotalOf(P.joints);
   return `<table class="ptable pp-t"><tbody>
-    <tr><td class="z">押す延長（BP（ダボ点）〜押し終わりの先端）</td><td>${fmt(c.L,3)} m</td></tr>
+    <tr><td class="z">推進距離＋押出し（発進坑口〜押し終わりの先端）</td><td>${fmt(c.L-(P.tr.launchX||0),3)} m</td></tr>
+    <tr><td class="z">本数を数える延長（BP（ダボ点）〜押し終わりの先端。空押距離 ${fmt(P.tr.launchX||0,2)}m を含む）</td><td>${fmt(c.L,3)} m</td></tr>
     <tr><td class="z">目地の開きの合計（割付の値・管の中心）</td><td>${fmt(c.sumGap*1000,0)} mm</td></tr>
     <tr><td class="z"><b>推進管の本数（目地の開きを反映）</b></td><td><b>${c.n} 本</b>（管長 ${fmt(c.Lp,2)}m × ${c.full} 本${cut?` ＋ 端数管 ${fmt(c.last,3)}m × 1 本`:''}）</td></tr>
     <tr><td class="z">参考：曲線プログラムの並び（目地の開き ${c.myOpen}mm 一律）</td><td>${c.n0} 本（差 ${c.n-c.n0>0?'+':''}${c.n-c.n0} 本）</td></tr>
@@ -3272,7 +3276,7 @@ function guideMapSVG(){
   h+=bubble(30,20,330,'🟫 A＝パルリングのみ',['曲線を一度も通らない目地。','FJリングは貼らない'],barA[0],barA[1]-6,...GC.teal);
   h+=bubble(430,14,350,'🔢 丸数字と英字',['丸数字＝区間（ここからここまで）','英字＝パターン（表で中身を見る）'],circ[1][0]-24,circ[1][1]-20,...GC.purple);
   h+=bubble(870,10,400,'✂️ 点線の帯',['パルリングを貼らない区間','（FJリングだけを貼る）'],dashC[0],dashC[1]-8,...GC.pink);
-  h+=bubble(40,420,330,'📍 BC・EC',['曲線の始まり・終わり。','距離は BP（ダボ点）から'],bc[0],bc[1]+76,...GC.orange);
+  h+=bubble(40,420,330,'📍 BC・EC',['曲線の始まり・終わり。','距離は発進坑口から'],bc[0],bc[1]+76,...GC.orange);
   h+=bubble(430,420,350,'🔤 小さな数字',['管番号（切羽側から数える）。','10本ごとに書いてある'],n10[0]+12,n10[1]+36,...GC.green);
   h+=bubble(870,420,400,'🎨 目地の色の線',['その目地に貼るパターン。','色ごとに貼る物が違う'],tickC[0],tickC[1]+4,...GC.blue);
   return h+'</svg>';
@@ -3923,7 +3927,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 11:32';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 11:50';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
