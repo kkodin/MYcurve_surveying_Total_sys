@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 14:59）</title>
+<title>軸力検証ソフト（HTML版 vr012 2026-11-09 15:09）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -194,6 +194,11 @@
   .fjtab.on{background:var(--head);color:#fff;border-color:var(--head)}
   .propblk{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:10px 0;background:var(--panel)}
   .propblk.adopted{border:3px solid #d00}
+  .propblk.closed .pbbody{display:none}
+  .propblk.closed{opacity:.8}
+  .pbtoggle{padding:2px 9px;font-size:11.5px;border-radius:5px;border:1px solid var(--line);cursor:pointer;margin-left:4px}
+  .pbcmp{font-size:12px;margin-left:8px;cursor:pointer}.pbcmp input{width:auto}
+  .pbreason{margin-top:6px;font-size:12px}.pbreason select{width:auto}.pbreason input{width:min(420px,60%)}
   .pbh{font-size:13px;margin-bottom:4px}
   .pspan{border-top:1px dashed var(--line);padding-top:6px;margin-top:6px}
   .psh{font-size:12.5px;margin-bottom:4px}
@@ -252,7 +257,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 14:59</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 15:09</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -2392,18 +2397,28 @@ function renderProposal(prop){
        `<span class="muted" style="font-size:11.5px">（第${names[sec.k-1]}曲線とその先の直線に静止する管`+
        (sec.k>1?`。第一〜第${names[sec.k-1]}曲線を通過`:'')+`）</span></div>`;
     // vr012: 提案は5個まで。提案ごとに、その構成で割付けた区間（管番号）とパターン（図付き）を並べる
+    prop.open=prop.open||{}; prop.cmp=prop.cmp||{};
+    const anyAd = prop.adopted && prop.adopted[sec.k]!=null;
     sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
       const ad=prop.adopted&&prop.adopted[sec.k]===i, mo=r.fin!=null?Math.max(r.out,r.fin):r.out;
       // vr012: 目地ごとの割付で NG の目地があれば、照査の区分（推奨など）ではなく「割付で NG」と出す
       const planNg = r.plan && r.plan.ngCount;
-      h+=`<div class="propblk${ad?' adopted':''}"><div class="pbh"><b style="font-size:14px">提案${i+1}</b> `+
+      // vr012: 採用したら、採用しなかった提案は閉じる（「開く」で見られる）。PDF に比較として出すかと、不採用の理由を選べる
+      const key=`${sec.k}-${i}`, closed = anyAd && !ad && !prop.open[key], cm=prop.cmp[key]||{};
+      const ctl = (anyAd && !ad)
+        ? ` <button type="button" class="pbtoggle noprint" data-key="${key}">${closed?'開く':'閉じる'}</button>`+
+          ` <label class="pbcmp noprint"><input type="checkbox" class="cmpck" data-k="${sec.k}" data-i="${i}" ${cm.on?'checked':''}>PDF に比較として出す</label>`+
+          `<div class="pbreason noprint" style="display:${cm.on?'':'none'}">不採用の理由 <select class="cmpwhy" data-key="${key}">${CMP_WHY.map(([v,t])=>`<option value="${v}"${cm.why===v?' selected':''}>${t}</option>`).join('')}</select>`+
+          ` <input type="text" class="cmpnote" data-key="${key}" value="${(cm.note||'').replace(/"/g,'&quot;')}" placeholder="説明（空なら理由だけ）"></div>`
+        : '';
+      h+=`<div class="propblk${ad?' adopted':''}${closed?' closed':''}" data-key="${key}"><div class="pbh"><b style="font-size:14px">提案${i+1}</b> `+
          (planNg ? `<span class="tier t-ng">割付で NG ${r.plan.ngCount}か所</span>` : `<span class="tier ${cls[r.t]}">${r.t}</span>`)+`　`+
          `<b>上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm（${r.lc}層）／側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm（${r.ls}層）</b>　合計 ${r.thick}mm`+
          `<span class="muted">　最大応力 ${fmt(r.sig,1)}・内側の開口 ${fmt(r.inn,1)}・外側の開口 ${fmt(mo,1)}mm</span>`+
          (ad?'　<b style="color:#d00">採用</b>':'')+
          ` <button type="button" class="adoptbtn noprint" data-k="${sec.k}" data-i="${i}" `+
-         `style="padding:2px 9px;font-size:11.5px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button></div>`+
-         (r.plan ? propPlanHTML(r.plan) : '<div class="muted">曲線プログラムの線形と1本毎の推進力が無いので、区間ごとの割付は出せません。</div>')+
+         `style="padding:2px 9px;font-size:11.5px;border-radius:5px;border:1px solid var(--line);cursor:pointer">採用</button>${ctl}</div>`+
+         '<div class="pbbody">'+(r.plan ? propPlanHTML(r.plan) : '<div class="muted">曲線プログラムの線形と1本毎の推進力が無いので、区間ごとの割付は出せません。</div>')+'</div>'+
          '</div>';
     });
     if(sec.okCount!=null) h+= sec.okCount ? `<div class="muted" style="margin-top:4px">目地ごとの割付で全目地 OK の構成を、合計厚みの小さい順に先に並べています（OK ${sec.okCount} 件）。</div>`
@@ -2416,6 +2431,53 @@ function renderProposal(prop){
     '「採用」を押すとその区間の層構成に反映します（曲線ごとに構成を変える＝ONになります）。</div>';
   $('propwrap').innerHTML=h;
   $('propwrap').querySelectorAll('.adoptbtn').forEach(b=>b.onclick=()=>adoptProposal(+b.dataset.k,+b.dataset.i));
+  // vr012: 開く／閉じる・比較に出す・不採用の理由
+  $('propwrap').querySelectorAll('.pbtoggle').forEach(b=>b.onclick=()=>{
+    const blk=b.closest('.propblk'), k=b.dataset.key, cl=!blk.classList.contains('closed');
+    blk.classList.toggle('closed', cl); prop.open[k]=!cl; b.textContent=cl?'開く':'閉じる'; });
+  $('propwrap').querySelectorAll('.cmpck').forEach(c=>c.onchange=()=>{
+    const k=+c.dataset.k, i=+c.dataset.i, key=`${k}-${i}`, sec=prop.sections.find(x=>x.k===k);
+    const cm=prop.cmp[key]=prop.cmp[key]||{}; cm.on=c.checked;
+    if(cm.on && !cm.why){ const sg=propWhySuggest(prop, sec, sec.show[i]); cm.why=sg.why; if(!cm.note) cm.note=sg.text; }
+    const row=c.closest('.pbh').querySelector('.pbreason'); row.style.display=cm.on?'':'none';
+    row.querySelector('.cmpwhy').value=cm.why||''; row.querySelector('.cmpnote').value=cm.note||''; });
+  $('propwrap').querySelectorAll('.cmpwhy').forEach(sl=>sl.onchange=()=>{ (prop.cmp[sl.dataset.key]=prop.cmp[sl.dataset.key]||{}).why=sl.value; });
+  $('propwrap').querySelectorAll('.cmpnote').forEach(t=>t.oninput=()=>{ (prop.cmp[t.dataset.key]=prop.cmp[t.dataset.key]||{}).note=t.value; });
+}
+/* vr012: 不採用の理由（選ぶもの）と、自動の下書き。説明したいときだけ使う（利用者の指示 2026-11-09） */
+const CMP_WHY=[['','（理由を書かない）'],['econ','経済性（FJリングの量が多い）'],['stress','応力不足（最大応力が許容を超える）'],
+  ['open','目地の開き（外側が許容を超える／内側が足りない）'],['plan','目地ごとの割付で NG'],['work','施工性（層数・倍率の種類が多い）'],['other','その他']];
+function propWhySuggest(prop, sec, r){
+  const P=r.plan, A = prop.adopted && prop.adopted[sec.k]!=null ? sec.show[prop.adopted[sec.k]] : null;
+  const sets=x=>x&&x.plan ? setsTotalOf(x.plan.joints) : null;
+  if(P && P.ngCount){
+    const why=planWhy(P.joints.filter(J=>J.res&&!J.res.ok), P.lim||planLim($('planJoint').value));
+    return {why: why.some(w=>w.startsWith('最大応力')||w.includes('破壊')) ? 'stress' : why.some(w=>w.includes('開口')) ? 'open' : 'plan',
+            text:`目地ごとの割付で NG ${P.ngCount}か所（${why.join('・')||'条件を満たさない'}）`};
+  }
+  if(r.t!=='推奨') return {why:'stress', text:`最大応力 ${fmt(r.sig,1)}N/mm²＞25（${r.t}）`};
+  if(A && sets(r)!=null && sets(A)!=null && sets(r)>sets(A)) return {why:'econ', text:`FJリング ${fmt(sets(r),0)} set（採用した提案は ${fmt(sets(A),0)} set）`};
+  if(A && (r.lc>A.lc || r.thick>A.thick)) return {why:'work', text:`層が厚い（合計 ${r.thick}mm・${r.lc}層／採用した提案は ${A.thick}mm・${A.lc}層）`};
+  return {why:'other', text:''};
+}
+// PDF の比較のページ（採用しなかった提案で、比較に出すと選んだもの）
+function propCompareHTML(){
+  const prop=lastProposal; if(!prop || !prop.cmp) return '';
+  const cls={"推奨":"t-rec","要検討":"t-warn","不成立":"t-ng"}, p=prop.pitch, W=Object.fromEntries(CMP_WHY);
+  let h='';
+  prop.sections.forEach(sec=>{
+    sec.show.slice(0,PROPOSE_LIMIT).forEach((r,i)=>{
+      const cm=prop.cmp[`${sec.k}-${i}`]; if(!cm || !cm.on) return;
+      const mo=r.fin!=null?Math.max(r.out,r.fin):r.out, planNg=r.plan&&r.plan.ngCount;
+      h+=`<div class="propblk"><div class="pbh"><b>提案${i+1}</b> `+
+         (planNg?`<span class="tier t-ng">割付で NG ${r.plan.ngCount}か所</span>`:`<span class="tier ${cls[r.t]}">${r.t}</span>`)+
+         `　<b>上下面 ${PROP_SN[r.mc]} ${r.lc*p}mm（${r.lc}層）／側方面 ${PROP_SN[r.ms]} ${r.ls*p}mm（${r.ls}層）</b>　合計 ${r.thick}mm`+
+         `<span class="muted">　最大応力 ${fmt(r.sig,1)}・内側の開口 ${fmt(r.inn,1)}・外側の開口 ${fmt(mo,1)}mm</span></div>`+
+         (cm.why||cm.note ? `<div style="margin:4px 0"><b>採用しなかった理由</b>：${cm.why?W[cm.why]:''}${cm.why&&cm.note?'　':''}${cm.note||''}</div>` : '')+
+         (r.plan ? `<div style="font-size:12px">${planSummaryHTML(r.plan)}</div>` : '')+'</div>';
+    });
+  });
+  return h;
 }
 // vr012: 割付の結果を「区間 No.a〜No.b　パターン A-1 …（図）」の形で並べる（提案ごと・自分で検討の結果）
 function propPlanHTML(P){
@@ -3737,6 +3799,7 @@ const PP_ITEMS=[
   ['input','入力値（現場・推進管・線形と区間ごとの推力）',false,true],
   ['check','1本ごとの FJリング割付（条件・先端の推進力・目地ごとの割付）',true,true],
   ['prop','採用した提案（逆算）／自分で検討の結果',false,true],
+  ['cmp','比較：採用しなかった提案（「PDF に比較として出す」に印を付けたもの）',false,true],
   ['map','管割付図',true,true], ['pattern','パターンと貼付け指示',true,true],
   ['spanchart','区間ごとの変形量と応力分布（A4横に2つ）',true,true],
   ['qty','FJリングの数量総括',true,true], ['span','管の伸び（区間ごと）',true,true], ['count','管の伸びによる本数の変化',true,true],
@@ -3746,7 +3809,7 @@ function renderPrintDialog(){
   const hasPlan=!!(lastPlan&&lastPlan.pats), hasProp=!!($('propwrap').innerHTML.trim()||$('selfWrap').innerHTML.trim());
   let h='<div class="ppdlg-h">📄 PDFに出す項目</div><div class="ppdlg-items">';
   PP_ITEMS.forEach(([k,lab,plan,def])=>{
-    const dis=(plan&&!hasPlan)||(k==='prop'&&!hasProp);
+    const dis=(plan&&!hasPlan)||((k==='prop'||k==='cmp')&&!hasProp);
     const prev=$('ppk_'+k), on=prev?prev.checked:def;
     h+=`<label class="${dis?'dis':''}"><input type="checkbox" id="ppk_${k}" ${on&&!dis?'checked':''} ${dis?'disabled':''}>${lab}${dis?(plan?'（割付を計算すると出せる）':'（未計算）'):''}</label>`;
   });
@@ -3807,6 +3870,7 @@ function buildPrintout(sel){
       // 逆算：採用した提案だけを出す（利用者の指示 2026-11-09）
       const ad=[...document.querySelectorAll('#propwrap .propblk.adopted')];
       if(ad.length) h+=page('採用した推進力伝達材（逆算の提案）', ad.map(b=>cloneForPrint(b)).join(''));
+      if(on('cmp')){ const c=propCompareHTML(); if(c) h+=page('比較：採用しなかった提案', c); }
     }
   }
   if(hasPlan && on('map')) h+=page('管割付図（FJリング・パルリング）', `<div class="pp-map">${planMapSVG(P,P.pats,P.spans)}</div><div class="pp-cond">${planCondLine(P)}</div>`, true);
@@ -4305,7 +4369,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 14:59';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr012 2026-11-09 15:09';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
