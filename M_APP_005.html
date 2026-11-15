@@ -332,8 +332,8 @@ tr.row-selected{background:#eff6ff}
       <div class="field-row full" id="pipeGradeRow">
         <label>種別</label>
         <select id="pipeGrade" onchange="onPipeGradeChange()">
-          <option value="1shu">1種（50N）</option>
-          <option value="2shu">2種（70N）</option>
+          <option value="1shu">外圧1種</option>
+          <option value="2shu">外圧2種</option>
         </select>
       </div>
       <div class="field-row full" id="steelNote" style="display:none">
@@ -358,10 +358,12 @@ tr.row-selected{background:#eff6ff}
           <option value="30">JA型 — 許容30mm</option>
         </select>
       </div>
+      <div class="field-row full" id="pipeStrengthRow"><label>コンクリート圧縮強度</label><select id="pipeStrength" onchange="onPipeStrengthChange()"><option value="50">50 N/mm²</option><option value="70">70 N/mm²</option><option value="90">90 N/mm²</option></select></div>
+      <div id="pipeSpecReview" class="note-box" style="display:none"></div>
       <div class="field-row"><label>継手部許容局部圧縮応力度 σ_allow [N/mm²]</label><input id="pipeCushionSigmaAllow" class="mono" value="" type="number" step="0.1" min="0" placeholder="任意入力" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">N/mm²</span></div>
     </div>
     <div class="note-box" style="font-size:11px">
-    σ_allow: BC点のクッション材（PB/FJリング）選定に使う、管の許容局部圧縮応力度。ヒューム管は播磨コンクリート工業「Wジョイント推進管」の許容平均圧縮応力度（クッション材厚10mm考慮）を参考値として管種変更時に自動入力します（1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²）。実際に使用するメーカー・クッション材厚が異なる場合や、レジン管・鋼管の場合は、管メーカーの資料に基づき手動で書き換えてください（未入力の間はクッション材選定は行いません）。この判定は材質の圧縮強度に基づくものであり、S4の厚さそのものとは独立です。<br>
+    σ_allowは局部最大応力度の許容値（50/70/90N管＝25/35/45N/mm²）です。軸方向耐荷力Faに用いる許容平均応力度は別の値（13/17.5/22.5N/mm²）です。外圧1種・2種と圧縮強度は独立して選びます。出典：全国ヒューム管協会『ヒューム管設計施工要覧』2024年12月版、式3.2.3.1-1・表3.2.3.3-1。ヒューム管以外の局部許容値はメーカー資料に基づき入力してください。<br>
     クッション材厚S4・つぶれ代は、下の「詳細: 推進力伝達材」カードで設定します（77章）。</div>
     <!-- 外圧耐荷力入力 -->
     <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
@@ -370,7 +372,7 @@ tr.row-selected{background:#eff6ff}
         <div class="field-row"><label>外圧強さ P_ext [kN/m]（自動）</label><input id="pipePext" class="mono" type="number" step="0.1" value="47.1" readonly oninput="autoSave();refreshForceIfCalculated()"><span class="unit">kN/m</span></div>
         <div class="field-row"><label>シールド機外径 Bs [m]（刃口推進は刃口外径）</label><input id="pipeBs" class="mono" type="number" step="0.01" value="1.00" oninput="autoSave();refreshForceIfCalculated()"><span class="unit">m</span></div>
       </div>
-      <div class="note-box" style="font-size:11px">P_ext: 外圧強さ（曲げ強度）のひび割れ荷重。全国ヒューム管協会『ヒューム管設計施工要覧』表1.4.2-1／ベルテクス『ヒューム管カタログ』より（例 推進管φ1350 1種=47.1 kN/m）。呼び径250〜700は小口径推進管(JSWAS A-6)、800〜2400は推進管(JSWAS A-2)の表を使用。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
+      <div class="note-box" style="font-size:11px">P_ext: 外圧強さ（曲げ強度）のひび割れ荷重。全国ヒューム管協会『ヒューム管設計施工要覧』2024年12月版 表1.4.3.1-1より（例 推進管φ1350 1種=47.1 kN/m）。呼び径250〜700は小口径推進管(JSWAS A-6)、800〜3000は推進管(JSWAS A-2)の表を使用。Bs初期値は管外径+30mm（片側15mmクリアランス）の目安値です。自由に変更してください。</div>
     </div>
   </div>
 
@@ -1295,8 +1297,8 @@ tr.row-selected{background:#eff6ff}
 // 版数はフォルダ名（M_APP_0XX）で管理しているので、その値をここ一箇所に持たせて
 // タイトルバー・ヘッダーバッジ・保存JSONの3か所へ流し込む。
 // ★新しい版を作ったら APP_BUILD と APP_BUILD_DATE を必ず書き換えること。
-const APP_BUILD = 'M_APP_046';
-const APP_BUILD_DATE = '2026-11-08';
+const APP_BUILD = 'M_APP_047';
+const APP_BUILD_DATE = '2026-11-15';
 function applyBuildLabel() {
   const label = `${APP_BUILD}（${APP_BUILD_DATE}）`;
   document.title = `MYcurve 推進力設計 ${APP_BUILD}`;
@@ -1574,7 +1576,7 @@ function setShinnukiUse(use) {
 //  管径選択（標準値自動入力）— PIPE_DB[category][grade][dia]
 // ══════════════════════════════════════
 const PIPE_DB = (() => {
-  // 肉厚T・W・Fa5(1種)は推進管詳細.xlsx「推進管寸法表」「推進管耐荷力」と一致させた値
+  // 肉厚T・W・Fa5(50N)は推進管詳細.xlsx「推進管寸法表」「推進管耐荷力」と一致させた値
   // （呼び径=内径、外径=内径+2T。W=π(D+T)T×24.0、Fa=1000×σmean×Ae で検算済み）
   // 85章: Ae＝管の有効断面積[m²]（一次資料『E型推進管耐荷力』の表そのままの値）。
   //   継手部の埋め込みカラー・目地溝・クッション材で断面が欠けるため、管壁の全断面
@@ -1585,7 +1587,7 @@ const PIPE_DB = (() => {
   //   ベルテクス『ヒューム管カタログ』外圧強さ表（両者の値は完全一致）。単位は両表とも kN/m。
   //   備考に「試験機が示す荷重を有効長Lで除した値」とあるとおり管長1mあたりの線荷重で、
   //   Mr=0.318×Pext×r+0.239×W×r の W[kN/m] と次元が揃う。
-  //   ・呼び径250〜700 は小口径推進管（JSWAS A-6）の表、800〜2400 は推進管（JSWAS A-2）の表。
+  //   ・呼び径250〜700 は小口径推進管（JSWAS A-6）の表、800〜3000 は推進管（JSWAS A-2）の表。
   //     規格が変わるので φ700=48.1 → φ800=35.4 と下がるが、管厚も 82mm→80mm と薄くなるため
   //     実際の不連続であって誤記ではない。
   const h1 = {
@@ -1595,33 +1597,34 @@ const PIPE_DB = (() => {
     400:{outer:0.526,inner:0.400,t:0.063,W:2.20,Fa:950,Ae:0.07305,Pext:39.3},
     450:{outer:0.584,inner:0.450,t:0.067,W:2.61,Fa:1146,Ae:0.08814,Pext:42.2},
     500:{outer:0.640,inner:0.500,t:0.070,W:3.01,Fa:1334,Ae:0.10264,Pext:44.2},
-    600:{outer:0.752,inner:0.600,t:0.076,W:4.10,Fa:1780,Ae:0.13694,Pext:46.1},
-    700:{outer:0.864,inner:0.700,t:0.082,W:5.36,Fa:2391,Ae:0.18394,Pext:48.1},
+    600:{outer:0.760,inner:0.600,t:0.080,W:4.10,Fa:1780,Ae:0.13694,Pext:46.1},
+    700:{outer:0.880,inner:0.700,t:0.090,W:5.36,Fa:2391,Ae:0.18394,Pext:48.1},
     800:{outer:0.960,inner:0.800,t:0.080,W:5.31,Fa:2296,Ae:0.17664,Pext:35.4},
     900:{outer:1.080,inner:0.900,t:0.090,W:6.72,Fa:2986,Ae:0.22973,Pext:38.3},
-    1000:{outer:1.200,inner:1.000,t:0.100,W:8.29,Fa:3766,Ae:0.28973,Pext:41.2},
+    1000:{outer:1.200,inner:1.000,t:0.100,W:8.29,Fa:3767,Ae:0.28973,Pext:41.2},
     1100:{outer:1.310,inner:1.100,t:0.105,W:9.54,Fa:4374,Ae:0.33646,Pext:42.7},
     1200:{outer:1.430,inner:1.200,t:0.115,W:11.40,Fa:5309,Ae:0.40841,Pext:44.2},
     1350:{outer:1.600,inner:1.350,t:0.125,W:13.90,Fa:6239,Ae:0.47996,Pext:47.1},
     1500:{outer:1.780,inner:1.500,t:0.140,W:17.31,Fa:7939,Ae:0.61073,Pext:50.1},
-    1650:{outer:1.950,inner:1.650,t:0.150,W:20.36,Fa:9450,Ae:0.72696,Pext:53.0},
+    1650:{outer:1.950,inner:1.650,t:0.150,W:20.36,Fa:9451,Ae:0.72696,Pext:53.0},
     1800:{outer:2.120,inner:1.800,t:0.160,W:23.64,Fa:11092,Ae:0.85326,Pext:55.9},
     2000:{outer:2.350,inner:2.000,t:0.175,W:28.70,Fa:13642,Ae:1.04937,Pext:58.9},
     2200:{outer:2.580,inner:2.200,t:0.190,W:34.24,Fa:16455,Ae:1.26575,Pext:61.8},
     2400:{outer:2.810,inner:2.400,t:0.205,W:40.26,Fa:18966,Ae:1.45896,Pext:64.8},
   };
-  // ヒューム管 2種(70N/mm²): 外形はσmeanが違うだけで1種と同一。Faは推進管耐荷力表のFa7列（σmean=17.5）を使用
-  const FA7 = {250:702,300:864,350:1063,400:1278,450:1542,500:1796,600:2396,700:3219,800:3091,
-               900:4020,1000:5070,1100:5888,1200:7147,1350:8399,1500:10688,1650:12722,1800:14932,
-               2000:18364,2200:22151,2400:25532};
+  Object.assign(h1, {
+    2600:{outer:3.040,inner:2.600,t:.220,W:46.78,Fa:22259,Ae:1.71225,Pext:67.7},
+    2800:{outer:3.270,inner:2.800,t:.235,W:53.78,Fa:25815,Ae:1.98580,Pext:70.7},
+    3000:{outer:3.500,inner:3.000,t:.250,W:61.26,Fa:29635,Ae:2.27962,Pext:73.6}
+  });
   // 88章: 2種のPextも一次資料の表そのままの値を使う（従来は1種×1.40の推定値だった）。
   //   実表は 2種＝1種のほぼ倍（丸めの分だけ厳密な2倍ではない）で、1.40倍とは合わない。
   const PEXT2 = {250:64.8,300:68.7,350:74.6,400:78.5,450:84.4,500:88.3,600:92.2,700:96.2,
                  800:70.7,900:76.5,1000:82.4,1100:85.4,1200:88.3,1350:94.2,1500:101,1650:106,
-                 1800:112,2000:118,2200:124,2400:130};
+                 1800:112,2000:118,2200:124,2400:130,2600:136,2800:142,3000:148};
   const h2 = {};
   for (const [d,b] of Object.entries(h1)) {
-    h2[d] = {...b, Fa: FA7[d] || Math.round(b.Fa*1.40), Pext: PEXT2[d]};
+    h2[d] = {...b, Pext: PEXT2[d]};
   }
   // ── レジンコンクリート管（JSWAS K-12-2016）──────────────────────────────
   // 86章: 従来はヒューム管に係数を掛けた暫定値（mkR）だったが、実カタログと大きく
@@ -1709,23 +1712,58 @@ function lookupPipeAe(category, grade, dia) {
 }
 
 const CATEGORY_GRADES = {
-  hume:  [{value:'1shu',label:'1種（50N）'},{value:'2shu',label:'2種（70N）'}],
+  hume:  [{value:'1shu',label:'外圧1種'},{value:'2shu',label:'外圧2種'}],
   resin: [{value:'RS',label:'RS形（軽量）'},{value:'RM',label:'RM形（標準）'},{value:'RT',label:'RT形（強化）'}],
   steel: [],
 };
 
-// クッション材選定用の許容平均圧縮応力度σ_allowの参考値（ヒューム管のみ）。
-// 出典: 播磨コンクリート工業「Wジョイント推進管」（クッション材厚10mmを考慮した値）。
-// 1種(50N)=13.0N/mm²、2種(70N)=17.5N/mm²。メーカー・クッション材厚が異なれば実際の値は変わるため、
-// あくまで初期値の参考として自動入力し、pipeCushionSigmaAllow欄は引き続き手動で上書き可能にする。
-// レジン管・鋼管は対応する一次資料が無いため自動入力しない（手入力のまま）。
-const HUME_SIGMA_ALLOW = { '1shu': 13.0, '2shu': 17.5 };
+// 125章：外圧種別と圧縮強度を分離。全国ヒューム管協会2024.12版を採用。
+const HUME_MEAN = {50:13,70:17.5,90:22.5};
+const HUME_FA70 = {250:702,300:864,350:1063,400:1278,450:1542,500:1796,600:2396,700:3219,800:3091,900:4020,1000:5070,1100:5888,1200:7147,1350:8399,1500:10688,1650:12722,1800:14932,2000:18364,2200:22151,2400:25532,2600:29964,2800:34752,3000:39893};
+const HUME_FA90 = {250:902,300:1111,350:1366,400:1644,450:1983,500:2309,600:3081,700:4139,800:3974,900:5169,1000:6519,1100:7570,1200:9189,1350:10799,1500:13741,1650:16357,1800:19198,2000:23611,2200:28479,2400:32827,2600:38526,2800:44681,3000:51291};
+function humePipeData(grade,dia,strength) {
+  const b=PIPE_DB.hume[grade]?.[dia], sc=+strength;
+  if(!b || !HUME_MEAN[sc]) return null;
+  return {...b,Fa:sc===50?PIPE_DB.hume['1shu'][dia].Fa:(sc===70?HUME_FA70[dia]:HUME_FA90[dia])};
+}
+let pipeSpecNeedsReview=false;
+function setPipeSpecReview(message) {
+  pipeSpecNeedsReview=!!message;
+  const el=document.getElementById('pipeSpecReview');
+  if(el){el.style.display=message?'':'none';el.textContent=message||'';}
+}
 function applyCushionSigmaAllowDefault() {
-  const cat = v('pipeCategory') || 'hume';
-  const grade = v('pipeGrade');
-  if (cat === 'hume' && HUME_SIGMA_ALLOW[grade] != null) {
-    setV('pipeCushionSigmaAllow', HUME_SIGMA_ALLOW[grade]);
+  const hume=v('pipeCategory')==='hume';
+  document.getElementById('pipeStrengthRow').style.display=hume?'':'none';
+  setV('pipeCushionSigmaAllow',hume ? n('pipeStrength')/2 : '');
+  document.getElementById('pipeCushionSigmaAllow').readOnly=hume;
+}
+function onPipeStrengthChange() {
+  setPipeSpecReview('');onPipeDiaChange();applyCushionSigmaAllowDefault();
+  refreshForceIfCalculated();autoSave();
+}
+function pipeSpecSignature(){
+  const pick=q=>q&&q.on?{category:q.category,grade:q.grade,strength:q.strength,crush:q.crush,len:q.len,sigma:q.cushionSigmaAllow}:null;
+  return JSON.stringify([v('pipeCategory'),v('pipeGrade'),n('pipeStrength'),n('pipeDia'),n('pipeLen'),n('pipeCrush'),n('pipeCushionSigmaAllow'),curves.map(c=>pick(c.spec)),straightSpecs.map(q=>pick(q.spec))]);
+}
+function pipeSpecLabel(spec) {
+  const label=(CATEGORY_GRADES[spec.category]||[]).find(g=>g.value===spec.grade)?.label||'';
+  return label+(spec.category==='hume'?`・${spec.strength}N`:'');
+}
+function migratePipeSpec(spec,version) {
+  if(!spec)return spec;
+  const q={...spec};
+  if(q.category && !['hume','ヒューム管'].includes(q.category))return q;
+  if(['RS','RM','RT','RS形','RM形','RT形'].includes(q.grade))return q;
+  const raw=q.grade||q.strength||'1shu';
+  if(raw==='3種'||raw==='3shu'){
+    q.grade='1shu';q.strength=90;q.needsReview=true;
+  }else{
+    q.grade=({'1種':'1shu','2種':'2shu'})[raw]||raw;
+    q.strength=HUME_MEAN[+q.strength]?+q.strength:(q.grade==='2shu'?70:50);
   }
+  if(!version)delete q.cushionSigmaAllow; // 旧値13/17.5や手動値を局部基準へ持ち込まない
+  return q;
 }
 
 // 呼び径/管種/種別から自動決定される項目（外径・内径・管厚・重量・許容耐荷力・外圧強さ）は
@@ -1765,6 +1803,7 @@ function onPipeCategoryChange() {
   refreshPipeDiaOptions();
   onPipeDiaChange();
   applyCushionSigmaAllowDefault();
+  refreshForceIfCalculated();autoSave();
 }
 
 // 86章: 呼び径の選択肢は管種・種別ごとに違う（レジン管はヒューム管と呼び径体系が別）。
@@ -1815,7 +1854,7 @@ function onPipeDiaChange() {
   if (!db) { updateShieldBsDefault(); autoSave(); return; }           // 鋼管: 手動入力
   const tbl = db[grade];
   if (!tbl) { updateShieldBsDefault(); autoSave(); return; }
-  const s = tbl[dia];
+  const s = cat==='hume'?humePipeData(grade,dia,n('pipeStrength')):tbl[dia];
   if (!s) { updateShieldBsDefault(); autoSave(); return; }
   setV('pipeOuter', s.outer.toFixed(3));
   setV('pipeInner', s.inner.toFixed(3));
@@ -1823,7 +1862,7 @@ function onPipeDiaChange() {
   setV('pipeWeight', s.W);
   setV('pipeAllow', s.Fa);
   setV('pipePext', s.Pext);
-  const lMap = {250:1.0,300:1.0,350:1.2,400:1.2,450:1.5,500:1.5,600:2.0,700:2.43,800:2.43,900:2.43,1000:2.43,1100:2.43,1200:2.43,1350:2.43,1500:2.43,1650:2.43,1800:2.43,2000:2.43,2200:2.43,2400:2.43};
+  const lMap = {250:1.0,300:1.0,350:1.2,400:1.2,450:1.5,500:1.5,600:2.0,700:2.43,800:2.43,900:2.43,1000:2.43,1100:2.43,1200:2.43,1350:2.43,1500:2.43,1650:2.43,1800:2.43,2000:2.43,2200:2.43,2400:2.43,2600:2.43,2800:2.43,3000:2.43};
   if (lMap[dia]) setV('pipeLen', lMap[dia]);
   updateShieldBsDefault();
   autoSave();
@@ -1831,9 +1870,11 @@ function onPipeDiaChange() {
 
 // 86章: 種別（1種/2種・RS/RM/RT）を変えたときも呼び径の体系が変わるので並べ直す。
 function onPipeGradeChange() {
+  setPipeSpecReview('');
   refreshPipeDiaOptions();
   onPipeDiaChange();
   applyCushionSigmaAllowDefault();
+  refreshForceIfCalculated();autoSave();
 }
 
 // ══════════════════════════════════════
@@ -1852,6 +1893,7 @@ function onPipeGradeChange() {
 function resolveSpec(override, autoS4, autoCrush) {
   const std = {
     category: v('pipeCategory') || 'hume', grade: v('pipeGrade') || '1shu',
+    strength:n('pipeStrength'),sigmaAllow:n('pipeCushionSigmaAllow'),
     D: n('pipeOuter') || 0.96, Di: n('pipeInner') || 0.80, t: n('pipeThick') || 0.08,
     lp: n('pipeLen') || 2.43, W: n('pipeWeight') || 0, Fa: n('pipeAllow') || 0, Pext: n('pipePext') || 0,
     Ae: lookupPipeAe(v('pipeCategory') || 'hume', v('pipeGrade') || '1shu', parseInt(v('pipeDia'))),
@@ -1861,7 +1903,9 @@ function resolveSpec(override, autoS4, autoCrush) {
   };
   if (autoS4 != null) std.S4 = autoS4;
   if (!override || !override.on) return std;
+  override=migratePipeSpec(override,2);
   const category = override.category || std.category;
+  const strength=category==='hume'?(+override.strength||std.strength):null;
   let vals;
   if (category === 'steel') {
     vals = {
@@ -1875,11 +1919,11 @@ function resolveSpec(override, autoS4, autoCrush) {
   } else {
     const grade = override.grade || (CATEGORY_GRADES[category]||[])[0]?.value || '1shu';
     const dia = parseInt(v('pipeDia'));
-    const s = ((PIPE_DB[category]||{})[grade]||{})[dia];
+    const s = category==='hume'?humePipeData(grade,dia,strength):((PIPE_DB[category]||{})[grade]||{})[dia];
     vals = s ? { D:s.outer, Di:s.inner, t:s.t, W:s.W, Fa:s.Fa, Pext:s.Pext, Ae:s.Ae } : std;
   }
   return {
-    category,
+    category, strength, sigmaAllow: category==='hume'?strength/2:(Number.isFinite(override.cushionSigmaAllow)?override.cushionSigmaAllow:(category===std.category?std.sigmaAllow:0)),
     grade: category === 'steel' ? null : (override.grade || (CATEGORY_GRADES[category]||[])[0]?.value),
     D: vals.D, Di: vals.Di, t: vals.t, W: vals.W, Fa: vals.Fa, Pext: vals.Pext, Ae: vals.Ae,
     lp: override.len > 0 ? override.len : std.lp,
@@ -1898,6 +1942,7 @@ function segSpecFieldsHTML(kind, key, spec) {
   const catLabel = {hume:'ヒューム管', resin:'レジン管', steel:'鋼管'};
   const catOptions = ['hume','resin','steel'].map(c =>
     `<option value="${c}" ${cat===c?'selected':''}>${catLabel[c]}</option>`).join('');
+  spec=migratePipeSpec(spec,2);
   const grades = CATEGORY_GRADES[cat] || [];
   const gradeOptions = grades.map(g =>
     `<option value="${g.value}" ${spec.grade===g.value?'selected':''}>${g.label}</option>`).join('');
@@ -1920,6 +1965,8 @@ function segSpecFieldsHTML(kind, key, spec) {
             <select id="${prefix}_grade" onchange="onSegSpecChange('${kind}','${key}')">${gradeOptions}</select>
           </div>
         </div>
+        <div class="two-col" style="display:${cat==='hume'?'':'none'}"><div class="field-row full"><label>コンクリート圧縮強度</label><select id="${prefix}_strength" onchange="onSegSpecChange('${kind}','${key}')">${[50,70,90].map(sc=>`<option value="${sc}" ${sc===(+spec.strength||n('pipeStrength'))?'selected':''}>${sc} N/mm²</option>`).join('')}</select></div></div>
+        <div class="field-row" style="display:${cat==='hume'?'none':''}"><label>局部許容応力度 [N/mm²]</label><input id="${prefix}_cushionSigmaAllow" type="number" min="0" value="${spec.cushionSigmaAllow??''}" onchange="onSegSpecChange('${kind}','${key}')"></div>
         <div id="${prefix}_steelFields" style="display:${isSteel?'':'none'}">
           <div class="two-col">
             <div class="field-row"><label>外径D [m]</label><input id="${prefix}_steelD" class="mono" type="text" inputmode="decimal" value="${spec.steelD ?? ''}" onchange="onSegSpecChange('${kind}','${key}')"></div>
@@ -1989,7 +2036,7 @@ function onSegSpecToggle(kind, key) {
     // 個別仕様をONにした時点の標準仕様の値をコピーしておく（空欄からではなく、そこから編集を始められるように）
     const std = resolveSpec(null);
     spec.category = std.category;
-    spec.grade = std.grade;
+    spec.grade = std.grade;spec.strength=std.strength;spec.cushionSigmaAllow=std.sigmaAllow;
     spec.len = std.lp;
     spec.cushion = std.S4;
     spec.crush = std.crush;
@@ -2008,7 +2055,7 @@ function onSegSpecCategoryChange(kind, key) {
   const ref = getSegRef(kind, key);
   if (!ref) return;
   const spec = ensureSpec(ref);
-  spec.category = document.getElementById(`seg_${kind}_${key}_category`).value;
+  spec.category = document.getElementById(`seg_${kind}_${key}_category`).value;spec.cushionSigmaAllow=0;spec.needsReview=false;
   if (spec.category !== 'steel') spec.grade = (CATEGORY_GRADES[spec.category]||[])[0]?.value || '1shu';
   afterSegSpecChange(kind);
 }
@@ -2019,6 +2066,9 @@ function onSegSpecChange(kind, key) {
   const prefix = `seg_${kind}_${key}`;
   const g = suffix => document.getElementById(prefix+suffix);
   if (g('_grade')) spec.grade = g('_grade').value;
+  if(g('_strength'))spec.strength=+g('_strength').value;
+  if(g('_cushionSigmaAllow'))spec.cushionSigmaAllow=parseFloat(g('_cushionSigmaAllow').value)||0;
+  spec.needsReview=false;
   ['_steelD','_steelInner','_steelThick','_steelW','_steelFa','_steelPext'].forEach(suf => {
     const el = g(suf);
     if (el) { const val = parseFloat(el.value); spec[suf.slice(1)] = Number.isFinite(val) && val > 0 ? val : null; }
@@ -4854,6 +4904,11 @@ function refreshForceIfCalculated() {
 }
 
 function calculate() {
+  if(pipeSpecNeedsReview || [...curves,...straightSpecs].some(q=>q.spec?.on&&q.spec.needsReview)){
+    lastCalcResult=null;document.getElementById('calcResult').style.display='none';
+    const err=document.getElementById('calcError');err.textContent='旧データの外圧種別と圧縮強度を選び直してください。';err.style.display='';
+    document.getElementById('reportBody').innerHTML='';showToast(err.textContent);return;
+  }
   const errEl = document.getElementById('calcError');
   const warnEl = document.getElementById('calcWarn'); // 96章
   const resEl = document.getElementById('calcResult');
@@ -5149,7 +5204,7 @@ function calculate() {
     // 99章: 鋼管は外圧強さPの規格表（JSWAS A-2系）の適用外なので従来どおり対象外。
     const fa = (spec.category !== 'steel' && spec.grade) ? calcFaBC(spec, bc.alpha) : null;
     const FaBC = fa ? fa.Fa : null;
-    const gradeLabel = (CATEGORY_GRADES[spec.category]||[]).find(g=>g.value===spec.grade)?.label || '';
+    const gradeLabel = pipeSpecLabel(spec);
     return { name:`BC.${bc.idx+1}`, FBC:bc.F, pipeLabel: `${catLabelMap[spec.category]||spec.category}${gradeLabel?' '+gradeLabel:''}`, FaBC, faDetail: fa, ok: FaBC!=null ? bc.F <= FaBC : null };
   });
 
@@ -5165,6 +5220,7 @@ function calculate() {
   const sigmaAllowCushion = n('pipeCushionSigmaAllow') || 0;
   const cushionResults = FBC_arr.map(bc => {
     const spec = bc.spec;
+    const sigmaAllow=spec.sigmaAllow||0;
     const aeApprox = spec.Ae == null;
     const A_mm2 = aeApprox
       ? Math.PI / 4 * (Math.pow(spec.D * 1000, 2) - Math.pow(spec.Di * 1000, 2))
@@ -5174,17 +5230,17 @@ function calculate() {
     const Dmm = spec.D * 1000, Dimm = spec.Di * 1000;
     const Afull = Math.PI / 4 * (Dmm * Dmm - Dimm * Dimm);
     const aeRatio = aeApprox || !(Afull > 0) ? 1 : A_mm2 / Afull;
-    const dc = n('pipeCrush') || 0;
+    const dc = spec.crush || 0;
     const theta = spec.lp > 0 && bc.R > 0 ? spec.lp / bc.R : 0;
     const a = theta > 0 ? dc / theta : Infinity;
     const full = !(theta > 0) || a >= Dmm;
     const Ac = full ? A_mm2 : innerContactArea(Dmm, Dimm, a, aeRatio);
     const sigmaReq = Ac > 0 ? (bc.F * 1000) / Ac : Infinity;
-    const sel = selectCushionMaterial(sigmaReq, sigmaAllowCushion);
-    const chosen = spec.cushionMaterial ? evaluateCushionMaterial(spec.cushionMaterial, sigmaReq, sigmaAllowCushion) : null;
+    const sel = selectCushionMaterial(sigmaReq, sigmaAllow);
+    const chosen = spec.cushionMaterial ? evaluateCushionMaterial(spec.cushionMaterial, sigmaReq, sigmaAllow) : null;
     return { name: `BC.${bc.idx + 1}`, FBC: bc.F, sigmaReq, sigmaFull, sel, chosen, Ae: spec.Ae, aeApprox,
              R: bc.R, lp: spec.lp, theta, dc, a, full, Ac, Aratio: A_mm2 > 0 ? Ac / A_mm2 : 0,
-             pipeOk: sigmaAllowCushion > 0 ? sigmaReq <= sigmaAllowCushion : null };
+             sigmaAllow, pipeOk: sigmaAllow > 0 ? sigmaReq <= sigmaAllow : null };
   });
 
   const latMode = v('soilLatKMode') || 'k0';
@@ -5357,7 +5413,7 @@ function renderResults(res) {
       // 123章: 曲線の内側だけで当たるときの当たる幅・面積と応力
       const aCell = c.full ? '全面' : !(c.dc > 0) ? '0（線）' : `${c.a.toFixed(0)}`;
       const sCell = Number.isFinite(c.sigmaReq) ? c.sigmaReq.toFixed(2) : '∞';
-      const pipePill = c.pipeOk == null ? '<span class="pill">未入力</span>' : `<span class="pill ${c.pipeOk?'ok':'ng'}">${c.pipeOk?'持つ':'持たない'}</span>`;
+      const pipePill = c.pipeOk == null ? '<span class="pill">未入力</span>' : `<span class="pill ${c.pipeOk?'ok':'ng'}">${c.pipeOk?'持つ':'持たない'}</span> 許容 ${c.sigmaAllow}N/mm²`;
       // 124章: 横スクロールしないよう、関係する値を1つの欄にまとめ、備考は判定の欄の下に出す
       return `<tr class="${rowNG?'row-ng':''}"><td><b>${c.name}</b></td>
         <td class="left"><span class="mono">${c.FBC.toFixed(0)}kN</span><br><span class="mono">R${c.R}m・θ${(c.theta*1000).toFixed(1)}×10⁻³</span></td>
@@ -5442,14 +5498,14 @@ function extraVerdictItems(res) {
     const cr = (res.cushionResults || []).filter(c => c.pipeOk != null);
     const crNg = cr.filter(c => !c.pipeOk);
     const j = jikuryokuVerdict();
-    if (cr.length && !crNg.length && j.ok == null) {
+    if (cr.length===(res.cushionResults||[]).length && cr.length && !crNg.length && j.ok == null) {
       items.push({ name:'⑦ 推進力伝達材', criteria:'曲線の内側だけで当たっても σ ≤ σ_allow（パルリングで対応）',
         value: `パルリングで対応可能（${cr.length} か所すべて持つ。軸力検証は不要）`, ok: true });
     } else if (crNg.length && j.ok == null) {
       items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'パルリングで持たない BC点は軸力検証で伝達材を選ぶ',
-        value: `パルリングだけでは管が持たない（${crNg.map(c => `${c.name} σ=${Number.isFinite(c.sigmaReq)?c.sigmaReq.toFixed(1):'∞'}`).join('・')}＞${res.sigmaAllowCushion}）→ 軸力検証が必要`, ok: false });
+        value: `パルリングだけでは管が持たない（${crNg.map(c => `${c.name} σ=${Number.isFinite(c.sigmaReq)?c.sigmaReq.toFixed(1):'∞'}`).join('・')}＞各区間の許容値）→ 軸力検証が必要`, ok: false });
     } else {
-      items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'応力 ≤ 25・内側 ≥ 5mm・外側 ≤ 許容目地開き',
+      items.push({ name:'⑦ 推進力伝達材（軸力検証）', criteria:'応力 ≤ 管強度/2・内側 ≥ 5mm・外側 ≤ 許容目地開き',
         value: j.text, ok: j.ok });
     }
   }
@@ -5460,12 +5516,14 @@ function jikuryokuVerdict() {
   const d = jikuryokuData;
   if (!d || !d.result || !d.result.length) return { ok:null, text:'未照査（軸力検証ソフトで照査して結果を返す）' };
   if (typeof jkMatchesAlignment === 'function' && !jkMatchesAlignment()) return { ok:null, text:'照査したときと線形が違う（照査し直す）' };
+  const expected=n('pipeStrength');
+  if(d.input.specVersion!==2 || +d.input.sc!==expected || d.input.pipeSpecSignature!==pipeSpecSignature())return {ok:null,text:'管強度の基準を更新しました。軸力検証をやり直してください'};
   const v = d.verdict;
   if (v && typeof v.ok === 'boolean') return { ok:v.ok, text: v.text || (v.ok ? 'すべて満たす' : '満たさない項目あり') };
   const outLim = (d.propose && d.propose.jointType) || 70;
   let sig = 0, inn = Infinity, out = 0;
   d.result.forEach(s => (s.passes || []).forEach(p => { sig = Math.max(sig, p.sigma); inn = Math.min(inn, p.inner); out = Math.max(out, p.outer); }));
-  const ok = sig <= 25 && inn >= 5 && out <= outLim;
+  const ok = sig <= expected/2 && inn >= 5 && out <= outLim;
   return { ok, text:`応力 ${jkFmt(sig,1)}・内側 ${jkFmt(inn,1)}・外側 ${jkFmt(out,1)}mm（≤${outLim}）` };
 }
 
@@ -5480,7 +5538,7 @@ function renderReport(res) {
 
   const siteName = v('siteName') || '（現場名未入力）';
   const siteSpan = v('siteSpan') || '';
-  const gradeLabel = (CATEGORY_GRADES[stdSpec.category] || []).find(g => g.value === stdSpec.grade)?.label || '';
+  const gradeLabel = pipeSpecLabel(stdSpec);
   const catLabel = CAT_LABEL[stdSpec.category] || stdSpec.category;
   const jointSel = document.getElementById('pipeJointType');
   const jointLabel = jointSel ? jointSel.options[jointSel.selectedIndex].text : '—';
@@ -5629,9 +5687,9 @@ function renderReport(res) {
   let s7;
   if (stdSpec.category === 'hume') {
     const Fr50 = (PIPE_DB.hume['1shu'][dia] || {}).Fa;
-    const Fr70 = (PIPE_DB.hume['2shu'][dia] || {}).Fa;
-    const Fr90 = Fr50 != null ? Fr50 * (22500/13000) : null;
-    const rows = [['1種（50N）', 13000, Fr50], ['2種（70N）', 17500, Fr70], ['3種（90N）', 22500, Fr90]];
+    const Fr70 = HUME_FA70[dia];
+    const Fr90 = HUME_FA90[dia];
+    const rows = [['50N管', 13000, Fr50], ['70N管', 17500, Fr70], ['90N管', 22500, Fr90]];
     s7 = `
       <div class="tbl-wrap"><table class="report-table">
         <thead><tr><th>強度種別</th><th>σmean(kN/m²)</th><th>Fr=1000σmean×A(kN)</th><th>判定 F≤Fr</th></tr></thead>
@@ -5958,7 +6016,7 @@ async function exportReportXLSX() {
 
   const siteName = v('siteName') || '（現場名未入力）';
   const siteSpan = v('siteSpan') || '';
-  const gradeLabel = (CATEGORY_GRADES[stdSpec.category] || []).find(g => g.value === stdSpec.grade)?.label || '';
+  const gradeLabel = pipeSpecLabel(stdSpec);
   const catLabel = CAT_LABEL[stdSpec.category] || stdSpec.category;
   const jointSel = document.getElementById('pipeJointType');
   const jointLabel = jointSel ? jointSel.options[jointSel.selectedIndex].text : '—';
@@ -6256,15 +6314,14 @@ async function exportReportXLSX() {
   let aFr = null;
   if (stdSpec.category === 'hume') {
     const Fr50 = (PIPE_DB.hume['1shu'][dia] || {}).Fa;
-    const Fr70 = (PIPE_DB.hume['2shu'][dia] || {}).Fa;
+    const Fr70 = HUME_FA70[dia];
     hdr(['強度種別', 'σmean(kN/m²)', 'Fr = 1000σmean×Ae', 'Fr(kN)', '判定 F≤Fr']);
     let a50 = null;
-    [['1種（50N）', 13000, Fr50], ['2種（70N）', 17500, Fr70], ['3種（90N）', 22500, Fr50 != null ? Fr50 * 22500 / 13000 : null]].forEach((x, i) => {
+    [['50N管', 13000, Fr50], ['70N管', 17500, Fr70], ['90N管', 22500, HUME_FA90[dia]]].forEach((x, i) => {
       T(r, 1, x[0] + (x[2] === Fa ? '　← 採用' : '')); xlsxNum(sh, r, 2, x[1], RS.INT);
       let a;
       if (x[2] == null) { T(r, 3, '規格表に該当なし'); T(r, 4, '—'); T(r, 5, '—'); r++; return; }
-      if (i === 2 && a50) { T(r, 3, '1種の Fr × 22500/13000'); a = fx(r, 4, `${a50}*22500/13000`, x[2], 0); }
-      else { T(r, 3, '規格表（JSWAS A-2）の値'); a = xlsxNum(sh, r, 4, x[2], RS.INPUT); }
+      T(r, 3, '要覧 表3.2.3.3-1の値'); a = xlsxNum(sh, r, 4, x[2], RS.INPUT);
       if (i === 0) a50 = a;
       if (x[2] === Fa) aFr = a;
       fxs(r, 5, `IF(${aFt}<=${a},"OK","NG")`, F_total <= x[2] ? 'OK' : 'NG');
@@ -10794,7 +10851,7 @@ function getProjectData() {
     site: { name: v('siteName'), span: v('siteSpan'), date: v('siteDate') },
     method: currentMethod,
     pipe: {
-      category: v('pipeCategory'), dia: v('pipeDia'), grade: v('pipeGrade'),
+      specVersion:2, needsReview:pipeSpecNeedsReview, specSignature:pipeSpecSignature(), category: v('pipeCategory'), dia: v('pipeDia'), grade: v('pipeGrade'), strength:n('pipeStrength'),
       outer: n('pipeOuter'), inner: n('pipeInner'), thick: n('pipeThick'),
       len: n('pipeLen'), weight: n('pipeWeight'), allow: n('pipeAllow'),
       jointType: n('pipeJointType'), crush: n('pipeCrush'),
@@ -10928,7 +10985,7 @@ function buildTraceForSave(r) {
       format: 'MYCURVE_TRACE_v1',
       Fo: num(r.Fo, 4), launchX: num(t.launchX, 4), groundEnd: num(t.groundL, 4), pushOut: num(t.pushOut, 4),
       F_total: num(t.F_total, 4),
-      secs: t.secs.map(sc => ({ label: sc.seg.label, type: sc.seg.type, curveNo: sc.seg.curveNo || null,
+      secs: t.secs.map(sc => ({ label: sc.seg.label, type: sc.seg.type, curveNo: sc.seg.curveNo || null, strength:sc.seg.spec?.strength, category:sc.seg.spec?.category, straightIdx:sc.seg.straightIdx, len:sc.seg.spec?.lp,
         x0: num(sc.x0, 4), L: num(sc.L, 4), fo: num(sc.seg.fo, 6), K: num(sc.seg.K == null ? 1 : sc.seg.K, 10),
         n: sc.seg.n == null ? null : sc.seg.n, R: num(sc.seg.R || 0, 4), tip: sc.tip,
         pitch: num(sc.pitch, 5), realPitch: num(sc.realPitch, 5), openMm: num(sc.openMm, 3) })),
@@ -10947,6 +11004,11 @@ function setProjectData(d) {
   // 工法の指定が無くても現在の工法で必ず setMethod() を通し、工法専用欄の表示を同期する。
   setMethod(d.method || currentMethod);
   if (d.pipe) {
+    const specVersion=d.pipe.specVersion;
+    d={...d,pipe:migratePipeSpec(d.pipe,specVersion)};
+    const migrateSeg=q=>q?{...q,spec:migratePipeSpec(q.spec,specVersion)}:q;
+    if(d.alignment)d={...d,alignment:{...d.alignment,curves:(d.alignment.curves||[]).map(migrateSeg),straightSpecs:(d.alignment.straightSpecs||[]).map(migrateSeg)}};
+    setPipeSpecReview(d.pipe.needsReview?'旧データの「3種」は圧縮強度と外圧種別が曖昧です。使用管の資料を確認し、外圧種別と圧縮強度を選び直してください。':'');
     // 旧フォーマット(split-*)互換: size→dia, strength→grade, joint→jointType, length→len
     const dia = d.pipe.dia || d.pipe.size || 800;
     // category: 旧形式はJapanese文字列、新形式は英字キー
@@ -10954,7 +11016,7 @@ function setProjectData(d) {
     const catMap = {'ヒューム管':'hume','hume':'hume','レジン管':'resin','resin':'resin','鋼管':'steel','steel':'steel'};
     // gradeのみでcategoryを推定（後方互換）
     const gradeRaw = d.pipe.grade || d.pipe.strength || '1shu';
-    const gradeMap = {'1種':'1shu','2種':'2shu','3種':'2shu','1shu':'1shu','2shu':'2shu',
+    const gradeMap = {'1種':'1shu','2種':'2shu','1shu':'1shu','2shu':'2shu',
                       'RS形':'RS','RM形':'RM','RT形':'RT','RS':'RS','RM':'RM','RT':'RT'};
     const grade = gradeMap[gradeRaw] || '1shu';
     const catFromGrade = (grade==='RS'||grade==='RM'||grade==='RT') ? 'resin' : 'hume';
@@ -10962,6 +11024,7 @@ function setProjectData(d) {
     setV('pipeCategory', category);
     onPipeCategoryChange();  // gradeセレクトのoptionを更新
     setV('pipeGrade', grade);
+    setV('pipeStrength',d.pipe.strength||50);
     // 86章: 呼び径の選択肢は管種×種別で変わるので、種別を確定させてから並べ直す。
     // 保存されていた呼び径がその種別に無い場合（例: レジン管RM形にφ1350は無い）は、
     // refreshPipeDiaOptions() がマシン呼び径での読み替え／最近径を選ぶのでそれに従う。
@@ -10975,7 +11038,7 @@ function setProjectData(d) {
     const len = d.pipe.len || d.pipe.length;
     if (len) setV('pipeLen', len);
     if (d.pipe.crush != null) setV('pipeCrush', d.pipe.crush); // 70章で一度削除された際、pipe.cushionだけ復元してpipe.crushの復元を書き忘れるバグがあった（74章で復活時、!=nullでの明示チェックを踏襲）
-    if (d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
+    if (category!=='hume' && d.pipe.cushionSigmaAllow != null) setV('pipeCushionSigmaAllow', d.pipe.cushionSigmaAllow);
     setV('pipeCushionMaterial', d.pipe.cushionMaterial || '');
     if (d.pipe.Bs) setV('pipeBs', d.pipe.Bs);
     // 100章: 100章より前のJSONは推奨継手に地震動を含めていなかったので、その判定のまま読み込む

@@ -1,6 +1,6 @@
 <!-- 軸力検証ソフト HTML版 — Excel vol_1.9 の計算エンジンを忠実移植 -->
 <meta charset="utf-8">
-<title>軸力検証ソフト（HTML版 vr012 2026-11-09 15:15）</title>
+<title>軸力検証ソフト（HTML版 vr013 2026-11-15 21:12）</title>
 <style>
   :root{
     --bg:#f4f6f8; --panel:#fff; --ink:#1a2733; --sub:#5b6b7a; --line:#d5dee6;
@@ -258,7 +258,7 @@
 </style>
 
 <div class="wrap">
-  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr012 2026-11-09 15:15</span></h1>
+  <h1>軸力検証ソフト <span class="pill">HTML版 β</span> <span class="pill" id="buildTag" title="この画面の版とビルド日時。単体で開いても 曲線プログラムから開いても同じファイル（vr011〜）">vr013 2026-11-15 21:12</span></h1>
   <div class="muted">曲線推進工法における FJリング（推進力伝達材）の圧縮応力・開口長の検証。
     Excel vol_1.9 の計算エンジンを忠実移植（呼び径2200の実例で数値一致を確認済み）。</div>
 
@@ -320,7 +320,7 @@
         <tr><td colspan="4" class="sec">推進管</td></tr>
         <tr><td class="lbl">推進管 呼び径</td><td colspan="3"><select id="dia"></select></td></tr>
         <tr><td class="lbl">推進管 管長 (m)</td><td><input type="number" id="leng" step="0.01" value="2.43"></td>
-            <td class="lbl">強度</td><td><input type="number" id="sc" step="1" value="50"></td></tr>
+            <td class="lbl">強度</td><td><select id="sc"><option value="">選択してください</option><option value="50" selected>50 N/mm²</option><option value="70">70 N/mm²</option><option value="90">90 N/mm²</option></select></td></tr>
     </table>
       <table class="form">
         <tr><td colspan="4" class="sec">曲線条件・各BC点通過時の推進力(kN)</td></tr>
@@ -338,7 +338,7 @@
     <span class="muted">照査・提案・割付のすべてをこの値1つで判定します（結果の表示・PDF には、どちらの値かは出ません）。</span>
   </div>
   <div class="toolbar" style="margin-top:6px">
-    <span class="muted">判定基準（概要説明PDF）：<b>BC点</b> 最大応力度 ≤ 25 N/mm²・内側の開口長 ≥ 5mm ／ <b>EP点</b> 外側の開口長 ≤ <span id="critAllow">60mm(JC)・40mm(JB)・30mm(JA)</span> ／ <b>配置</b> FJリングは最小1.5set（全周1枚＋上下90°1枚。メーカー推奨）</span>
+    <span class="muted">判定基準（管強度の1/2）：<b>BC点</b> 最大応力度 ≤ <span data-stress-limit>25</span> N/mm²・内側の開口長 ≥ 5mm ／ <b>EP点</b> 外側の開口長 ≤ <span id="critAllow">60mm(JC)・40mm(JB)・30mm(JA)</span> ／ <b>配置</b> FJリングは最小1.5set（全周1枚＋上下90°1枚。メーカー推奨）</span>
   </div>
   <!-- vr012: FJリングの検討。曲線プログラムから引き継ぐのは線形と推進力の計算。ここから「逆算」と「自分で検討」に分かれる（利用者の指示 2026-11-09） -->
   <div class="panel" id="fjCommon" style="margin-top:10px">
@@ -503,8 +503,8 @@
     <div id="propwrap" style="overflow-x:auto;margin-top:8px"></div>
   </div>
   <div class="toolbar" style="margin-top:10px" id="propLegend">
-    <span class="muted">区分：<span class="tier t-rec">推奨</span> 応力≤25 ／
-      <span class="tier t-warn">要検討</span> 25＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
+    <span class="muted">区分：<span class="tier t-rec">推奨</span> 応力≤<span data-stress-limit>25</span> ／
+      <span class="tier t-warn">要検討</span> <span data-stress-limit>25</span>＜応力＜破壊(材料限界)・開口長OK（現場判断で採用可）／
       <span class="tier t-ng">不成立</span> 破壊 or 内側の開口長&lt;5 or 外側の開口長 超過 or 1.5set未満</span>
   </div>
   </div>
@@ -1174,6 +1174,32 @@ Engine.prototype.runUpTo=function(kmax){
 /* ===== UI ===== */
 const $=id=>document.getElementById(id);
 
+// vr013: σca＝σc/2。許容平均応力度・FJ材の破壊限界とは独立する。
+let sectionStrengths=[];
+function stressAllow(sc){
+  const v=+(sc==null?$('sc').value:sc);
+  return [50,70,90].includes(v)?v/2:0;
+}
+function strengthForSection(k){return sectionStrengths[k-1]||+$('sc').value;}
+function sectionAllow(k){return stressAllow(strengthForSection(k));}
+function projectStrength(spec,pipe){
+  const q=spec&&spec.on?spec:pipe;
+  if(!['hume','ヒューム管'].includes(q.category||pipe.category||'hume'))return null;
+  const sc=+q.strength;
+  if([50,70,90].includes(sc))return sc;
+  const grade=q.grade||pipe.grade;
+  return grade==='2shu'||grade==='2種'?70:grade==='1shu'||grade==='1種'?50:null;
+}
+function stressAtPosition(p){
+  if(!myTrace||!myTrace.secs)return stressAllow();
+  const eps=(+(myPipe&&myPipe.len)||+$('leng').value||0)/2;
+  const sc=myTrace.secs.filter(s=>s.x0<=p+eps&&s.x0+s.L>=p-eps).map(s=>+s.strength).filter(x=>[50,70,90].includes(x));
+  return sc.length?Math.min(...sc)/2:stressAllow();
+}
+function updateStressLabels(){
+  document.querySelectorAll('[data-stress-limit]').forEach(el=>el.textContent=stressAllow()||'—');
+}
+
 /* ---- 推進力伝達材の層構成（曲線プログラムと同じ枠組み）----
    曲線プログラムのカタログ準拠の選択肢に合わせる。
      厚さ 5/8/10mm ・ 1切片の中心角 30/45/60/90/180° ・ 枚数は2枚刻み（360÷角度が全面）
@@ -1686,7 +1712,7 @@ function runPerCurve(){
     // いちばん厳しい曲線＝外側がいちばん開く（＝内側がいちばん詰まる）曲線
     let gov=null; passes.forEach(p=>{ if(!gov || p.outer>gov.outer) gov=p; });
     out.push({
-      k, zone:z, pr, mx:eng.mx, exit:res.exit,
+      k, sc:strengthForSection(k), allow:sectionAllow(k), zone:z, pr, mx:eng.mx, exit:res.exit,
       layers:cuSpecFor(k).layers.map(l=>({...l})), pul:{...cuSpecFor(k).pul},
       straight: got ? {pp:got.straight.pp, sigma:got.straight.sigma,
                        verdict:got.straight.verdict, gap:got.straight.gap+pr,
@@ -1727,8 +1753,8 @@ function captureTable(eng,nCurves,pr){
   return {slots, rows, n};
 }
 function fmt(x,d=1){return (Math.round(x*10**d)/10**d).toLocaleString('ja-JP',{minimumFractionDigits:d,maximumFractionDigits:d});}
-function sigCell(sigma,verdict){
-  const v=verdict; const cls=v==="破壊"?"v-bad":v==="範囲外"?"v-warn":( sigma<=25?"v-ok":"v-warn");
+function sigCell(sigma,verdict,limit=stressAllow()){
+  const v=verdict; const cls=v==="破壊"?"v-bad":v==="範囲外"?"v-warn":( sigma<=limit?"v-ok":"v-warn");
   const tag=v?`&lt;${v}&gt; `:""; return `<span class="${cls}">${tag}${fmt(sigma,2)}</span>`;
 }
 const JOINT_NAME={70:'JC',50:'JB',40:'JA'};
@@ -1829,7 +1855,7 @@ function render(secs){
   const jn=JOINT_NAME[+$('jointType').value]||'JC', outLim=allowOpen(jn), doneLim=outLim;
   const MN=Object.fromEntries(CU_MAT.map(m=>[m.v,m.label]));
   /* 判定サマリ（vr008：概要説明PDFの考え方で BC点／EP点 を分ける）
-     ・BC点（曲線に入るところ）…… 最大応力度 ≤ 25、内側の開口長 ≥ 5mm
+     ・BC点（曲線に入るところ）…… 最大応力度 ≤ σc/2、内側の開口長 ≥ 5mm
      ・EP点（曲線を出るところ）…… 外側の開口長 ≤ 継手の許容開口長（JC70/JB50/JA40）
      ・配置 …………………………… FJリングは最小 1.5set（メーカー推奨）
      数値は区間ごと・通過する全曲線の最悪値。 */
@@ -1852,17 +1878,18 @@ function render(secs){
   const mk=(pt,label,ok,val)=>`<div class="item"><b>${pt}</b> ${label}：<span class="${ok?'v-ok':'v-bad'}">${val}</span> ${ok?'✓':'✕'}</div>`;
   const s0=secs[0]&&secs[0].set;
   $('crit').innerHTML =
-    mk('BC点','最大応力度 ≤ 25', allMaxSig<=25 && !US, fmt(allMaxSig,2)+' N/mm²'+(US?'（'+US+'）':'')) +
+    mk('BC点','最大応力度 ≤ '+[...new Set(secs.map(s=>s.allow))].join('／'), secs.every(s=>Math.max(s.straight?.sigma||0,...s.passes.map(p=>p.sigma))<=s.allow) && !US, fmt(allMaxSig,2)+' N/mm²'+(US?'（'+US+'）':'')) +
     mk('BC点','内側の開口長 ≥ 5mm', minInner>=5 && !US, US || fmt(minInner,2)+' mm') +
     mk('EP点',`外側の開口長 ≤ ${outLim}mm（${jn}）`, maxOuter<=outLim && !finNG.length && !US,
        US || fmt(maxOpen,2)+' mm'+(openFromStop?(cuPerCurve||secs.length>1?`（区間${maxFin.k} ${maxFin.lab}）`:`（${maxFin.lab}）`):'')) +
     mk('配置','FJリング ≥ 1.5set', !setNG.length,
        setNG.length ? (cuPerCurve?`区間${setNG.join('・')}が1.5set未満`:setLabel(s0)) : (s0?setLabel(s0):'—'));
   // vr011: 曲線プログラムの総合判定⑦に渡す判定（collectEmbed で返す）
+  const stressNG=secs.filter(s=>Math.max(s.straight?.sigma||0,...s.passes.map(p=>p.sigma))>s.allow);
   const ng=[];
   if(US) ng.push(US);
   else{
-    if(allMaxSig>25) ng.push(`応力 ${fmt(allMaxSig,1)}＞25`);
+    if(stressNG.length) ng.push(stressNG.map(s=>`区間${s.k} 応力が許容${s.allow}を超過`).join('・'));
     if(minInner<5) ng.push(`内側 ${fmt(minInner,1)}＜5mm`);
     if(maxOpen>outLim) ng.push(`外側 ${fmt(maxOpen,1)}＞${outLim}mm`);
   }
@@ -1870,40 +1897,40 @@ function render(secs){
   // vr012: 手で入れた構成でも、判定と理由を1行で出す（利用者の指示 2026-11-09）
   $('crit').innerHTML += `<div class="item" style="flex-basis:100%"><b>判定</b> <span class="${ng.length?'v-bad':'v-ok'}">${ng.length?'NG':'OK'}</span>`+
     (ng.length?`　理由：${ng.join('・')}`:'　応力・内側の開口・外側の開口・配置のすべてを満たす')+'</div>';
-  lastVerdict = { ok: !ng.length, joint: jn,
+  lastVerdict = { specVersion:2, strength:+$('sc').value, stressLimit:stressAllow(), ok: !ng.length, joint: jn,
     text: ng.length ? `${jn}：${ng.join('・')}` : `${jn}：応力 ${fmt(allMaxSig,1)}・内側 ${fmt(minInner,1)}・外側 ${fmt(maxOpen,1)}mm すべて満たす` };
 
   // 結果表（BC点で見る項目／EP点で見る項目を分けて並べる）
   let h='<table><thead><tr><th rowspan="2">区間</th><th rowspan="2">推進力(kN)</th>'+
         '<th colspan="2">BC点で確認</th><th>EP点で確認</th><th rowspan="2">開口長(直線)<br>開口差(曲線)(mm)</th></tr>'+
-        '<tr><th>最大応力度(N/mm²)<br>≤25</th><th>内側の開口長(mm)<br>≥5</th><th>外側の開口長(mm)<br>≤'+outLim+'</th></tr></thead><tbody>';
+        '<tr><th>最大応力度(N/mm²)<br>≤'+[...new Set(secs.map(s=>s.allow))].join('／')+'</th><th>内側の開口長(mm)<br>≥5</th><th>外側の開口長(mm)<br>≤'+outLim+'</th></tr></thead><tbody>';
   // vr012: 止まった位置の開口も同じ「外側の開口長」の列に出す（許容値は1つ）
   const finCell=v=>`<td class="${v<=doneLim?'v-ok':'v-bad'}">${fmt(v,2)} ${v<=doneLim?'OK':'NG'}</td>`;
   secs.forEach(s=>{
-    if(cuPerCurve){
+    if(cuPerCurve||sectionStrengths.some(x=>x!==+$('sc').value)){
       const zt=`上下面 ${MN[s.zone.varc]||'—'} ${s.zone.thic}mm ／ 側方面 ${s.zone.this?(MN[s.zone.vars]||'—'):'無し'} ${s.zone.this}mm`
         + (s.pr?`　＋パルリング残り ${fmt(s.pr,1)}mm`:'')
         + (s.set?`　<span class="${s.set.ok?'v-ok':'v-bad'}">${setLabel(s.set)}</span>`:'');
       h+=`<tr><td class="lab" colspan="6" style="background:var(--chip);font-size:11.5px">`+
-         `<b>区間${s.k}</b>（第${'一二三四五六七八九十'[s.k-1]}曲線〜。ここに静止する管の構成）： ${zt}</td></tr>`;
+         `<b>区間${s.k}（${s.sc}N・許容${s.allow}N/mm²）</b>（第${'一二三四五六七八九十'[s.k-1]}曲線〜。ここに静止する管の構成）： ${zt}</td></tr>`;
     }
     if(s.straight){
       h+=`<tr><td class="lab">第${s.k}直線</td><td>${fmt(s.straight.pp)}</td>`+
-         `<td>${sigCell(s.straight.sigma,s.straight.verdict)}</td>`+
+         `<td>${sigCell(s.straight.sigma,s.straight.verdict,s.allow)}</td>`+
          `<td>—</td>${s.k===1?finCell(s.straight.gap):'<td>—</td>'}<td>${fmt(s.straight.gap,2)}</td></tr>`;
     }
     s.passes.forEach(p=>{
       const inOK=p.inner>=5, outOK=p.outer<=outLim, own=(p.j===s.k);
       const lab = own ? `第${p.j}曲線` : `　└ 通過：第${p.j}曲線`;
       h+=`<tr${own?'':' style="opacity:.85"'}><td class="lab">${lab}<span class="muted" style="font-size:10.5px"> R=${p.rad}m</span></td>`+
-         `<td>${fmt(p.pp)}</td><td>${sigCell(p.sigma,p.verdict)}</td>`+
+         `<td>${fmt(p.pp)}</td><td>${sigCell(p.sigma,p.verdict,s.allow)}</td>`+
          `<td class="${inOK?'v-ok':'v-bad'}">${fmt(p.inner,2)}</td>`+
          `<td class="${outOK?'v-ok':'v-bad'}">${fmt(p.outer,2)}</td>`+
          `<td>${fmt(p.sd0,2)}</td></tr>`;
     });
     if(s.straightAfter){
       h+=`<tr style="opacity:.85"><td class="lab">　└ 通過後の直線（静止位置）</td><td>${fmt(s.straightAfter.pp)}</td>`+
-         `<td>${sigCell(s.straightAfter.sigma,s.straightAfter.verdict)}</td>`+
+         `<td>${sigCell(s.straightAfter.sigma,s.straightAfter.verdict,s.allow)}</td>`+
          `<td>—</td>${finCell(s.straightAfter.gap)}<td>${fmt(s.straightAfter.gap,2)}</td></tr>`;
     }
     if(!s.straight && !s.passes.length)
@@ -1963,7 +1990,7 @@ function render(secs){
       '上下の端面どうしの距離が<b>開口</b>で、内側の端が内側の開口、外側の端が外側の開口。'+
       '図中の数値は結果表と同じ値（管の外径位置へ換算・パルリング残り厚み込み）なので、図の寸法と少し違うことがある。'+
       '<br>※ 右の図は各分割の最大圧縮応力度。<span style="color:#2e9d5b;font-weight:600">緑＝曲線部で発生する応力</span>、'+
-      '<span style="color:#7b5cc4;font-weight:600">紫＝直線部で発生する応力</span>、橙の破線が許容 25N/mm²。';
+      '<span style="color:#7b5cc4;font-weight:600">紫＝直線部で発生する応力</span>、橙の破線が許容 '+stressAllow()+'N/mm²。';
     ca.appendChild(lg);
     ca.appendChild(calcTableEl(secs));
   }
@@ -2123,7 +2150,7 @@ function stressSVG(s){
   const W=440,H=250,L=38,R=12,T=14,B=26;
   const prof=s.prof, xEnd=s.xEnd||Math.max(...prof.map(p=>p.x));
   const mxs=Math.max(...prof.map(p=>Math.max(p.sig,p.sigS)));
-  const ymax=Math.max(50,Math.ceil(mxs*1.1/10)*10);
+  const ymax=Math.max(50,stressAllow(s.sc)+5,Math.ceil(mxs*1.1/10)*10);
   const X=x=>L+(x/xEnd)*(W-L-R), Y=y=>T+(y/ymax)*(H-T-B), f=v=>v.toFixed(1);
   const edgeL=i=>i===0?0:(prof[i-1].x+prof[i].x)/2;
   const edgeR=i=>i===prof.length-1?xEnd:(prof[i].x+prof[i+1].x)/2;
@@ -2145,8 +2172,8 @@ function stressSVG(s){
     <path d="${outline('sigS')}" fill="none" stroke="#7b5cc4" stroke-width="1.2"/>
     <path d="${area('sig')}" fill="#2e9d5b" opacity=".45"/>
     <path d="${outline('sig')}" fill="none" stroke="#d62728" stroke-width="1.6"/>
-    <line x1="${L}" y1="${f(Y(25))}" x2="${W-R}" y2="${f(Y(25))}" stroke="#b26a00" stroke-width="1.2" stroke-dasharray="6 3"/>
-    <text x="${W-R-3}" y="${f(Y(25)-3)}" font-size="9" fill="#b26a00" text-anchor="end">許容 25</text>
+    <line x1="${L}" y1="${f(Y(stressAllow(s.sc)))}" x2="${W-R}" y2="${f(Y(stressAllow(s.sc)))}" stroke="#b26a00" stroke-width="1.2" stroke-dasharray="6 3"/>
+    <text x="${W-R-3}" y="${f(Y(stressAllow(s.sc))-3)}" font-size="9" fill="#b26a00" text-anchor="end">許容 ${stressAllow(s.sc)}</text>
     <rect x="${L}" y="${T}" width="${W-L-R}" height="${H-T-B}" fill="none" stroke="var(--line)"/>
     <text x="${L+6}" y="${H-B-20}" font-size="9.5" font-weight="700" fill="#2e9d5b">曲線部 最大 ${cv?fmt(cv.sigma,1):'—'}</text>
     <text x="${L+6}" y="${H-B-8}" font-size="9.5" font-weight="700" fill="#7b5cc4">直線部 最大 ${st?fmt(st.sigma,1):'—'}</text>
@@ -2172,7 +2199,7 @@ function calcTableEl(secs){
     h+='</tr><tr>'+tb.slots.map(()=>'<th>開口長</th><th>最大応力度</th>').join('')+'</tr></thead><tbody>';
     tb.rows.forEach(r=>{
       h+=`<tr><td>${r.label}</td><td>${fmt(r.area,1)}</td><td>${fmt(r.x,1)}</td>`+
-        r.v.map(v=>`<td>${fmt(v.gap,1)}</td><td${v.sig>25?' class="v-bad"':''}>${fmt(v.sig,1)}</td>`).join('')+'</tr>';
+        r.v.map(v=>`<td>${fmt(v.gap,1)}</td><td${v.sig>(s.allow||stressAllow(s.sc))?' class="v-bad"':''}>${fmt(v.sig,1)}</td>`).join('')+'</tr>';
     });
     h+='</tbody></table></div>';
     const d=document.createElement('div'); d.innerHTML=h; wrap.appendChild(d);
@@ -2187,7 +2214,7 @@ function inputGaps(){
   const i=readInput(), a=[], names='一二三四五六七八九十';
   if(!DATA.pipe[String(parseInt(i.dia,10))]) a.push('呼び径');
   if(!(+i.leng>0)) a.push('管長(m)');
-  if(!(+i.sc>0)) a.push('管の強度');
+  if(!stressAllow(i.sc)) a.push('管の強度（50・70・90N）');
   if(!(+i.curves[0].rad>0)) a.push('第一曲線の半径(m)');
   i.curves.forEach((c,k)=>{ if(+c.rad>0 && !(+c.pbc>0)) a.push(`第${names[k]}曲線の BC点の推進力(kN)`); });
   if(!(+i.thic>0)) a.push('推進力伝達材（FJリングの層）');
@@ -2212,7 +2239,7 @@ function clearPlanView(){
   if($('planmapbox')) $('planmapbox').style.display='none';
 }
 function detachMyCurve(){
-  myProject=null; myTrace=null; myAlign=null; myPipe=null;
+  myProject=null; myTrace=null; myAlign=null; myPipe=null;sectionStrengths=[];
   planPulForce.clear(); planCfgForce.clear(); planMapsN=null;
   clearPlanView();
   if($('planinfo')) $('planinfo').innerHTML=PLAN_NEED_MY;
@@ -2240,6 +2267,8 @@ function renderTraceSummary(){
   el.innerHTML=h;
 }
 function compute(){
+  updateStressLabels();
+  if(!stressAllow()){$('reswrap').innerHTML='<div class="v-bad">管強度を50・70・90Nから選択してください。</div>';lastSections=null;lastVerdict=null;return;}
   try{ renderTraceSummary(); }catch(e){}
   drawLayout();
   showGaps();
@@ -2305,12 +2334,12 @@ function aggregateThrough(per,k,pr){
   const fin=Math.max(rk.outer, rk.after, k===1?rk.straightIn:-Infinity)+pr;
   return {sig:sig,inn:inn===Infinity?0:inn,out:out,fin:fin,broken:broken,bott:bott};
 }
-function tierOf(r,outlim,donelim){
+function tierOf(r,outlim,donelim,limit=stressAllow()){
   if(r.broken||r.bott||r.inn<5||r.out>outlim) return "不成立";
   if(donelim!=null && r.fin>donelim) return "不成立";   // vr010: 推進完了後の許容開口長
   // vr008: メーカー推奨の最小配置 1.5set（全周1枚＋上下90°1枚）に届かない構成は採らない
   if(r.ls!=null && !(r.ls>=1 && r.lc>=2)) return "不成立";
-  if(r.sig<=25) return "推奨";
+  if(r.sig<=limit) return "推奨";
   return "要検討";
 }
 /* 層（同心のリング）で作れる組合せか。
@@ -2347,7 +2376,7 @@ async function propose(){
     const pr=pulResidualFor(k);
     const list=raw.map(r=>{
       const a=aggregateThrough(r.per,k,pr);
-      return {t:tierOf(Object.assign({lc:r.lc,ls:r.ls},a),outlim,donelim),mc:r.mc,lc:r.lc,ms:r.ms,ls:r.ls,thick:r.thick,
+      return {t:tierOf(Object.assign({lc:r.lc,ls:r.ls},a),outlim,donelim,sectionAllow(k)),mc:r.mc,lc:r.lc,ms:r.ms,ls:r.ls,thick:r.thick,
               sig:a.sig,inn:a.inn,out:a.out,fin:a.fin};
     });
     let show=list.filter(r=> showAll || r.t!=="不成立");
@@ -2456,7 +2485,7 @@ function propWhySuggest(prop, sec, r){
     return {why: why.some(w=>w.startsWith('最大応力')||w.includes('破壊')) ? 'stress' : why.some(w=>w.includes('開口')) ? 'open' : 'plan',
             text:`目地ごとの割付で NG ${P.ngCount}か所（${why.join('・')||'条件を満たさない'}）`};
   }
-  if(r.t!=='推奨') return {why:'stress', text:`最大応力 ${fmt(r.sig,1)}N/mm²＞25（${r.t}）`};
+  if(r.t!=='推奨') return {why:'stress', text:`最大応力 ${fmt(r.sig,1)}N/mm²＞${sectionAllow(sec.k)}（${r.t}）`};
   if(A && sets(r)!=null && sets(A)!=null && sets(r)>sets(A)) return {why:'econ', text:`FJリング ${fmt(sets(r),0)} set（採用した提案は ${fmt(sets(A),0)} set）`};
   if(A && (r.lc>A.lc || r.thick>A.thick)) return {why:'work', text:`層が厚い（合計 ${r.thick}mm・${r.lc}層／採用した提案は ${A.thick}mm・${A.lc}層）`};
   return {why:'other', text:''};
@@ -2510,7 +2539,7 @@ function planWhy(ngJ, lim){
   const mx=f=>Math.max(...ngJ.map(f)), mn=f=>Math.min(...ngJ.map(f));
   if(ngJ.some(J=>J.res.broken)) why.push('材料の破壊');
   if(ngJ.some(J=>J.res.bott)) why.push('FJリングがつぶれきる');
-  if(mx(J=>J.res.sig)>25) why.push(`最大応力 ${fmt(mx(J=>J.res.sig),1)}＞25`);
+  if(ngJ.some(J=>J.res.sig>(J.res.allow||stressAllow()))) why.push('最大応力が管ごとの許容応力度を超過');
   if(mn(J=>J.res.inner)<5) why.push(`内側の開口 ${fmt(mn(J=>J.res.inner),1)}mm＜5`);
   const o=mx(J=>Math.max(J.res.outer,J.res.final)); if(o>lim.allow) why.push(`外側の開口 ${fmt(o,1)}mm＞${lim.allow}`);
   return why;
@@ -2560,7 +2589,12 @@ function selfDefaultRow(){
 function setFjMode(m){
   m = m==='prop' ? 'prop' : 'self';
   $('fjMode').value=m;
-  document.querySelectorAll('.fjtab').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
+  $('sc').addEventListener('change',()=>{
+  sectionStrengths=[];lastProposal=null;lastPlan=null;planPassCache=new Map();
+  $('propwrap').innerHTML='';$('planinfo').textContent='管強度を変更しました。割付を計算し直してください。';
+  compute();scheduleSaveLast();
+});
+document.querySelectorAll('.fjtab').forEach(b=>b.classList.toggle('on', b.dataset.mode===m));
   $('tabProp').style.display = m==='prop' ? '' : 'none';
   $('tabSelf').style.display = m==='self' ? '' : 'none';
 }
@@ -2643,7 +2677,7 @@ function adoptProposal(k,i){
    ・推進管は発進立坑で継ぎ足して押すので、最終位置 p の目地は、先端が X にあるとき p−(Xf−X) にいる
      （Xf＝押し終わりの先端位置）。曲線 k の中（BC_k〜EC_k）にいるのは X∈[BC_k+Xf−p, EC_k+Xf−p] の間。
    ・最後まで BC に届かない目地（p≦BC1）は曲線を通らない → FJリングは要らない（パルリングだけ）。
-   ・曲線を通る目地は、通過中の最大推進力で 応力≦25・内側≧5・外側≦許容目地開き を確かめ、
+   ・曲線を通る目地は、通過中の最大推進力で 応力≦σc/2・内側≧5・外側≦許容目地開き を確かめ、
      止まった位置での開口（曲線の先の直線なら残留開口、曲線の中ならその開口）≦許容目地開き を確かめる。
      vr012: 許容目地開きは利用者が選んだ1つの値（planLim。推進完了時／推進中の値。表示にはどちらかを書かない）。
    ・構成は 1.5set 以上（全周≧1枚・上下を覆う層≧2枚）で、枚数（set）が少ない順に試し、最初に通ったものを採る。
@@ -2724,8 +2758,8 @@ function planEval(cfg, base, p, govs, m, finalF, inCurve, pr, lim, exact){
   let fin;
   if(inCurve) fin=rows[m-1].outer;
   else { const r=solve(2*m+1, finalF); fin=eng.mx-r.pl+pr; }
-  const ok = !broken && !bott && sig<=25 && inn>=5 && out<=lim.pass && fin<=lim.done;
-  return {ok, sig, inner:inn, outer:out, final:fin, rows, broken, bott};
+  const ok = !broken && !bott && stressAtPosition(p)>0 && sig<=stressAtPosition(p) && inn>=5 && out<=lim.pass && fin<=lim.done;
+  return {ok, sig, allow:stressAtPosition(p), inner:inn, outer:out, final:fin, rows, broken, bott};
 }
 /* vr010: set 数の合計は切り上げで統一する（0.5set は無い）。構成（パターン）ごとに set×か所 を切り上げてから足す。
    1か所あたりの「1.5set」（全周1枚＋上下1枚）はメーカーの数え方なのでそのまま出す。 */
@@ -2845,7 +2879,7 @@ async function runPlan(opt){
   // 条件が変わったら「通る／通らない」の控えを捨てる
   // vr012: 方針「採用した構成で割付」…… 区間（止まる曲線）ごとに上の照査の層構成を1つずつ使う
   const candA = opt.cfgA ? opt.cfgA : opt.cfgOf ? [null] : policy==='adopt' ? Array.from({length:Math.max(1,curves.length)},(_,i)=>adoptedPlanCfg(i+1, pitchOf(pDia))) : null;
-  const sig=[$('planJoint').value, openBasis(), mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, pDia, pLen, inp.sc,
+  const sig=[$('planJoint').value, openBasis(), mode, maxL, mats.join(','), prOn, tr.F_total, tr.pipes.length, pDia, pLen, inp.sc, JSON.stringify(tr.secs.map(s=>s.strength)),
              base.curves.map(c=>c.rad+'/'+c.drc).join(',')].join('|');
   if(sig!==planPassSig){ planPassCache=new Map(); planPassSig=sig; }
   // 目地＝No.i と No.i+1 の間（発進側を1本目。曲線プログラムの1本毎の表と同じ番号）。位置は No.i の先端
@@ -2890,7 +2924,7 @@ async function runPlan(opt){
     J.kind = J.p<last.EC ? 'in' : 'through';
     J.govs=passed.map(c=>jointGov(tr, J.p, c, Xf, mode));
     J.finalF = mode==='trans' ? trResist(tr, J.p, Xf) : trJack(tr, Xf);
-    J.key=J.govs.map(g=>Math.round(g.F)).join(',')+'|'+Math.round(J.finalF)+'|'+J.kind+'|'+m;
+    J.key=stressAtPosition(J.p)+'|'+J.govs.map(g=>Math.round(g.F)).join(',')+'|'+Math.round(J.finalF)+'|'+J.kind+'|'+m;
     const okPul=ci=> J.pulReq==null || cand[ci].pul===J.pulReq;
     const fk=planCfgForce.get(J.i), fci = fk ? cand.findIndex(c=>planCfgKey(c)===fk) : -1;
     J.forcedCi = fci>=0 ? fci : null;
@@ -2976,7 +3010,7 @@ async function runPlan(opt){
   if(policy==='adopt'){
     const ngJ=joints.filter(J=>J.res && !J.res.ok), ng=ngJ.length;
     const why=planWhy(ngJ, lim);
-    const unspec=joints.filter(J=>J.kind!=='none' && !J.cfg).length;
+    const unspec=joints.filter(J=>J.kind!=='none' && (!J.cfg||!J.res||!J.res.ok)).length;
     if(unspec) why.push(`曲線を通るのに貼付けが未指定の目地 ${unspec} か所`);
     groupNote = (ng||unspec)
       ? `<span class="v-bad">${opt.cfgOf?'指定した貼付け':'採用した構成'}では ${ng+unspec} か所の目地が条件を満たしません（目地ごとの割付の表の赤字）。理由：${why.join('・')||'条件を満たさない'}</span>`
@@ -3000,12 +3034,12 @@ async function runPlan(opt){
     policy, K, M, minTotal, groupNote, mapNote};
   if(silent){
     const P=lastPlan; lastPlan=prevPlan;
-    P.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && !J.cfg)).length;
+    P.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && (!J.cfg||!J.res||!J.res.ok))).length;
     P.pats=planPatterns(P); P.spans=planSpans(P,P.pats);
     return P;
   }
   lastPlan.selfMode=!!opt.cfgOf;
-  lastPlan.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && !J.cfg)).length;
+  lastPlan.ngCount=joints.filter(J=>(J.res && !J.res.ok) || (J.kind!=='none' && (!J.cfg||!J.res||!J.res.ok))).length;
   bar.style.width='100%'; prog.style.display='none'; $('planbtn').disabled=false;
   renderPlan(lastPlan);
   renderPlanMap(lastPlan);
@@ -3042,7 +3076,7 @@ function renderPlan(P){
   const kindLab={none:'曲線に<br>入らない', in:'曲線の中で<br>止まる', through:'曲線を通り<br>直線で止まる'};
   h+='<div style="margin:12px 0 6px;font-weight:600;color:var(--head)">目地ごとの割付</div>'+
     '<table class="ptable jt"><thead><tr><th>目地（管番号）<br>最終位置(m)<br>発進坑口から</th><th>区分</th><th>最大推進力<br>(kN)<br>先端の位置</th>'+
-    '<th>パル<br>リング</th><th>FJリング<br>（set／か所）</th><th>最大<br>応力<br>≤25</th><th>内側<br>≥5</th><th>外側<br>≤'+lim.allow+'</th></tr></thead><tbody>';
+    '<th>パル<br>リング</th><th>FJリング<br>（set／か所）</th><th>最大<br>応力／許容</th><th>内側<br>≥5</th><th>外側<br>≤'+lim.allow+'</th></tr></thead><tbody>';
   let nJ=0, nFull=0, nTop=0, nPulOff=0, nFail=0;
   groups.forEach(g=>{
     const A=g.js[0], B=g.js[g.js.length-1], n=g.js.length;
@@ -3062,7 +3096,7 @@ function renderPlan(P){
     nJ+=n; nFull+=c.ls*n; nTop+=(c.lc-c.ls)*n; if(!c.pul) nPulOff+=n;
     h+=`<tr><td class="z">${range}</td><td class="z">${kindLab[A.kind]}</td><td>${f0(gmax.f)}<br><span class="muted">先端 ${k1(gX.X)}m</span></td>`+
        `<td class="z ${c.pul?'':'v-warn'}">${c.pul?'あり':'外す'}</td><td class="z">${planCfgHTML(c)}<br><span class="muted">${fmt(c.sets,1)} set</span></td>`+
-       `<td class="${sig<=25?'v-ok':'v-bad'}">${fmt(sig,1)}</td><td class="${inn>=5?'v-ok':'v-bad'}">${fmt(inn,1)}</td>`+
+       `<td class="${rs.every(r=>r.sig<=(r.allow||stressAllow()))?'v-ok':'v-bad'}">${fmt(sig,1)}<br><span class="muted">許容 ${[...new Set(rs.map(r=>r.allow||stressAllow()))].join('／')}</span></td><td class="${inn>=5?'v-ok':'v-bad'}">${fmt(inn,1)}</td>`+
        `<td class="${Math.max(out,fin)<=lim.allow?'v-ok':'v-bad'}">${fmt(Math.max(out,fin),1)}</td></tr>`;
   });
   h+='</tbody></table>';
@@ -3434,7 +3468,7 @@ function planSpanSecs(P, sp){
   const eng=new Engine(); eng.setup(Object.assign({},P.base,z,{curves}));
   const res=eng.runUpTo(m);
   const table=captureTable(eng, res.curves.length, pr), layers=planCfgLayers(cfg);
-  return res.curves.map(c=>({k:c.k, F:F[c.k-1], zone:z, pr, mx:eng.mx, layers,
+  return res.curves.map(c=>({k:c.k, sc:Math.min(...sp.js.map(J=>2*(J.res?.allow||stressAtPosition(J.p)))), F:F[c.k-1], zone:z, pr, mx:eng.mx, layers,
     straight:{pp:c.straight.pp, sigma:c.straight.sigma, verdict:c.straight.verdict, gap:c.straight.gap+pr},
     curve:{pp:c.curve.pp, sigma:c.curve.sigma, verdict:c.curve.verdict, sd0:c.curve.sd0,
            outer:c.curve.outer_gap+pr, inner:c.curve.inner_gap+pr, rad:c.curve.rad},
@@ -3448,7 +3482,7 @@ function spanChartsHTML(P, sp){
         `<div class="muted">${sp.pat.fj}／パルリング ${sp.pat.pul}</div>`;
   secs.forEach(s=>{
     h+=`<div class="muted" style="margin-top:4px">${nc>1?`第${s.k}曲線 `:''}R=${fmt(s.curve.rad,0)}m・区間の最大推進力 ${fmt(s.F,0)}kN　`+
-       `最大応力 <b class="${s.curve.sigma<=25?'v-ok':'v-bad'}">${fmt(s.curve.sigma,1)}</b>・内側 <b class="${s.curve.inner>=5?'v-ok':'v-bad'}">${fmt(s.curve.inner,1)}mm</b>・外側 <b class="${s.curve.outer<=P.lim.allow?'v-ok':'v-bad'}">${fmt(s.curve.outer,1)}mm</b></div>`+
+       `最大応力 <b class="${s.curve.sigma<=stressAllow(s.sc)?'v-ok':'v-bad'}">${fmt(s.curve.sigma,1)}</b>・内側 <b class="${s.curve.inner>=5?'v-ok':'v-bad'}">${fmt(s.curve.inner,1)}mm</b>・外側 <b class="${s.curve.outer<=P.lim.allow?'v-ok':'v-bad'}">${fmt(s.curve.outer,1)}mm</b></div>`+
        `<div class="charts" style="margin-top:4px"><div class="chartbox"><div class="ct">変形量（累計圧縮量 mm）と目地の開口</div>${jointSVG(s,true,P.lim.allow)}</div>`+
        `<div class="chartbox"><div class="ct">応力分布（圧縮応力度 N/mm²）</div>${stressSVG(s)}</div></div>`;
   });
@@ -3612,7 +3646,7 @@ function proposeMerge(){
   const reqs=new Set(js.map(J=>planPulReq(J.i)).filter(v=>v!=null));
   const pulOk=c=> !reqs.size || (reqs.size===1 && reqs.has(c.pul));
   const reason=f=>{ const r=f.r, L=P.lim, a=[];
-    if(r.sig>25) a.push(`最大応力 ${fmt(r.sig,1)}＞25`); if(r.inner<5) a.push(`内側の開口 ${fmt(r.inner,1)}mm＜5`);
+    if(r.sig>(r.allow||stressAllow())) a.push(`最大応力 ${fmt(r.sig,1)}＞${r.allow||stressAllow()}`); if(r.inner<5) a.push(`内側の開口 ${fmt(r.inner,1)}mm＜5`);
     { const o=Math.max(r.outer||0,r.final||0); if(o>L.allow) a.push(`外側の開口 ${fmt(o,1)}mm＞${L.allow}`); }
     if(r.broken) a.push('材料の破壊'); if(r.bott) a.push('FJリングがつぶれきる');
     return `No.${f.J.a}/${f.J.b} の目地で ${a.join('・')||'条件を満たさない'}`; };
@@ -3736,10 +3770,10 @@ function guideChartSVG(){
   ar+=` L${sx0+(sx1-sx0)*0.6},${Y(0)} Z`;
   h+=`<path d="${ar}" fill="#2e9d5b" opacity=".5" stroke="#d62728" stroke-width="2.5"/>`;
   h+=`<rect x="${sx0+(sx1-sx0)*0.6}" y="${Y(0)}" width="${(sx1-sx0)*0.4}" height="${Y(9)-Y(0)}" fill="#7b5cc4" opacity=".3"/>`;
-  h+=`<line x1="${sx0}" y1="${Y(25)}" x2="${sx1}" y2="${Y(25)}" stroke="#b26a00" stroke-width="3.5" stroke-dasharray="10 6"/>`;
-  h+=`<text x="${sx0-8}" y="${Y(0)+6}" text-anchor="end" font-size="16">0</text><text x="${sx0-8}" y="${Y(25)+6}" text-anchor="end" font-size="16">25</text>`;
+  h+=`<line x1="${sx0}" y1="${Y(stressAllow())}" x2="${sx1}" y2="${Y(stressAllow())}" stroke="#b26a00" stroke-width="3.5" stroke-dasharray="10 6"/>`;
+  h+=`<text x="${sx0-8}" y="${Y(0)+6}" text-anchor="end" font-size="16">0</text><text x="${sx0-8}" y="${Y(stressAllow())+6}" text-anchor="end" font-size="16">${stressAllow()}</text>`;
   h+=bubble(960,500,150,'🟢 緑',['曲線の応力'],sx0+30,Y(16),...GC.green);
-  h+=bubble(1120,500,170,'🟠 破線',['許容 25','はみ出すと NG'],sx1-50,Y(25),...GC.orange);
+  h+=bubble(1120,500,170,'🟠 破線',['許容 '+stressAllow(),'はみ出すと NG'],sx1-50,Y(stressAllow()),...GC.orange);
   return h+'</svg>';
 }
 function guideTableSVG(){
@@ -3762,7 +3796,7 @@ function guideHTML(part){
   const p2=`<div class="gh">📊 変形量と応力分布の見方</div>${guideChartSVG()}`;
   return `<div class="guide">${part===2?'':p1}${part===1?'':p2}${part===1?'':`
   <div class="gcards">
-    <div class="gc" style="border-color:#2b8a3e"><b>照査で見ること</b>最大応力度 ≦ 25N/mm²・内側の開口 ≧ 5mm・外側の開口・止まった位置の開口 ≦ 継手の許容目地開き</div>
+    <div class="gc" style="border-color:#2b8a3e"><b>照査で見ること</b>最大応力度 ≦ ${stressAllow()}N/mm²・内側の開口 ≧ 5mm・外側の開口・止まった位置の開口 ≦ 継手の許容目地開き</div>
     <div class="gc" style="border-color:#1f5fbf"><b>推進力</b>曲線プログラムの1本毎の推進力。目地ごとに、曲線を通る間の一番大きい力で確かめる</div>
     <div class="gc" style="border-color:#e8590c"><b>割付の方針</b>費用優先＝目地ごとに最小。まとめる＝パターンと倍率の種類を減らし、取り違えを防ぐ</div>
   </div>`}</div>`;
@@ -4042,7 +4076,7 @@ function collectRecord(){
     savedAt: new Date().toISOString(),
     site: {name:$('siteName').value.trim(), span:$('siteSpan').value.trim(), date:$('siteDate').value},
     input: {
-      dia:+$('dia').value, leng:+$('leng').value, sc:+$('sc').value,
+      specVersion:2, pipeSpecSignature:myProject?.pipe?.specSignature||null, sectionStrengths:[...sectionStrengths], dia:+$('dia').value, leng:+$('leng').value, sc:+$('sc').value,
       cuMode:$('cuMode').value,
       // 互換のため第一区間の構成を従来のキーでも残す（vr006以前の読み手が壊れないように）
       pulRing:{on:c0.pul.on, thick:c0.pul.thick, crush:c0.pul.crush},
@@ -4062,7 +4096,7 @@ function collectRecord(){
     const secs = lastSections || runPerCurve();
     rec.input.pulResidual = pulResidualOf(c0.pul);
     rec.result = secs.map(sc=>({
-      k: sc.k,
+      k: sc.k, sc:sc.sc, allow:sc.allow,
       // その区間に据え付ける構成（曲線プログラム側の曲線へ書き戻すのに使う）
       zone: {...sc.zone}, pulResidual: sc.pr,
       layers: sc.layers.map(l=>({...l})), pulRing: {...sc.pul},
@@ -4082,7 +4116,7 @@ function applyRecord(rec){
   if(!rec || !rec.input) throw new Error('履歴の形式が違います');
   const s=rec.site||{}, i=rec.input;
   $('siteName').value=s.name||''; $('siteSpan').value=s.span||''; $('siteDate').value=s.date||'';
-  $('dia').value=i.dia; $('leng').value=i.leng; $('sc').value=i.sc;
+  $('dia').value=i.dia; $('leng').value=i.leng; $('sc').value=i.sc;sectionStrengths=Array.isArray(i.sectionStrengths)?i.sectionStrengths:[];
   // 層構成（無い旧形式の履歴は「直接指定」モードで開く）
   if(i.layers){
     const norm = ls => { const a=(ls||[]).map(l=>({...l}));
@@ -4172,7 +4206,7 @@ function renderHistory(show){
     let sig='—';
     if(r.result&&r.result.length){
       const m=Math.max(...r.result.map(c=>Math.max(c.straight.sigma,c.curve.sigma)));
-      sig=`<span class="${m<=25?'v-ok':'v-warn'}">${fmt(m,2)}</span>`;
+      sig=`<span class="${m<=stressAllow(i.sc)?'v-ok':'v-warn'}">${fmt(m,2)}</span>`;
     }
     h+=`<tr><td class="z">${s.name||''}</td><td class="z">${s.span||''}</td><td class="z">${s.date||''}</td>`+
        `<td>${i.dia||''}</td><td class="z">${SN[i.varc]||''} ${i.thic||0}mm ／ ${SN[i.vars]||''} ${i.this||0}mm</td>`+
@@ -4242,6 +4276,23 @@ function importMyCurve(d){
     : 'この現場JSONには1本毎の推進力が入っていません（曲線プログラムで推進力を計算してから保存すると入ります）。';
   const site=d.site||{}, pipe=d.pipe||{}, curvesIn=(d.alignment.curves||[]);
   const notes=[];
+  const standards=curvesIn.map(c=>projectStrength(c.spec,pipe));
+  const straightSpecs=d.alignment.straightSpecs||[];
+  sectionStrengths=standards.map((sc,k)=>{
+    const after=projectStrength(straightSpecs[k+1]?.spec,pipe);
+    return sc&&after?Math.min(sc,after):sc||after||0;
+  });
+  const sc=projectStrength(null,pipe);
+  $('sc').value=sc||'';
+  if(!sc||standards.some(x=>!x))throw new Error('この管材または管強度は軸力検証の対象外です。ヒューム管50・70・90Nの仕様を確認してください。');
+  if(myTrace){let si=0;myTrace.secs.forEach(sec=>{
+    const idx=sec.type==='straight'?(sec.straightIdx??si++):sec.type==='pushout'?straightSpecs.length-1:0;
+    const spec=sec.type==='curve'?curvesIn[(sec.curveNo||1)-1]?.spec:straightSpecs[idx]?.spec;
+    sec.strength=projectStrength(spec,pipe);
+    if(!sec.strength)throw new Error('区間の管材は軸力検証の対象外です。管仕様を確認してください。');
+  });}
+  if(sectionStrengths.some(x=>x!==sc))notes.push('区間ごとの管強度を取り込みました。曲線とその先の直線は小さい方の強度で照査します。');
+
 
   $('siteName').value=site.name||''; $('siteSpan').value=site.span||''; $('siteDate').value=site.date||'';
 
@@ -4385,7 +4436,7 @@ function importMyCurve(d){
 const MY_HANDOFF_KEY = 'mycurve_jikuryoku_handoff_v1';
 const MY_RETURN_KEY  = 'mycurve_jikuryoku_return_v1';
 const MY_EMBED_FORMAT = 'JIKURYOKU_EMBED_v1';
-const APP_BUILD_TAG = 'vr012 2026-11-09 15:15';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
+const APP_BUILD_TAG = 'vr013 2026-11-15 21:12';   // build.py が「vr011 2026-11-08 10:00」の形に置き換える
 const MY_SOURCE = '軸力検証ソフト HTML版 ' + APP_BUILD_TAG;
 /* vr011: JSON を1つの形にそろえる（曲線プログラムでも軸力検証でも開ける）。
    共通の形＝曲線プログラムの現場JSON。軸力検証の入力・結果はその jikuryoku（JIKURYOKU_EMBED_v1）に入る。
@@ -4401,8 +4452,8 @@ function collectEmbed(rec){
   // vr011: 判定（曲線プログラムの総合判定⑦）。割付を計算していて構成の見つからない目地があれば NG に加える
   let verdict = lastVerdict ? {...lastVerdict} : null;
   if(verdict && lastPlan && lastPlan.joints){
-    const nf=lastPlan.joints.filter(J=>J.kind!=='none' && !J.cfg).length;
-    if(nf){ verdict.ok=false; verdict.text+=`／割付：構成の見つからない目地 ${nf} か所（継手 ${lastPlan.joint}）`; }
+    const nf=lastPlan.joints.filter(J=>J.kind!=='none' && (!J.cfg||!J.res||!J.res.ok)).length;
+    if(nf){ verdict.ok=false; verdict.text+=`／割付：条件を満たさない目地 ${nf} か所（継手 ${lastPlan.joint}）`; }
     else verdict.text+=`／割付：${fmt(setsTotalOf(lastPlan.joints),0)} set（継手 ${lastPlan.joint}）`;
   }
   return { format: MY_EMBED_FORMAT, savedAt: rec.savedAt, source: MY_SOURCE,
@@ -4446,7 +4497,7 @@ function overlayEmbedded(d, notes){
   const jk = d && d.jikuryoku;
   if(!jk || !jk.input) return false;
   const i = jk.input;
-  if(i.sc!=null && i.sc!=='') $('sc').value = i.sc;   // 管の強度。曲線プログラムに対応する入力が無い
+  // 管強度は今回の曲線プログラムの管仕様を優先し、前回のscでは上書きしない。
   if(jk.propose){
     if(jk.propose.maxLayers) $('maxLayers').value = jk.propose.maxLayers;
     if(jk.propose.jointType) $('jointType').value = jk.propose.jointType;  // 手で選び直した分を優先
@@ -4658,7 +4709,7 @@ function loadExample(){
   $('cuMode').value='zone';
   $('layerUI').style.display='none'; $('zoneUI').style.display='';
   PUL.on=false; PUL.residual=0; $('pulUse').checked=false; $('zonecalc').innerHTML='';
-  $('dia').value=e.dia; $('leng').value=e.leng; $('sc').value=e.sc;
+  sectionStrengths=[];$('dia').value=e.dia; $('leng').value=e.leng; $('sc').value=e.sc;
   $('varc').value=e.varc; $('vars').value=e.vars; $('thic').value=e.thic; $('this').value=e.this;
   const dirs=drcToDirs(e.cv);
   for(let k=0;k<CURVE_N;k++){
