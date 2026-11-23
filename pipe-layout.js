@@ -147,14 +147,25 @@ function svg(L){
  const all=L.pipes.flatMap(p=>polygon(p,0,p.len,p.outer/2));if(L.arr.R){const c=L.rt.at(L.arr.center);all.push([c.X-L.arr.R,c.Y-L.arr.R],[c.X+L.arr.R,c.Y+L.arr.R]);}
  const minX=Math.min(...all.map(p=>p[0])),maxX=Math.max(...all.map(p=>p[0])),minY=Math.min(...all.map(p=>p[1])),maxY=Math.max(...all.map(p=>p[1])),pad=Math.max(1,(maxX-minX)*.025),W=maxX-minX+pad*2,H=maxY-minY+pad*2;
  const path=pts=>'M'+pts.map(p=>p.map(v=>f(v,6)).join(',')).join(' L')+' Z',lw=.0012;
- let h=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX-pad} ${minY-pad} ${W} ${H}" role="img" aria-label="実寸管割付図" style="display:block;width:100%;height:100%;background:white;touch-action:none"><defs><pattern id="plh" width=".04" height=".04" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V.04" stroke="#c8ced3" stroke-width=".008"/></pattern></defs>`;
+ let h=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX-pad} ${minY-pad} ${W} ${H}" class="pl-drawing pl-overview" role="img" aria-label="実寸管割付図" style="display:block;width:100%;height:100%;background:white;touch-action:none"><style>
+.pl-drawing,.pl-drawing *{user-select:none;-webkit-user-select:none;caret-color:transparent}
+.pl-drawing [data-pipe]:focus{outline:none}
+.pl-drawing [data-pipe]:focus-visible .pl-outer{stroke:#c02626}
+.pl-outer{stroke-width:2.4px;vector-effect:non-scaling-stroke}
+.pl-inner{stroke-width:1px;vector-effect:non-scaling-stroke}
+.pl-overview .pl-outer{fill:#e2e8f0}
+.pl-overview .pl-inner,.pl-overview .pl-collar,.pl-overview [data-joint],.pl-overview .pl-survey{display:none}
+.pl-section .pl-outer{fill:#d9e1e8}
+.pl-number{paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}
+.pl-selected .pl-outer{stroke:#c02626;fill:#fee2e2}
+</style><defs><pattern id="plh" width=".04" height=".04" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V.04" stroke="#c8ced3" stroke-width=".008"/></pattern></defs>`;
  L.pipes.forEach(p=>{
-  const mat=L.joints[p.no-1]?.mat||material(L.settings,p.no,L.pitch),c=color(L,mat),poly=(a,b,r,fill,stroke)=>`<path d="${path(polygon(p,a,b,r))}" fill="${fill}" stroke="${stroke}" stroke-width="${lw}"/>`;
+  const mat=L.joints[p.no-1]?.mat||material(L.settings,p.no,L.pitch),c=color(L,mat),poly=(a,b,r,fill,stroke,cls)=>`<path class="${cls}" d="${path(polygon(p,a,b,r))}" fill="${fill}" stroke="${stroke}" stroke-width="${lw}"/>`;
   // 輪郭線を管体の内側で切り抜く。線幅を大きくしても目地・材料へはみ出させない。
-  h+=`<defs><clipPath id="pipeclip${p.no}"><path d="${path(polygon(p,0,p.len,p.outer/2))}"/></clipPath></defs><g data-pipe="${p.no}" tabindex="0" role="button" aria-label="${p.no}本目"><title>${p.no}本目 有効長${f(p.len)}m</title><g clip-path="url(#pipeclip${p.no})">`+poly(0,p.len,p.outer/2,'url(#plh)',c)+poly(0,p.len,p.inner/2,'#fff','#8796a3');
+  h+=`<defs><clipPath id="pipeclip${p.no}"><path d="${path(polygon(p,0,p.len,p.outer/2))}"/></clipPath></defs><g data-pipe="${p.no}" tabindex="0" role="button" aria-label="${p.no}本目"><title>${p.no}本目 有効長${f(p.len)}m</title><g clip-path="url(#pipeclip${p.no})">`+poly(0,p.len,p.outer/2,'url(#plh)',c,'pl-outer')+poly(0,p.len,p.inner/2,'#fff','#475569','pl-inner');
   const ca=catalog(p),ci=Math.min(ca?ca.lc1/1000:.12,p.len/4);
-  h+=`<path d="${path(polygon(p,0,ci,p.outer/2))} ${path(polygon(p,0,ci,p.inner/2))}" fill="#94a3b844" fill-rule="evenodd" stroke="none"/>`+'</g>';
-  const cc={X:(p.front.X+p.rear.X)/2,Y:(p.front.Y+p.rear.Y)/2};h+=`<text x="${cc.X}" y="${cc.Y}" font-size=".12" fill="#183550" text-anchor="middle" dominant-baseline="middle">${p.no}</text></g>`;
+  h+=`<path class="pl-collar" d="${path(polygon(p,0,ci,p.outer/2))} ${path(polygon(p,0,ci,p.inner/2))}" fill="#94a3b844" fill-rule="evenodd" stroke="none"/>`+'</g>';
+  const cc={X:(p.front.X+p.rear.X)/2,Y:(p.front.Y+p.rear.Y)/2};h+=`<text class="pl-number" x="${cc.X}" y="${cc.Y}" font-size=".12" fill="#183550" text-anchor="middle" dominant-baseline="middle">${p.no}</text></g>`;
  });
  L.joints.forEach(j=>{
   const m=j.mat,c=color(L,m);
@@ -164,7 +175,7 @@ function svg(L){
   if(!prev||prev.pattern!==m.pattern||prev.pul!==m.pul){const p=j.frontPipe,x=(p.front.X+p.rear.X)/2,y=(p.front.Y+p.rear.Y)/2-p.outer/2-.3;h+=`<text x="${x}" y="${y}" font-size=".2" text-anchor="middle" fill="${c}">${esc(m.pattern==='PB'?(m.pul?'パル':'なし'):m.pattern)}</text>`;}
   h+='</g>';
  });
- const label=(s,txt,c,row=0)=>{const q=L.rt.at(s),y=q.Y+Math.max(...L.pipes.map(p=>p.outer))/2+.25+row*.25;return `<circle cx="${q.X}" cy="${q.Y}" r=".035" fill="${c}"/><path d="M${q.X} ${q.Y+.1}V${y-.16}" fill="none" stroke="${c}" stroke-width=".004"/><text x="${q.X}" y="${y}" font-size=".16" fill="${c}" text-anchor="middle">${txt}</text>`;};
+ const label=(s,txt,c,row=0)=>{const q=L.rt.at(s),y=q.Y+Math.max(...L.pipes.map(p=>p.outer))/2+.25+row*.25;return `<g class="pl-survey"><circle cx="${q.X}" cy="${q.Y}" r=".035" fill="${c}"/><path d="M${q.X} ${q.Y+.1}V${y-.16}" fill="none" stroke="${c}" stroke-width=".004"/><text x="${q.X}" y="${y}" font-size=".16" fill="${c}" text-anchor="middle">${txt}</text></g>`;};
  h+=label(0,'BP','#334155')+label(L.launch,'発進坑口','#334155')+label(L.rt.total-L.arr.off,'到達坑口','#334155');
  L.rt.segs.filter(g=>g.k).forEach(g=>{h+=label(g.s,'BC'+g.curveNo,'#334155')+label(g.s+g.L,'EC'+g.curveNo,'#334155');});
  if(L.arr.R){const c=L.rt.at(L.arr.center),p=L.pipes[0],u={x:Math.cos(p.th),y:Math.sin(p.th)},n={x:-Math.sin(p.th),y:Math.cos(p.th)},cut=[];
@@ -174,6 +185,25 @@ function svg(L){
   h+=label(L.arr.center,'到達人孔芯','#dc2626',2);
  }
  h+=label(L.arr.tip,'押切端面','#dc2626',1);return h+'</svg>';
+}
+
+function updateDisplay(svg,L){
+ const scale=Math.abs(svg.getScreenCTM()?.a)||1;
+ const diameter=Math.min(...L.pipes.map(p=>p.outer))*scale;
+ const mode=diameter<28?'overview':diameter<80?'section':'detail';
+ svg.classList.remove('pl-overview','pl-section','pl-detail-view');
+ svg.classList.add(mode==='detail'?'pl-detail-view':'pl-'+mode);
+ svg.dataset.display=mode;
+ const pitch=Math.min(...L.pipes.filter(p=>!p.partial).map(p=>p.len))*scale;
+ const stride=[1,5,10,20,50,100,200,500,1000].find(n=>n*pitch>=42)||1000;
+ svg.querySelectorAll('[data-pipe]').forEach(g=>{
+  const p=L.pipes[+g.dataset.pipe-1],t=g.querySelector('.pl-number');
+  if(!t)return;
+  t.style.display=(p.no===1||p.no%stride===0||g.classList.contains('pl-selected'))?'':'none';
+  t.setAttribute('font-size',12/scale);
+  t.setAttribute('dy',mode==='overview'?-p.outer/2-9/scale:0);
+ });
+ return mode;
 }
 function catalog(p){
  const dia=Math.round(p.inner*1000),ja=p.jointType===30,jc=p.jointType===60;
@@ -210,6 +240,6 @@ function detail(L,no){
  h+=ca?`<small>継手${ca.kind}参考寸法：D1=${ca.d1}・D2=${ca.d2}・Dc=${ca.dc}・Tc=${ca.tc}・Lc1=${ca.lc1}・Lc2=${ca.lc2}mm。ゴム断面と上図のカラー周辺は模式。<a href="https://harima-con.co.jp/image/about_hume_pipe/hp_manual_all.pdf" target="_blank" rel="noopener">設計施工要覧 表1.3.8.1-1／1.3.8.2-1</a></small>`:'<small>この管種・継手の製品詳細寸法は未収録です。管体と開口のみを実寸で算定します。</small>';
  return h;
 }
-const api={offset,arrival,route,standard,material,validate,build,svg,detail,catalog,esc,materialPolygons,polygon,signature};
+const api={updateDisplay,offset,arrival,route,standard,material,validate,build,svg,detail,catalog,esc,materialPolygons,polygon,signature};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.PipeLayout=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

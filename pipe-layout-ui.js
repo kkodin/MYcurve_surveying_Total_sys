@@ -11,7 +11,7 @@ function mount(host,project,settings,hooks={}){
  <div data-pl="summary"></div>
  <div class="pl-controls"><button type="button" data-pl="fit">全体</button><button type="button" data-pl="plus">拡大</button><button type="button" data-pl="minus">縮小</button><label>管番号 <input type="number" min="1" step="1" value="1" data-pl="number"></label><button type="button" data-pl="jump">この管へ</button><button type="button" data-pl="save">図を保存</button></div>
  <div class="pl-note">図上の管を押すと目地詳細を表示します。ドラッグで移動、ホイール・2本指で拡大縮小。</div>
- <div class="pl-view" data-pl="view"></div><div class="pl-detail" data-pl="detail"></div>
+ <div class="pl-note" data-pl="display" aria-live="polite"></div><div class="pl-view" data-pl="view"></div><div class="pl-detail" data-pl="detail"></div>
  <details><summary style="cursor:pointer;padding:12px 0;font-weight:600">管ごとの寸法と目地開き</summary><div data-pl="table" style="max-height:360px;overflow:auto"></div></details>
  <h3>組合せパターン</h3><p class="pl-note">全周の層を左右にも貼り、残りは上下面に貼ります。パターンの変更は、そのパターンを指定した範囲すべてに反映します。</p>
  <div data-pl="patterns"></div><div class="pl-controls"><button type="button" data-pl="addPattern">パターンを追加</button></div>
@@ -29,13 +29,15 @@ function mount(host,project,settings,hooks={}){
   host.querySelectorAll('[data-del-pat]').forEach(b=>b.onclick=()=>{state.patterns.splice(+b.dataset.delPat,1);editors();dirty();});
   host.querySelectorAll('[data-del-range]').forEach(b=>b.onclick=()=>{state.ranges.splice(+b.dataset.delRange,1);editors();dirty();});
  }
- function setView(v){if(!layout)return;view=v;el('view').querySelector('svg').setAttribute('viewBox',[v.x,v.y,v.w,v.h].join(' '));}
+ function display(){const svg=el('view').querySelector('svg');if(!layout||!svg)return;const mode=PL.updateDisplay(svg,layout);el('display').textContent=mode==='overview'?'全体表示：外郭を強調（内径線・継手・材料は拡大すると表示）':mode==='section'?'管断面表示：内径線・継手・材料を表示（さらに拡大すると管壁ハッチを表示）':'詳細表示：管壁・目地・材料を実寸で表示';}
+ function setView(v){if(!layout)return;view=v;el('view').querySelector('svg').setAttribute('viewBox',[v.x,v.y,v.w,v.h].join(' '));display();}
  function zoom(k,c){if(!view)return;const w=view.w*k,h=view.h*k;if(w<.15||w>20000)return;const p=c||{x:view.x+view.w/2,y:view.y+view.h/2},rx=(p.x-view.x)/view.w,ry=(p.y-view.y)/view.h;setView({x:p.x-w*rx,y:p.y-h*ry,w,h});}
- function select(no,jump){if(!layout)return;if(!Number.isInteger(no)||no<1||no>layout.pipes.length){status('管番号は1〜'+layout.pipes.length+'で指定してください。',true);return;}selected=no;el('number').value=no;el('detail').innerHTML=PL.detail(layout,no);el('view').querySelectorAll('[data-pipe]').forEach(g=>{const t=g.querySelector('text');if(t){t.setAttribute('fill',+g.dataset.pipe===no?'#dc2626':'#183550');t.setAttribute('font-weight',+g.dataset.pipe===no?'700':'400');}});if(jump){const p=layout.pipes[no-1],w=Math.max(5,p.len*3),h=w*el('view').clientHeight/Math.max(1,el('view').clientWidth);setView({x:(p.front.X+p.rear.X)/2-w/2,y:(p.front.Y+p.rear.Y)/2-h/2,w,h});}}
+ function select(no,jump){if(!layout)return;if(!Number.isInteger(no)||no<1||no>layout.pipes.length){status('管番号は1〜'+layout.pipes.length+'で指定してください。',true);return;}selected=no;el('number').value=no;el('detail').innerHTML=PL.detail(layout,no);el('view').querySelectorAll('[data-pipe]').forEach(g=>{g.classList.toggle('pl-selected',+g.dataset.pipe===no);const t=g.querySelector('text');if(t){t.setAttribute('fill',+g.dataset.pipe===no?'#dc2626':'#183550');t.setAttribute('font-weight',+g.dataset.pipe===no?'700':'400');}});display();if(jump){const p=layout.pipes[no-1],w=Math.max(5,p.len*3),h=w*el('view').clientHeight/Math.max(1,el('view').clientWidth);setView({x:(p.front.X+p.rear.X)/2-w/2,y:(p.front.Y+p.rear.Y)/2-h/2,w,h});}}
  function interactions(){
   const svg=el('view').querySelector('svg'),pointers=new Map();let moved=false,down=null,lastPinch=null;
   const world=(x,y)=>{const p=svg.createSVGPoint();p.x=x;p.y=y;return p.matrixTransform(svg.getScreenCTM().inverse());};
-  svg.onpointerdown=e=>{pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});svg.setPointerCapture(e.pointerId);down={x:e.clientX,y:e.clientY,target:e.target};moved=false;};
+  svg.onselectstart=e=>e.preventDefault();
+  svg.onpointerdown=e=>{e.preventDefault();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});svg.setPointerCapture(e.pointerId);down={x:e.clientX,y:e.clientY,target:e.target};moved=false;};
   svg.onpointermove=e=>{if(!pointers.has(e.pointerId))return;const old=pointers.get(e.pointerId),a=world(old.x,old.y),b=world(e.clientX,e.clientY);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
    if(pointers.size===2){const ps=[...pointers.values()],distance=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);if(lastPinch)zoom(lastPinch/distance,world((ps[0].x+ps[1].x)/2,(ps[0].y+ps[1].y)/2));lastPinch=distance;moved=true;}
    else {if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>4)moved=true;if(moved)setView({...view,x:view.x+a.x-b.x,y:view.y+a.y-b.y});}
@@ -59,7 +61,7 @@ function mount(host,project,settings,hooks={}){
  el('apply').onclick=render;el('plus').onclick=()=>zoom(.6);el('minus').onclick=()=>zoom(1/.6);el('jump').onclick=()=>select(+el('number').value,true);
  el('save').onclick=()=>{if(!layout)return;const s=el('view').querySelector('svg').cloneNode(true);s.setAttribute('viewBox',view.x+' '+view.y+' '+view.w+' '+view.h);s.setAttribute('width','1600');s.setAttribute('height','900');s.style.width='1600px';s.style.height='900px';const url=URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(s)],{type:'image/svg+xml'})),a=document.createElement('a');a.href=url;a.download='管割付図.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  el('check').onclick=async()=>{const L=render();if(!L)return;try{await hooks.onCheck?.(L);status(hooks.onCheck?'照査結果を下の管割付表で確認してください。':'推進力が未計算です。配置検討図として保存できます。');}catch(e){status(e.message,true);}};
- editors();render();
+ new ResizeObserver(()=>display()).observe(el('view'));editors();render();
  return {getSettings:()=>JSON.parse(JSON.stringify(state)),getLayout:()=>layout,render};
 }
 function f(x,n=3){return Number(x).toFixed(n);}
