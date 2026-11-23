@@ -1,4 +1,4 @@
-const CACHE_NAME = "m-app-005-v126";
+const CACHE_NAME = "m-app-005-v127";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./icon.svg",
   "./README.txt",
   "./M_APP_005.html",
+  "./pipe-layout.js",
   "./軸力検証ソフト_HTML版.html"
 ];
 
