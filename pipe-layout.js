@@ -6,7 +6,7 @@ const WALL={.9:[80,100],1.2:[100,125],1.5:[125,150],1.8:[160,160],2.2:[190,190]}
 function offset(sh,side){
  if(sh[side+'Mode']==='direct')return +sh[side+'Direct']||0;
  const type=sh[side+'Type'];
- if(side==='arrival'&&type==='manhole'){const D=+sh.manholeSize||1.2;return D/2+(WALL[D]?.[(+sh.manholeGrade||1)-1]||0)/1000;}
+ if(side==='arrival'&&type==='manhole'){const m=sh.arrivalManhole||{};if(m.shape==='circle'&&m.outerD>0)return m.outerD/2;if(m.shape==='rect'&&m.outerL>0)return m.outerL/2;const D=+sh.manholeSize||1.2;return D/2+(WALL[D]?.[(+sh.manholeGrade||1)-1]||0)/1000;}
  if(type==='circle')return +sh[side+'CircleOff']||0;
  return (+sh[side+'L']||0)/2+(side==='launch'?(+sh.launchOffset||0):0);
 }
@@ -17,6 +17,12 @@ function arrival(sh,D,total){
   const push=Number(sh.arrivalPushOut??0.3);
   if(!Number.isFinite(push)||push<0)throw Error('押込み量は0以上の数値にしてください。');
   return {mode,push,tip:total-off+push,center:total,R:0,r:D/2,missing:0,a:0,off};
+ }
+ const man=sh.arrivalManhole||{};if(man.shape==='none'&&mode==='inner')throw Error('人孔なしの場合は空伏管または個別停止位置を指定してください。');
+ if(mode==='inner'&&man.shape==='rect'){
+  const w=+man.innerW,l=+man.innerL;if(!(w>D&&l>0))throw Error('矩形到達人孔の内幅は管外径より大きく、内延長は正の値にしてください。');
+  const a=l/2,push=off-a;if(push<0)throw Error('矩形人孔の内壁が到達坑口より手前です。');
+  return {mode,push,tip:total-a,center:total,R:0,r:D/2,missing:0,a,off,shape:'rect'};
  }
  const R=Number(sh.arrivalInnerD??(sh.arrivalType==='manhole'?sh.manholeSize:1.2))/2,r=D/2;
  if(!(R>r))throw Error('到達人孔内径は推進管外径より大きくしてください。個別の停止位置も選べます。');
@@ -55,7 +61,7 @@ function step(q,k,L){return Math.abs(k)<1e-12?{X:q.X+L*Math.cos(q.th),Y:q.Y+L*Ma
 function standard(){return {version:1,patterns:[{name:'A',mc:12,lc:2,ms:12,ls:1},{name:'B',mc:13,lc:3,ms:13,ls:1}],ranges:[]};}
 function material(settings,no,pitch){
  const r=settings.ranges.find(r=>no>=r.from&&no<=r.to);
- const p=r&&r.pattern!=='PB'?settings.patterns.find(p=>p.name===r.pattern):null;
+ const pp=r&&r.pattern!=='PB'?settings.patterns.find(p=>p.name===r.pattern):null,p=pp&&(pp.lc||pp.ls)?pp:null;
  const on=r?r.pul:true,thick=r?+r.thick:10,crush=r?+r.crush:0;
  return {pattern:r?r.pattern:'PB',pul:on,thick,crush,p,cushion:(on?thick-crush:0)+(p?p.ls*pitch:0),maximum:(on?thick-crush:0)+(p?p.lc*pitch:0),specified:!!r};
 }
@@ -63,7 +69,7 @@ function validate(settings){
  if(!settings||!Array.isArray(settings.patterns)||!Array.isArray(settings.ranges))throw Error('材料指定の保存形式を確認してください。');
  const names=new Set();settings.patterns.forEach(p=>{
   if(!p.name||names.has(p.name))throw Error('パターン名を重複させないでください。');names.add(p.name);
-  if(![11,12,13,14,15].includes(+p.mc)||![11,12,13,14,15].includes(+p.ms)||!Number.isInteger(+p.ls)||!Number.isInteger(+p.lc)||p.ls<1||p.lc<p.ls||p.lc>6)throw Error('FJの全周層数は1以上、上下面層数は全周層数以上・6以下にしてください。');
+  if(![11,12,13,14,15].includes(+p.mc)||![11,12,13,14,15].includes(+p.ms)||!Number.isInteger(+p.ls)||!Number.isInteger(+p.lc)||p.ls<0||p.lc<0||p.ls>6||p.lc>6)throw Error('FJの上下面・左右の総層数は0〜6の整数にしてください。');
  });
  settings.ranges.forEach((r,i)=>{
   if(!Number.isInteger(r.from)||!Number.isInteger(r.to)||r.from<1||r.to<r.from)throw Error('目地範囲は1以上の整数で開始≦終了にしてください。');
@@ -76,14 +82,15 @@ function specAt(d,rt,s){
  const g=rt.segs.find(g=>s>=g.s-1e-9&&s<=g.s+g.L+1e-9)||rt.segs.at(-1),b=d.pipe||{},o=(g.spec?.on===false?{}:g.spec)||{};
  const outer=+(o.outer??b.outer),inner=+(o.inner??b.inner),len=+(o.len??o.lp??b.len);
  if(!(len>0&&outer>inner&&inner>0))throw Error('管の外径・内径・有効長を確認してください。');
- return {outer,inner,len,category:o.category||b.category,jointType:+(o.jointType??b.jointType),g};
+ return {outer,inner,len,category:o.category||b.category,grade:o.grade||b.grade,jointType:+(o.jointType??b.jointType),g};
 }
 function signature(d){
  const rt=route(d),sh=d.shaft||{},a=arrival(sh,specAt(d,rt,rt.total).outer,rt.total);
  const round=v=>Math.round(v*1e8)/1e8;
- return JSON.stringify({pipe:d.pipe?.specSignature||null,route:rt.segs.map(g=>{const p=specAt(d,rt,g.s+g.L/2);return [g.s,g.L,g.k,p.outer,p.inner,p.nominalLen||p.len,p.category,p.jointType].map(x=>typeof x==='number'?round(x):x);}),launch:round(offset(sh,'launch')),arrival:[a.mode,...[a.tip,a.push,a.R,a.off].map(round)]});
+ return JSON.stringify({pipe:d.pipe?.specSignature||null,route:rt.segs.map(g=>{const p=specAt(d,rt,g.s+g.L/2);return [g.s,g.L,g.k,p.outer,p.inner,p.nominalLen||p.len,p.category,p.jointType].map(x=>typeof x==='number'?round(x):x);}),shaft:[sh.launchManhole||null,sh.arrivalManhole||null,...['launchType','arrivalType','launchCircleD','arrivalCircleD','launchL','launchW','arrivalL','arrivalW'].map(k=>sh[k]||null)],launch:round(offset(sh,'launch')),arrival:[a.mode,...[a.tip,a.push,a.R,a.off].map(round)]});
 }
-function build(d,settings=standard()){
+function build(d,settings=standard(),options={}){
+ settings=normalize(settings);
  validate(settings); const rt=route(d),sh=d.shaft||{},spec=specAt(d,rt,rt.total),arr=arrival(sh,spec.outer,rt.total),launch=offset(sh,'launch');
  if(arr.tip<=launch)throw Error('押切位置が発進坑口以前です。到達条件を確認してください。');
  if(arr.mode==='inner'&&rt.segs.some(g=>g.k&&g.s+g.L>arr.tip-spec.len))throw Error('到達部が曲線です。個別の停止位置を指定してください。');
@@ -108,7 +115,8 @@ function build(d,settings=standard()){
    if(cs<.1)throw Error('管の折れ角が大きすぎます。');
    const center=(dx*Math.cos(q.th)+dy*Math.sin(q.th))/cs,slope=Math.tan(delta),spread=pp.outer/2*Math.abs(slope);
    const full=center-spread-mat.cushion/1000,upper=center-spread/Math.SQRT2-mat.maximum/1000;
-   return {q,center,slope,margin:Math.min(full,upper)};
+   const final=options.finalGaps?.[no];
+   return {q,center,slope,margin:final!=null?center-final/1000:Math.min(full,upper)};
   };
   const need=mat.maximum/1000;let lo=0,hi=Math.min(pp.rearS,need+(pp.outer+spec.outer)*2);
   if(gapAt(pp.rearS-hi).margin<0){throw Error('発進側の残りが目地だけになります。BP位置または材料構成を確認してください。');}
@@ -118,13 +126,15 @@ function build(d,settings=standard()){
   frontS=backS;
  }
  if(settings.ranges.some(r=>r.to>joints.length))throw Error('再割付後の最終目地は'+joints.length+'です。範囲を修正してください。');
- return {rt,arr,launch,pipes,joints,settings,pitch,project:d};
+ const L={rt,arr,launch,pipes,joints,settings,pitch,project:d,loaded:!!options.finalGaps};
+ if(L.loaded){for(const j of joints){if(j.left < -0.01||j.right < -0.01)throw Error("完成目地"+j.no+"の開口が負です。配置と荷重条件を確認してください。");j.finished=options.jointResults?.[j.no]||null;}}
+ return L;
 }
 const COLORS={PB:'#aa793b',A:'#2563eb',B:'#dc4b3f'},COL=['#2563eb','#dc4b3f','#14834e','#8344ba'];
 function color(L,m){return m.pattern==='PB'?COLORS.PB:COL[L.settings.patterns.findIndex(p=>p.name===m.pattern)%COL.length];}
 function polygon(pp,a,b,r){const u={x:Math.cos(pp.th),y:Math.sin(pp.th)},n={x:-u.y,y:u.x};return [[a,-r],[b,-r],[b,r],[a,r]].map(([x,y])=>[pp.rear.X+u.x*x+n.x*y,pp.rear.Y+u.y*x+n.y*y]);}
 // 材料を描画と干渉検査で共用。端面に貼った平行な矩形のままにし、目地のくさび形へ変形させない。
-function materialPolygons(j,pitch){
+function materialPolygonsLegacy(j,pitch){
  const p=j.frontPipe,m=j.mat,u={x:Math.cos(p.th),y:Math.sin(p.th)},n={x:-u.y,y:u.x},layers=[];
  if(m.pul&&m.thick-m.crush>0)layers.push({kind:'PB',thick:m.thick-m.crush});
  if(m.p)for(let k=0;k<m.p.ls;k++)layers.push({kind:'FJ',thick:pitch});
@@ -147,6 +157,7 @@ function svg(L){
  const all=L.pipes.flatMap(p=>polygon(p,0,p.len,p.outer/2));if(L.arr.R){const c=L.rt.at(L.arr.center);all.push([c.X-L.arr.R,c.Y-L.arr.R],[c.X+L.arr.R,c.Y+L.arr.R]);}
  const minX=Math.min(...all.map(p=>p[0])),maxX=Math.max(...all.map(p=>p[0])),minY=Math.min(...all.map(p=>p[1])),maxY=Math.max(...all.map(p=>p[1])),pad=Math.max(1,(maxX-minX)*.025),W=maxX-minX+pad*2,H=maxY-minY+pad*2;
  const path=pts=>'M'+pts.map(p=>p.map(v=>f(v,6)).join(',')).join(' L')+' Z',lw=.0012;
+ const required=new Set(exposure(L).filter(p=>!p.isSecond).map(p=>p.no));
  let h=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${minX-pad} ${minY-pad} ${W} ${H}" class="pl-drawing pl-overview" role="img" aria-label="実寸管割付図" style="display:block;width:100%;height:100%;background:white;touch-action:none"><style>
 .pl-drawing,.pl-drawing *{user-select:none;-webkit-user-select:none;caret-color:transparent}
 .pl-drawing [data-pipe]:focus{outline:none}
@@ -154,15 +165,17 @@ function svg(L){
 .pl-outer{stroke-width:2.4px;vector-effect:non-scaling-stroke}
 .pl-inner{stroke-width:1px;vector-effect:non-scaling-stroke}
 .pl-overview .pl-outer{fill:#e2e8f0}
+.pl-survey{display:none}
 .pl-overview .pl-inner,.pl-overview .pl-collar,.pl-overview [data-joint],.pl-overview .pl-survey{display:none}
 .pl-section .pl-outer{fill:#d9e1e8}
 .pl-number{paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}
+.pl-required .pl-outer{stroke:#9a3412}
 .pl-selected .pl-outer{stroke:#c02626;fill:#fee2e2}
 </style><defs><pattern id="plh" width=".04" height=".04" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V.04" stroke="#c8ced3" stroke-width=".008"/></pattern></defs>`;
  L.pipes.forEach(p=>{
   const mat=L.joints[p.no-1]?.mat||material(L.settings,p.no,L.pitch),c=color(L,mat),poly=(a,b,r,fill,stroke,cls)=>`<path class="${cls}" d="${path(polygon(p,a,b,r))}" fill="${fill}" stroke="${stroke}" stroke-width="${lw}"/>`;
   // 輪郭線を管体の内側で切り抜く。線幅を大きくしても目地・材料へはみ出させない。
-  h+=`<defs><clipPath id="pipeclip${p.no}"><path d="${path(polygon(p,0,p.len,p.outer/2))}"/></clipPath></defs><g data-pipe="${p.no}" tabindex="0" role="button" aria-label="${p.no}本目"><title>${p.no}本目 有効長${f(p.len)}m</title><g clip-path="url(#pipeclip${p.no})">`+poly(0,p.len,p.outer/2,'url(#plh)',c,'pl-outer')+poly(0,p.len,p.inner/2,'#fff','#475569','pl-inner');
+  h+=`<defs><clipPath id="pipeclip${p.no}"><path d="${path(polygon(p,0,p.len,p.outer/2))}"/></clipPath></defs><g class="${required.has(p.no)?'pl-required':''}" data-pipe="${p.no}" tabindex="0" role="button" aria-label="${p.no}本目"><title>${p.no}本目 有効長${f(p.len)}m</title><g clip-path="url(#pipeclip${p.no})">`+poly(0,p.len,p.outer/2,'url(#plh)',c,'pl-outer')+poly(0,p.len,p.inner/2,'#fff','#475569','pl-inner');
   const ca=catalog(p),ci=Math.min(ca?ca.lc1/1000:.12,p.len/4);
   h+=`<path class="pl-collar" d="${path(polygon(p,0,ci,p.outer/2))} ${path(polygon(p,0,ci,p.inner/2))}" fill="#94a3b844" fill-rule="evenodd" stroke="none"/>`+'</g>';
   const cc={X:(p.front.X+p.rear.X)/2,Y:(p.front.Y+p.rear.Y)/2};h+=`<text class="pl-number" x="${cc.X}" y="${cc.Y}" font-size=".12" fill="#183550" text-anchor="middle" dominant-baseline="middle">${p.no}</text></g>`;
@@ -170,7 +183,7 @@ function svg(L){
  L.joints.forEach(j=>{
   const m=j.mat,c=color(L,m);
   h+=`<g data-joint="${j.no}"><title>目地${j.no} 左${f(j.left,1)}mm 右${f(j.right,1)}mm（材料は変形させず描画）</title>`;
-  for(const shape of materialPolygons(j,L.pitch))h+=`<path data-material="${shape.kind}" d="${path(shape.points)}" fill="${shape.kind==='PB'?'#aa793b':c}" fill-opacity="${shape.projection?.45:1}" stroke="none"><title>${shape.projection?'上下90°材の平面投影':'全周材の平面断面'} 厚さ${shape.thick}mm</title></path>`;
+  for(const shape of materialPolygons(j,L.pitch))h+=`<path data-material="${shape.kind}" d="${path(shape.points)}" fill="${materialColor(shape.id||10)}" fill-opacity="${shape.projection?.45:1}" stroke="none"><title>${shape.projection?'上下90°材の平面投影':'全周材の平面断面'} 厚さ${shape.thick}mm</title></path>`;
   const prev=L.joints[j.no-2]?.mat;
   if(!prev||prev.pattern!==m.pattern||prev.pul!==m.pul){const p=j.frontPipe,x=(p.front.X+p.rear.X)/2,y=(p.front.Y+p.rear.Y)/2-p.outer/2-.3;h+=`<text x="${x}" y="${y}" font-size=".2" text-anchor="middle" fill="${c}">${esc(m.pattern==='PB'?(m.pul?'パル':'なし'):m.pattern)}</text>`;}
   h+='</g>';
@@ -184,7 +197,7 @@ function svg(L){
   h+=`<circle cx="${c.X}" cy="${c.Y}" r="${L.arr.R}" fill="none" stroke="#64748b" stroke-width=".015"/><path d="${path(area)}" fill="#ef4444" fill-opacity=".25"/><path d="M${cut.map(q=>q.join(',')).join(' L')}" fill="none" stroke="#dc2626" stroke-width=".012" stroke-dasharray=".03 .02"/>`;
   h+=label(L.arr.center,'到達人孔芯','#dc2626',2);
  }
- h+=label(L.arr.tip,'押切端面','#dc2626',1);return h+'</svg>';
+ h+=label(L.arr.tip,'押切端面','#dc2626',1);const scene=drawingScene(L);h+=sceneSVG(scene);const pts=[...all,...scene.flatMap(e=>e.type==='line'?[e.a,e.b]:e.type==='poly'?e.points:e.type==='circle'?[[e.p[0]-e.r,e.p[1]-e.r],[e.p[0]+e.r,e.p[1]+e.r]]:[e.p])];const bx=Math.min(...pts.map(p=>p[0]))-4,by=Math.min(...pts.map(p=>p[1]))-4,bw=Math.max(...pts.map(p=>p[0]))-bx+4,bh=Math.max(...pts.map(p=>p[1]))-by+4;h=h.replace(/viewBox="[^"]*"/,'viewBox="'+[bx,by,bw,bh].join(' ')+'"');return h+'</svg>';
 }
 
 function updateDisplay(svg,L){
@@ -218,7 +231,7 @@ function detail(L,no){
  let h=`<b>${no}本目</b>：有効長 ${f(p.len)}m${p.partial?'（発進側に必要な端数有効長）':''}／外径 ${f(p.outer*1000,0)}mm／内径 ${f(p.inner*1000,0)}mm<br>発進坑口から 前端 ${f(p.frontS-L.launch)}m・後端 ${f(p.rearS-L.launch)}m`;
  if(p.crossed.length)h+='<br>区間境界をまたぐ管：'+p.crossed.map(esc).join('・');
  if(!j)return h+'<br>最終管の後ろには目地を作りません。';
- h+=`<br><b>目地 ${no}/${no+1}</b>：左 ${f(j.left,2)}mm・右 ${f(j.right,2)}mm・折れ角 ${f(j.angle,4)}°<br>${esc(m.pattern==='PB'?'パルリングのみ':'パターン '+m.pattern)}／パルリング ${m.pul?'1枚 '+m.thick+'mm・つぶれ代 '+m.crush+'mm':'なし'}${m.p?'／FJ側方面 '+m.p.ls*L.pitch+'mm（無圧縮）':''}`;
+ h+=`<br><b>目地 ${no}/${no+1}</b>：左 ${f(j.left,2)}mm・右 ${f(j.right,2)}mm・折れ角 ${f(j.angle,4)}°<br>${esc(m.pattern==='PB'?'パルリングのみ':'パターン '+m.pattern)}／パルリング ${m.pul?'1枚 '+m.thick+'mm・つぶれ代 '+m.crush+'mm':'なし'}${m.p?'／FJ側方面 '+m.p.ls*L.pitch+'mm（初期厚）':''}`;
  const D=p.outer*1000,di=p.inner*1000,scale=260/D,cx=170,cy=180,ro=D/2*scale,ri=di/2*scale;
  h+=`<svg viewBox="0 0 780 350" style="display:block;width:100%;max-height:350px;background:#fff" role="img" aria-label="選択目地の平面断面と環状形状"><text x="30" y="25" fill="#24415c">環状形状（正面・管壁に貼付け）</text><circle cx="${cx}" cy="${cy}" r="${ro}" fill="#a87b45" stroke="#573b21"/><circle cx="${cx}" cy="${cy}" r="${ri}" fill="#fff" stroke="#573b21"/>`;
  if(!m.pul)h+=`<circle cx="${cx}" cy="${cy}" r="${(ri+ro)/2}" fill="none" stroke="#fff" stroke-width="${ro-ri}"/>`;
@@ -231,15 +244,141 @@ function detail(L,no){
  for(const [pp,a,b] of [[p,0,Math.min(.55,p.len)],[j.nextPipe,Math.max(0,j.nextPipe.len-.55),j.nextPipe.len]]){
   h+=`<path d="${dpath(polygon(pp,a,b,pp.outer/2))} ${dpath(polygon(pp,a,b,pp.inner/2))}" fill="#e2e8f0" fill-rule="evenodd" stroke="#53677a" stroke-width=".35"/>`;
  }
- for(const shape of materialPolygons(j,L.pitch))h+=`<path d="${dpath(shape.points)}" fill="${shape.kind==='PB'?'#aa793b':color(L,m)}" fill-opacity="${shape.projection?.45:1}"/>`;
+ for(const shape of materialPolygons(j,L.pitch))h+=`<path d="${dpath(shape.points)}" fill="${materialColor(shape.id||10)}" fill-opacity="${shape.projection?.45:1}"/>`;
  if(ca)for(const side of [-1,1]){
   const r=(ca.dc/2+ca.tc/2)/1000,aa=[p.rear.X+u.x*ca.lc1/1000+n.x*r*side,p.rear.Y+u.y*ca.lc1/1000+n.y*r*side],bb=[p.rear.X-u.x*ca.lc2/1000+n.x*r*side,p.rear.Y-u.y*ca.lc2/1000+n.y*r*side];
   const q0=project(aa),q1=project(bb);h+=`<path d="M${q0.join(',')}L${q1.join(',')}" fill="none" stroke="#475569" stroke-width="${ca.tc/1000*k}"/>`;
  }
- h+=`<text x="365" y="25" font-size="16">平面断面（縦横同縮尺・無圧縮配置）</text><text x="365" y="165" font-size="14">左 ${f(j.left,2)}mm ／ 右 ${f(j.right,2)}mm</text><text x="365" y="205" font-size="14">茶：パルリング　青等：FJ</text><text x="365" y="230" font-size="14">灰：カラー（取付部は模式）</text></svg>`;
+ h+=`<text x="365" y="25" font-size="16">平面断面（縦横同縮尺・${L.loaded?'完成載荷時':'初期無圧縮'}）</text><text x="365" y="165" font-size="14">左 ${f(j.left,2)}mm ／ 右 ${f(j.right,2)}mm</text><text x="365" y="205" font-size="14">茶：パルリング　青等：FJ</text><text x="365" y="230" font-size="14">灰：カラー（取付部は模式）</text></svg>`;
  h+=ca?`<small>継手${ca.kind}参考寸法：D1=${ca.d1}・D2=${ca.d2}・Dc=${ca.dc}・Tc=${ca.tc}・Lc1=${ca.lc1}・Lc2=${ca.lc2}mm。ゴム断面と上図のカラー周辺は模式。<a href="https://harima-con.co.jp/image/about_hume_pipe/hp_manual_all.pdf" target="_blank" rel="noopener">設計施工要覧 表1.3.8.1-1／1.3.8.2-1</a></small>`:'<small>この管種・継手の製品詳細寸法は未収録です。管体と開口のみを実寸で算定します。</small>';
  return h;
 }
-const api={updateDisplay,offset,arrival,route,standard,material,validate,build,svg,detail,catalog,esc,materialPolygons,polygon,signature};
+// v2: 上下面・左右の総層数、パルリング条件、範囲をパターンで一元管理。
+function normalize(input){
+ const x=JSON.parse(JSON.stringify(input||standard()));
+ if(x.version===2){x.ranges=x.patterns.flatMap(p=>(p.ranges||[]).map(r=>({...r,pattern:p.name,pul:!!p.pul,thick:+p.thick,crush:+p.crush})));return x;}
+ const pats=x.patterns.map(p=>({...p,pul:true,thick:10,crush:0,ranges:[]}));
+ for(const r of x.ranges||[]){let p=pats.find(p=>p.name===r.pattern);if(!p){p={name:r.pattern==='PB'?'パル'+(pats.length+1):r.pattern,mc:12,ms:12,lc:0,ls:0,ranges:[]};pats.push(p);}
+  if(p.ranges.length&&(p.pul!==!!r.pul||p.thick!==+r.thick||p.crush!==+r.crush)){p={...p,name:p.name+'_'+(pats.length+1),ranges:[]};pats.push(p);}
+  Object.assign(p,{pul:!!r.pul,thick:+r.thick,crush:+r.crush});p.ranges.push({from:+r.from,to:+r.to});
+ }
+ return normalize({version:2,patterns:pats});
+}
+function materialColor(id){return ({10:'#a47943',11:'#8755b8',12:'#2166b3',13:'#218450',14:'#d77c18',15:'#b63d49'})[id]||'#53677a';}
+function materialPolygons(j,pitch){
+ const p=j.frontPipe,m=j.mat,u={x:Math.cos(p.th),y:Math.sin(p.th)},n={x:-u.y,y:u.x},out=[],pb=m.pul?m.thick-m.crush:0;
+ const gap=y=>(j.center+1000*Math.tan(j.nextPipe.th-p.th)*y);
+ const add=(kind,id,layer,count,ys,projection)=>{
+  const points=[];
+  for(const [end,y] of [[0,ys[0]],[1,ys[0]],[1,ys[1]],[0,ys[1]]]){
+   const remain=j.finished?Math.min(pitch,Math.max(0,gap(y)-pb)/Math.max(1,count)):pitch;
+   const depth=kind==='PB'?end*pb:pb+(layer+end)*remain;
+   points.push([p.rear.X-u.x*depth/1000+n.x*y,p.rear.Y-u.y*depth/1000+n.y*y]);
+  }
+  out.push({kind,id,projection,side:projection?0:1,thick:kind==='PB'?pb:pitch,points});
+ };
+ if(pb>0)for(const side of [-1,1])add('PB',10,0,1,[p.inner/2*side,p.outer/2*side],false);
+ if(m.p){for(let k=0;k<m.p.ls;k++)for(const side of [-1,1])add('FJ',m.p.ms,k,m.p.ls,[p.inner/2*side,p.outer/2*side],false);
+  for(let k=0;k<m.p.lc;k++)add('FJ',m.p.mc,k,m.p.lc,[-p.outer/(2*Math.SQRT2),p.outer/(2*Math.SQRT2)],true);}
+ return out;
+}
+function patternSVG(p,pitch=10){
+ const count=Math.max(p.lc,p.ls),pb=p.pul?1:0,W=Math.max(460,(count+pb)*110+30),ro=35,ri=27;
+ const sector=(cx,cy,a,b)=>{const q=(r,t)=>[cx+r*Math.cos(t*Math.PI/180),cy+r*Math.sin(t*Math.PI/180)].join(',');return `M${q(ro,a)} A${ro} ${ro} 0 0 1 ${q(ro,b)} L${q(ri,b)} A${ri} ${ri} 0 0 0 ${q(ri,a)} Z`;};
+ let h=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} 235" style="width:100%;min-width:460px;background:#fff" role="img" aria-label="パターン${esc(p.name)}の正面と上面積層図"><text x="10" y="18" font-size="13" fill="#183550">正面・層別分解（上下／左右 各90°）</text>`;
+ for(let k=0;k<count+pb;k++){const cx=65+k*110,isPB=pb&&k===0,layer=k-pb;
+  h+=`<text x="${cx}" y="38" text-anchor="middle" font-size="12">${isPB?'パルリング':'FJ '+(layer+1)+'層目'}</text>`;
+  for(const [a,b,type,id] of [[45,135,'lc',p.mc],[225,315,'lc',p.mc],[135,225,'ls',p.ms],[315,405,'ls',p.ms]])h+=`<path d="${sector(cx,82,a,b)}" fill="${isPB?materialColor(10):layer<p[type]?materialColor(id):'#f1f5f9'}" stroke="#374151" stroke-width=".6"/>`;
+ }
+ h+='<text x="10" y="139" font-size="13">上面・軸方向の厚さ（投影模式）</text>';
+ let x=15;if(pb){h+=`<rect x="${x}" y="155" width="${p.thick*3}" height="42" fill="${materialColor(10)}" stroke="#374151"/>`;x+=p.thick*3;}
+ for(let k=0;k<count;k++){for(const [y,hei,n,id] of [[155,10,p.ls,p.ms],[165,22,p.lc,p.mc],[187,10,p.ls,p.ms]])if(k<n)h+=`<rect x="${x+k*pitch*3}" y="${y}" width="${pitch*3}" height="${hei}" fill="${materialColor(id)}" stroke="#fff" stroke-width="1"/>`;}
+ h+=`<text x="15" y="217" font-size="12">上下 ${p.lc}層=${p.lc*pitch}mm ／ 左右 ${p.ls}層=${p.ls*pitch}mm${pb?' ／ パル '+p.thick+'mm・指定つぶれ '+p.crush+'mm':' ／ パルなし'}</text></svg>`;
+ return h+'<div style="font-size:12px">'+[10,11,12,13,14,15].map(id=>`<span style="display:inline-block;margin-right:10px"><i style="display:inline-block;width:12px;height:12px;background:${materialColor(id)}"></i> ${id===10?'パル':({11:'1.7',12:'2.0',13:'2.5',14:'3.0',15:'3.5'})[id]+'倍'}</span>`).join('')+'</div>';
+}
+function shaftGeometry(L,side){
+ const s=L.project.shaft||{},man=s[side+'Manhole']||{},q=L.rt.at(side==='launch'?0:L.rt.total);
+ const shaftType=s[side+'Type']||'circle',D=+(s[side+'CircleD']||0),len=+(s[side+'L']||0),width=+(s[side+'W']||0);
+ let shaft=shaftType==='rect'?{shape:'rect',innerW:width,innerL:len}:shaftType==='manhole'?{shape:'circle',innerD:+(s.manholeSize||0)}:{shape:'circle',innerD:D};
+ const shape=man.shape||'circle',innerD=+(man.innerD??(side==='arrival'?s.arrivalInnerD:0)),outerD=+(man.outerD||0);
+ if(shape==='circle'&&outerD>0&&!(outerD>innerD))throw Error((side==='launch'?'発進':'到達')+'人孔の外径は内径より大きくしてください。');
+ if(shape==='rect'&&((man.outerW>0&&man.outerW<=man.innerW)||(man.outerL>0&&man.outerL<=man.innerL)))throw Error('矩形人孔の外寸は対応する内寸より大きくしてください。');
+ return {side,q,shaft,man:{...man,shape,innerD,outerD}};
+}
+// 図とDXFが共用する全体座標モデル。長さ=m。YはSVGで下向き、DXFで反転する。
+function drawingScene(L){
+ const out=[],line=(a,b,layer='BASELINE',dash=false)=>out.push({type:'line',a,b,layer,dash}),text=(p,value,size=.28,layer='ANNOTATION')=>out.push({type:'text',p,value,size,layer});
+ const poly=(points,layer,closed=false,dash=false)=>out.push({type:'poly',points,layer,closed,dash}),at=s=>{const q=L.rt.at(s);return[q.X,q.Y];};
+ for(const g of L.rt.segs){const pts=[];for(let i=0;i<=Math.max(1,Math.ceil(g.L/.3));i++)pts.push(at(g.s+g.L*i/Math.max(1,Math.ceil(g.L/.3))));poly(pts,'ALIGNMENT',false,true);if(g.k)out.at(-1).arc={cx:g.X-Math.sin(g.th)/g.k,cy:g.Y+Math.cos(g.th)/g.k,r:1/Math.abs(g.k),clockwise:g.k>0};
+  if(g.k){const bc=at(g.s),ec=at(g.s+g.L),sp=at(g.s+g.L/2),c=[g.X-Math.sin(g.th)/g.k,g.Y+Math.cos(g.th)/g.k];line(c,bc,'CURVE_RADIUS',true);line(c,ec,'CURVE_RADIUS',true);text(c,'O'+g.curveNo);for(const [p,n] of [[bc,'BC'],[sp,'SP'],[ec,'EC']]){out.push({type:'circle',p,r:.055,layer:'SURVEY'});text([p[0],p[1]+.65],n+g.curveNo);}}
+ }
+ const baseLen=+(L.project.alignment?.seg_L0||5);line([-5,0],[baseLen+3,0],'JACKING_BASE',true);text([-4,-.6],'推進基線');
+ for(const side of ['launch','arrival']){const z=shaftGeometry(L,side),nm=side==='launch'?'発進':'到達',u=[Math.cos(z.q.th),Math.sin(z.q.th)],n=[-u[1],u[0]],point=(x,y)=>[z.q.X+u[0]*x+n[0]*y,z.q.Y+u[1]*x+n[1]*y];
+  const draw=(shape,w,l,layer)=>{if(!(w>0&&l>0))return;if(shape==='circle')out.push({type:'circle',p:[z.q.X,z.q.Y],r:w/2,layer});else poly([point(-l/2,-w/2),point(l/2,-w/2),point(l/2,w/2),point(-l/2,w/2)],layer,true);};
+  draw(z.shaft.shape,z.shaft.innerD||z.shaft.innerW,z.shaft.innerD||z.shaft.innerL,'SHAFT');
+  draw(z.man.shape,z.man.innerD||+z.man.innerW,z.man.innerD||+z.man.innerL,'MANHOLE_INNER');
+  draw(z.man.shape,z.man.outerD||+z.man.outerW,z.man.outerD||+z.man.outerL,'MANHOLE_OUTER');
+  text(point(0,-5),nm+'立坑 '+(z.shaft.shape==='circle'?'内径φ'+f(z.shaft.innerD||0):f(z.shaft.innerW||0)+'×'+f(z.shaft.innerL||0))+'m');
+  text(point(0,-3.5),nm+'人孔 '+(z.man.shape==='circle'?'内φ'+(z.man.innerD?f(z.man.innerD):'未設定')+'／外φ'+(z.man.outerD?f(z.man.outerD):'未設定'):(z.man.innerW&&z.man.innerL?'内 '+f(z.man.innerW)+'×'+f(z.man.innerL):'内寸未設定')+'／'+(z.man.outerW&&z.man.outerL?'外 '+f(z.man.outerW)+'×'+f(z.man.outerL):'外寸未設定'))+'m');
+ }
+ const pts=L.pipes.flatMap(p=>polygon(p,0,p.len,p.outer/2)),minX=Math.min(...pts.map(p=>p[0])),maxX=Math.max(...pts.map(p=>p[0])),maxY=Math.max(...pts.map(p=>p[1]));
+ text(at(0),'BP',.3,'SURVEY');text(at(L.rt.total),'EP',.3,'SURVEY');text(at(L.launch),'発進坑口',.3,'SURVEY');text(at(L.rt.total-L.arr.off),'到達坑口',.3,'SURVEY');
+ const totalBody=L.pipes.reduce((n,p)=>n+p.len,0),rows=[['人孔中心間（線形）',L.rt.total],['推進延長（坑口間）',L.rt.total-L.arr.off-L.launch],['管体実長合計（目地除く）',totalBody],['管列占有延長（線形・目地含む）',L.arr.tip-L.pipes.at(-1).rearS]];
+ rows.forEach(([label,length],i)=>{const y=maxY+4+i*2;line([minX,y],[maxX,y],'DIMENSION');line([minX,y-.2],[minX,y+.2],'DIMENSION');line([maxX,y-.2],[maxX,y+.2],'DIMENSION');text([(minX+maxX)/2,y-.25],label+' '+f(length)+'m',.4,'DIMENSION');});
+ text([minX,maxY+13],'延長寸法は線形に沿う延長の展開表示。管体実長は剛体管の弦長合計。',.3,'DIMENSION');
+ return out;
+}
+
+
+function exposure(L){
+ const found=[];
+ for(const p of L.pipes){const len=p.nominalLen,u=[Math.cos(p.th),Math.sin(p.th)],full={...p,rear:{X:p.front.X-u[0]*len,Y:p.front.Y-u[1]*len},len};const points=polygon(full,0,len,p.outer/2);
+  const sides=[];
+  for(const side of ['launch','arrival']){const z=shaftGeometry(L,side),shape=z.shaft,cx=z.q.X,cy=z.q.Y;
+   if(shape.shape==='circle'&&shape.innerD>0){const r=shape.innerD/2;
+    const edge=points.some((a,i)=>{const b=points[(i+1)%points.length],dx=b[0]-a[0],dy=b[1]-a[1],t=Math.max(0,Math.min(1,((cx-a[0])*dx+(cy-a[1])*dy)/(dx*dx+dy*dy)));return Math.hypot(a[0]+t*dx-cx,a[1]+t*dy-cy)<r-1e-8;});
+    if(edge)sides.push(side);
+   }else if(shape.innerW>0&&shape.innerL>0){const co=Math.cos(z.q.th),si=Math.sin(z.q.th),q=points.map(a=>[(a[0]-cx)*co+(a[1]-cy)*si,-(a[0]-cx)*si+(a[1]-cy)*co]),rect=[[-shape.innerL/2,-shape.innerW/2],[shape.innerL/2,-shape.innerW/2],[shape.innerL/2,shape.innerW/2],[-shape.innerL/2,shape.innerW/2]];
+    let separate=false;for(const poly of [q,rect])for(let i=0;i<4;i++){const a=poly[i],b=poly[(i+1)%4],n=[a[1]-b[1],b[0]-a[0]],A=q.map(p=>p[0]*n[0]+p[1]*n[1]),B=rect.map(p=>p[0]*n[0]+p[1]*n[1]);if(Math.max(...A)<=Math.min(...B)+1e-8||Math.max(...B)<=Math.min(...A)+1e-8)separate=true;}
+    if(!separate)sides.push(side);
+   }
+  }
+  if(sides.length)found.push({no:p.no,sides,isSecond:p.grade==='2shu',grade:p.grade||'未指定',nominalLen:len});
+ }
+ return found;
+}
+
+function sceneSVG(scene){
+ const col={SHAFT:'#475569',MANHOLE_INNER:'#0f766e',MANHOLE_OUTER:'#0f766e',SURVEY:'#374151',CURVE_RADIUS:'#64748b',JACKING_BASE:'#a21caf',ALIGNMENT:'#0e7490',DIMENSION:'#334155'},n=x=>f(x,6);
+ let h='<g class="pl-scene" style="user-select:none;caret-color:transparent;pointer-events:none">';
+ for(const e of scene){const style='fill="none" stroke="'+(col[e.layer]||'#334155')+'" stroke-width="1" vector-effect="non-scaling-stroke"'+(e.dash?' stroke-dasharray="5 4"':'');
+  if(e.type==='line')h+='<path d="M'+e.a.map(n).join(',')+' L'+e.b.map(n).join(',')+'" '+style+'/>';
+  if(e.type==='poly')h+='<path d="M'+e.points.map(p=>p.map(n).join(',')).join(' L')+(e.closed?' Z':'')+'" '+style+'/>';
+  if(e.type==='circle')h+='<circle cx="'+n(e.p[0])+'" cy="'+n(e.p[1])+'" r="'+n(e.r)+'" '+style+'/>';
+  if(e.type==='text')h+='<text data-layer="'+e.layer+'" x="'+n(e.p[0])+'" y="'+n(e.p[1])+'" font-size="'+e.size+'" text-anchor="middle" fill="'+(col[e.layer]||'#334155')+'" paint-order="stroke" stroke="#fff" stroke-width="3" vector-effect="non-scaling-stroke">'+esc(e.value)+'</text>';
+ }
+ return h+'</g>';
+}
+
+function dxf(L){
+ const a=[],put=(...p)=>a.push(...p.map(String)),safe=t=>String(t).replace(/[\r\n]/g,' ').replace(/[^\x20-\x7e]/g,c=>'\\U+'+c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0'));
+ const scene=drawingScene(L),layers=[...new Set(['0','PIPE_OUTER','PIPE_INNER','PIPE_NUMBER','DESIGN_STATE',...scene.map(e=>e.layer),...L.joints.flatMap(j=>materialPolygons(j,L.pitch).map(sh=>'MATERIAL_'+sh.kind+'_'+(sh.id||0)))])];
+ put(0,'SECTION',2,'HEADER',9,'$ACADVER',1,'AC1015',9,'$INSUNITS',70,6,0,'ENDSEC',0,'SECTION',2,'TABLES');
+ put(0,'TABLE',2,'LTYPE',5,'10',100,'AcDbSymbolTable',70,2);
+ for(const [name,handle]of [['CONTINUOUS','11'],['DASHED','12']]){put(0,'LTYPE',5,handle,330,'10',100,'AcDbSymbolTableRecord',100,'AcDbLinetypeTableRecord',2,name,70,0,3,name,72,65,73,name==='DASHED'?2:0,40,name==='DASHED'?.5:0);if(name==='DASHED')put(49,.3,74,0,49,-.2,74,0);}
+ put(0,'ENDTAB',0,'TABLE',2,'LAYER',5,'13',100,'AcDbSymbolTable',70,layers.length);
+ layers.forEach((name,i)=>put(0,'LAYER',5,(32+i).toString(16),330,'13',100,'AcDbSymbolTableRecord',100,'AcDbLayerTableRecord',2,name,70,0,62,name==='SHAFT'?8:name==='DIMENSION'?4:name.includes('MANHOLE')?3:7,6,'CONTINUOUS'));
+ put(0,'ENDTAB',0,'ENDSEC',0,'SECTION',2,'ENTITIES');
+ let handle=4096;
+ const entity=(type,layer,color=7,dash=false)=>{put(0,type,5,(handle++).toString(16),100,'AcDbEntity',8,layer,62,color);if(dash)put(6,'DASHED');put(100,({LINE:'AcDbLine',CIRCLE:'AcDbCircle',TEXT:'AcDbText',ARC:'AcDbCircle'})[type]);};
+ const line=(p,q,layer,dash=false)=>{entity('LINE',layer,7,dash);put(10,p[0],20,-p[1],30,0,11,q[0],21,-q[1],31,0);};
+ const poly=(pts,layer,closed)=>{for(let i=1;i<pts.length;i++)line(pts[i-1],pts[i],layer);if(closed)line(pts.at(-1),pts[0],layer);};
+ for(const p of L.pipes){poly(polygon(p,0,p.len,p.outer/2),'PIPE_OUTER',true);poly(polygon(p,0,p.len,p.inner/2),'PIPE_INNER',true);entity('TEXT','PIPE_NUMBER');put(10,(p.front.X+p.rear.X)/2,20,-(p.front.Y+p.rear.Y)/2,30,0,40,.12,1,p.no);}
+ for(const j of L.joints)for(const sh of materialPolygons(j,L.pitch))poly(sh.points,'MATERIAL_'+sh.kind+'_'+(sh.id||0),true);
+ for(const e of scene){if(e.arc){const c=e.arc,first=e.points[0],last=e.points.at(-1),angle=p=>(Math.atan2(-(p[1]-c.cy),p[0]-c.cx)*180/Math.PI+360)%360;entity('ARC',e.layer,7,e.dash);put(10,c.cx,20,-c.cy,30,0,40,c.r,100,'AcDbArc',50,angle(c.clockwise?last:first),51,angle(c.clockwise?first:last));}else if(e.type==='line')line(e.a,e.b,e.layer,e.dash);else if(e.type==='poly'){for(let i=1;i<e.points.length;i++)line(e.points[i-1],e.points[i],e.layer,e.dash);if(e.closed)line(e.points.at(-1),e.points[0],e.layer,e.dash);}else if(e.type==='circle'){entity('CIRCLE',e.layer);put(10,e.p[0],20,-e.p[1],30,0,40,e.r);}else if(e.type==='text'){entity('TEXT',e.layer);put(10,e.p[0],20,-e.p[1],30,0,40,e.size,1,safe(e.value));}}
+ entity('TEXT','DESIGN_STATE');put(10,0,20,5,30,0,40,.45,1,safe(L.loaded?(L.equilibrated===false?'完成参考・反力未収束・本数未確定':'推進完了・載荷時／再配置図'):'初期配置／FJ無圧縮'));put(0,'ENDSEC',0,'EOF');return a.join('\r\n')+'\r\n';
+}
+
+const api={normalize,updateDisplay,offset,arrival,route,standard,material,validate,build,svg,detail,catalog,esc,materialPolygons,polygon,signature,exposure,shaftGeometry,drawingScene,dxf,patternSVG,materialColor};
 if(typeof module!=='undefined'&&module.exports)module.exports=api;root.PipeLayout=api;
 })(typeof globalThis!=='undefined'?globalThis:this);
